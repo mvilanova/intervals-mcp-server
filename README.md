@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/mvilanova-intervals-mcp-server-badge.png)](https://mseep.ai/app/mvilanova-intervals-mcp-server)
+
 # Intervals.icu MCP Server
 
 Model Context Protocol (MCP) server for connecting Claude with the Intervals.icu API. It provides tools for authentication and data retrieval for activities, events, and wellness data.
