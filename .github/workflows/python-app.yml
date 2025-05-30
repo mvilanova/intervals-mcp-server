@@ -32,5 +32,7 @@ jobs:
       run: |
         pip install -e .
     - name: Test with pytest
+      env:
+        API_KEY: ${{ secrets.API_KEY }}
       run: |
         pytest
