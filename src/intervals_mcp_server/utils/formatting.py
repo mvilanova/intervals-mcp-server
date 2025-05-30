@@ -202,8 +202,9 @@ Last Updated: {entry.get("updated", "Unknown")}"""
 
 def format_event_summary(event: dict[str, Any]) -> str:
     """Format a basic event summary into a readable string."""
-
-    event_date = event.get("start_date_local", "Unknown")
+    
+    # Update to check for "date" if "start_date_local" is not provided
+    event_date = event.get("start_date_local", event.get("date", "Unknown"))
     event_type = (
         "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
     )
