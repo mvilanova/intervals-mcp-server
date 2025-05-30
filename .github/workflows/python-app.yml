@@ -33,6 +33,6 @@ jobs:
     - name: Test with pytest
       env:
         API_KEY: ${{ secrets.API_KEY }}
-        ATHLETE_ID: i12345
+        ATHLETE_ID: ${{ vars.ATHLETE_ID }}
       run: |
         pytest
