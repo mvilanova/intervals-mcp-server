@@ -14,9 +14,8 @@ permissions:
 
 jobs:
   build:
-
+    environment: intervals-mcp-server-env
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python 3.12
