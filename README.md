@@ -69,6 +69,38 @@ ATHLETE_ID=your_athlete_id_here
 Your athlete ID is typically visible in the URL when you're logged into Intervals.icu. It looks like:
 - `https://intervals.icu/athlete/i12345/...` where `i12345` is your athlete ID
 
+## Updating
+
+This project is actively developed, with new features and fixes added regularly. To stay up to date, follow these steps:
+
+### 1. Pull the latest changes from `main`
+
+> ⚠️ Make sure you don’t have uncommitted changes before running this command.
+
+```bash
+git checkout main && git pull
+```
+
+### 2. Update Python dependencies
+ 
+Activate your virtual environment and sync dependencies:
+
+```bash
+source .venv/bin/activate
+uv sync
+```
+
+### Troubleshooting
+
+If Claude Desktop fails due to configuration changes, follow these steps:
+
+1. Delete the existing entry in claude_desktop_config.json.
+2. Reconfigure Claude Desktop from the intervals_mcp_server directory:
+
+```bash
+mcp install src/intervals_mcp_server/server.py --name "Intervals.icu" --with-editable . --env-file .env
+```
+
 ## Usage
 
 ### 1. Configure Claude Desktop
