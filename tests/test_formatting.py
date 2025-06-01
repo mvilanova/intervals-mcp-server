@@ -12,6 +12,7 @@ from intervals_mcp_server.utils.formatting import (
     format_event_details,
     format_intervals,
 )
+from tests.sample_data import INTERVALS_DATA
 
 
 def test_format_activity_summary():
@@ -109,32 +110,6 @@ def test_format_intervals():
     """
     Test that format_intervals returns a string containing interval analysis and the interval label.
     """
-    intervals_data = {
-        "id": "i1",
-        "analyzed": True,
-        "icu_intervals": [
-            {
-                "type": "work",
-                "label": "Rep 1",
-                "elapsed_time": 60,
-                "moving_time": 60,
-                "distance": 100,
-                "average_watts": 200,
-                "max_watts": 300,
-                "average_watts_kg": 3.0,
-                "max_watts_kg": 5.0,
-                "weighted_average_watts": 220,
-                "intensity": 0.8,
-                "training_load": 10,
-                "average_heartrate": 150,
-                "max_heartrate": 160,
-                "average_cadence": 90,
-                "max_cadence": 100,
-                "average_speed": 6,
-                "max_speed": 8,
-            }
-        ],
-    }
-    result = format_intervals(intervals_data)
+    result = format_intervals(INTERVALS_DATA)
     assert "Intervals Analysis:" in result
     assert "Rep 1" in result

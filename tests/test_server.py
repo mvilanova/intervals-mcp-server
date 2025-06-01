@@ -15,10 +15,11 @@ The tests ensure that the server's public API returns expected strings and handl
 import sys
 import pathlib
 import asyncio
+import os
 
-sys.path.append(
-    str(pathlib.Path(__file__).resolve().parents[1] / "src" / "intervals_mcp_server")
-)
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
+os.environ.setdefault("API_KEY", "test")
+os.environ.setdefault("ATHLETE_ID", "i1")
 from intervals_mcp_server.server import (
     get_activities,
     get_activity_details,
@@ -27,6 +28,7 @@ from intervals_mcp_server.server import (
     get_wellness_data,
     get_activity_intervals,
 )
+from tests.sample_data import INTERVALS_DATA
 
 
 def test_get_activities(monkeypatch):
@@ -42,7 +44,7 @@ def test_get_activities(monkeypatch):
         "duration": 3600,
     }
 
-    async def fake_request(*args, **kwargs):
+    async def fake_request(*_args, **_kwargs):
         return [sample]
 
     monkeypatch.setattr("intervals_mcp_server.server.make_intervals_request", fake_request)
@@ -64,7 +66,7 @@ def test_get_activity_details(monkeypatch):
         "duration": 3600,
     }
 
-    async def fake_request(*args, **kwargs):
+    async def fake_request(*_args, **_kwargs):
         return sample
 
     monkeypatch.setattr("intervals_mcp_server.server.make_intervals_request", fake_request)
@@ -84,7 +86,7 @@ def test_get_events(monkeypatch):
         "race": True,
     }
 
-    async def fake_request(*args, **kwargs):
+    async def fake_request(*_args, **_kwargs):
         return [event]
 
     monkeypatch.setattr("intervals_mcp_server.server.make_intervals_request", fake_request)
@@ -105,7 +107,7 @@ def test_get_event_by_id(monkeypatch):
         "race": True,
     }
 
-    async def fake_request(*args, **kwargs):
+    async def fake_request(*_args, **_kwargs):
         return event
 
     monkeypatch.setattr("intervals_mcp_server.server.make_intervals_request", fake_request)
@@ -127,7 +129,7 @@ def test_get_wellness_data(monkeypatch):
         }
     }
 
-    async def fake_request(*args, **kwargs):
+    async def fake_request(*_args, **_kwargs):
         return wellness
 
     monkeypatch.setattr("intervals_mcp_server.server.make_intervals_request", fake_request)
@@ -140,35 +142,8 @@ def test_get_activity_intervals(monkeypatch):
     """
     Test get_activity_intervals returns a formatted string with interval analysis for a given activity.
     """
-    intervals_data = {
-        "id": "i1",
-        "analyzed": True,
-        "icu_intervals": [
-            {
-                "type": "work",
-                "label": "Rep 1",
-                "elapsed_time": 60,
-                "moving_time": 60,
-                "distance": 100,
-                "average_watts": 200,
-                "max_watts": 300,
-                "average_watts_kg": 3.0,
-                "max_watts_kg": 5.0,
-                "weighted_average_watts": 220,
-                "intensity": 0.8,
-                "training_load": 10,
-                "average_heartrate": 150,
-                "max_heartrate": 160,
-                "average_cadence": 90,
-                "max_cadence": 100,
-                "average_speed": 6,
-                "max_speed": 8,
-            }
-        ],
-    }
-
-    async def fake_request(*args, **kwargs):
-        return intervals_data
+    async def fake_request(*_args, **_kwargs):
+        return INTERVALS_DATA
 
     monkeypatch.setattr("intervals_mcp_server.server.make_intervals_request", fake_request)
     result = asyncio.run(get_activity_intervals("123"))

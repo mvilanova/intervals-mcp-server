@@ -74,12 +74,12 @@ httpx_client = httpx.AsyncClient()
 
 
 @asynccontextmanager
-async def lifespan(app: FastMCP):
+async def lifespan(_app: FastMCP):
     """
     Context manager to ensure the shared httpx client is closed when the server stops.
 
     Args:
-        app (FastMCP): The MCP server application instance.
+        _app (FastMCP): The MCP server application instance.
     """
     try:
         yield
@@ -169,9 +169,9 @@ async def make_intervals_request(
     except httpx.RequestError as e:
         logger.error("Request error: %s", str(e))
         return {"error": True, "message": f"Request error: {str(e)}"}
-    except Exception as e:
-        logger.error("Unexpected error: %s", str(e))
-        return {"error": True, "message": f"Unexpected error: {str(e)}"}
+    except httpx.HTTPError as e:
+        logger.error("HTTP client error: %s", str(e))
+        return {"error": True, "message": f"HTTP client error: {str(e)}"}
 
 
 # ----- MCP Tool Implementations ----- #
@@ -291,9 +291,12 @@ async def get_activities(
 
     if not activities:
         if include_unnamed:
-            return f"No valid activities found for athlete {athlete_id_to_use} in the specified date range."
-        else:
-            return f"No named activities found for athlete {athlete_id_to_use} in the specified date range. Try with include_unnamed=True to see all activities."
+            return (
+                f"No valid activities found for athlete {athlete_id_to_use} in the specified date range."
+            )
+        return (
+            f"No named activities found for athlete {athlete_id_to_use} in the specified date range. Try with include_unnamed=True to see all activities."
+        )
 
     activities_summary = "Activities:\n\n"
     for activity in activities:
