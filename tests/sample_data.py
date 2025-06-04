@@ -1,3 +1,9 @@
+"""
+Sample data for testing Intervals.icu MCP server functions.
+
+This module contains test data structures used across the test suite.
+"""
+
 INTERVALS_DATA = {
     "id": "i1",
     "analyzed": True,

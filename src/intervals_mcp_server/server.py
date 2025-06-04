@@ -40,8 +40,8 @@ from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any
 
-import httpx
-from mcp.server.fastmcp import FastMCP
+import httpx  # pylint: disable=import-error
+from mcp.server.fastmcp import FastMCP  # pylint: disable=import-error
 
 # Import formatting utilities
 from intervals_mcp_server.utils.formatting import (
@@ -177,8 +177,90 @@ async def make_intervals_request(
 # ----- MCP Tool Implementations ----- #
 
 
+def _parse_activities_from_result(result: Any) -> list[dict[str, Any]]:
+    """Extract a list of activity dictionaries from the API result."""
+    activities: list[dict[str, Any]] = []
+
+    if isinstance(result, list):
+        activities = [item for item in result if isinstance(item, dict)]
+    elif isinstance(result, dict):
+        # Result is a single activity or a container
+        for key, value in result.items():
+            if isinstance(value, list):
+                activities = [item for item in value if isinstance(item, dict)]
+                break
+        # If no list was found but the dict has typical activity fields, treat it as a single activity
+        if not activities and any(
+            key in result for key in ["name", "startTime", "distance"]
+        ):
+            activities = [result]
+
+    return activities
+
+
+def _filter_named_activities(activities: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Filter out unnamed activities from the list."""
+    return [
+        activity
+        for activity in activities
+        if activity.get("name") and activity.get("name") != "Unnamed"
+    ]
+
+
+async def _fetch_more_activities(
+    athlete_id: str,
+    start_date: str,
+    api_key: str | None,
+    api_limit: int,
+) -> list[dict[str, Any]]:
+    """Fetch additional activities from an earlier date range."""
+    oldest_date = datetime.fromisoformat(start_date)
+    older_start_date = (oldest_date - timedelta(days=60)).strftime("%Y-%m-%d")
+    older_end_date = (oldest_date - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    if older_start_date >= older_end_date:
+        return []
+
+    more_params = {
+        "oldest": older_start_date,
+        "newest": older_end_date,
+        "limit": api_limit,
+    }
+    more_result = await make_intervals_request(
+        url=f"/athlete/{athlete_id}/activities",
+        api_key=api_key,
+        params=more_params,
+    )
+
+    if isinstance(more_result, list):
+        return _filter_named_activities(more_result)
+    return []
+
+
+def _format_activities_response(
+    activities: list[dict[str, Any]],
+    athlete_id: str,
+    include_unnamed: bool,
+) -> str:
+    """Format the activities response based on the results."""
+    if not activities:
+        if include_unnamed:
+            return f"No valid activities found for athlete {athlete_id} in the specified date range."
+        return f"No named activities found for athlete {athlete_id} in the specified date range. Try with include_unnamed=True to see all activities."
+
+    # Format the output
+    activities_summary = "Activities:\n\n"
+    for activity in activities:
+        if isinstance(activity, dict):
+            activities_summary += format_activity_summary(activity) + "\n"
+        else:
+            activities_summary += f"Invalid activity format: {activity}\n\n"
+
+    return activities_summary
+
+
 @mcp.tool()
-async def get_activities(
+async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-statements,too-many-branches,too-many-positional-arguments
     athlete_id: str | None = None,
     api_key: str | None = None,
     start_date: str | None = None,
@@ -212,100 +294,39 @@ async def get_activities(
 
     # Call the Intervals.icu API
     params = {"oldest": start_date, "newest": end_date, "limit": api_limit}
-
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/activities", api_key=api_key, params=params
     )
 
-    # Check for error differently based on result type
+    # Check for error
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")
         return f"Error fetching activities: {error_message}"
 
-    # Format the response
     if not result:
         return f"No activities found for athlete {athlete_id_to_use} in the specified date range."
 
-    # Ensure result is a list of activity dictionaries
-    activities: list[dict[str, Any]] = []
-
-    if isinstance(result, list):
-        # Result is already a list
-        activities = [item for item in result if isinstance(item, dict)]
-    elif isinstance(result, dict):
-        # Result is a single activity or a container
-        for key, value in result.items():
-            if isinstance(value, list):
-                # Found a list inside the dictionary
-                activities = [item for item in value if isinstance(item, dict)]
-                break
-        # If no list was found but the dict has typical activity fields, treat it as a single activity
-        if not activities and any(
-            key in result for key in ["name", "startTime", "distance"]
-        ):
-            activities = [result]
+    # Parse activities from result
+    activities = _parse_activities_from_result(result)
 
     if not activities:
         return f"No valid activities found for athlete {athlete_id_to_use} in the specified date range."
 
-    # Filter out unnamed activities if needed and limit to requested count
+    # Filter and fetch more if needed
     if not include_unnamed:
-        activities = [
-            activity
-            for activity in activities
-            if activity.get("name") and activity.get("name") != "Unnamed"
-        ]
+        activities = _filter_named_activities(activities)
 
         # If we don't have enough named activities, try to fetch more
         if len(activities) < limit:
-            # Calculate how far back we need to go to get more activities
-            oldest_date = datetime.fromisoformat(start_date)
-            older_start_date = (oldest_date - timedelta(days=60)).strftime("%Y-%m-%d")
-            older_end_date = (oldest_date - timedelta(days=1)).strftime("%Y-%m-%d")
-
-            # Additional fetch if needed
-            if older_start_date < older_end_date:
-                more_params = {
-                    "oldest": older_start_date,
-                    "newest": older_end_date,
-                    "limit": api_limit,
-                }
-                more_result = await make_intervals_request(
-                    url=f"/athlete/{athlete_id_to_use}/activities",
-                    api_key=api_key,
-                    params=more_params,
-                )
-
-                if isinstance(more_result, list):
-                    more_activities = [
-                        activity
-                        for activity in more_result
-                        if isinstance(activity, dict)
-                        and activity.get("name")
-                        and activity.get("name") != "Unnamed"
-                    ]
-                    activities.extend(more_activities)
+            more_activities = await _fetch_more_activities(
+                athlete_id_to_use, start_date, api_key, api_limit
+            )
+            activities.extend(more_activities)
 
     # Limit to requested count
     activities = activities[:limit]
 
-    if not activities:
-        if include_unnamed:
-            return (
-                f"No valid activities found for athlete {athlete_id_to_use} in the specified date range."
-            )
-        return (
-            f"No named activities found for athlete {athlete_id_to_use} in the specified date range. Try with include_unnamed=True to see all activities."
-        )
-
-    activities_summary = "Activities:\n\n"
-    for activity in activities:
-        if isinstance(activity, dict):
-            activities_summary += format_activity_summary(activity) + "\n"
-        else:
-            activities_summary += f"Invalid activity format: {activity}\n\n"
-
-    return activities_summary
+    return _format_activities_response(activities, athlete_id_to_use, include_unnamed)
 
 
 @mcp.tool()

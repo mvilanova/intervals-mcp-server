@@ -12,15 +12,16 @@ These tests use monkeypatching to mock API responses and verify the formatting a
 The tests ensure that the server's public API returns expected strings and handles data correctly.
 """
 
-import sys
-import pathlib
 import asyncio
 import os
+import pathlib
+import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 os.environ.setdefault("API_KEY", "test")
 os.environ.setdefault("ATHLETE_ID", "i1")
-from intervals_mcp_server.server import (
+
+from intervals_mcp_server.server import (  # pylint: disable=wrong-import-position
     get_activities,
     get_activity_details,
     get_events,
@@ -28,7 +29,7 @@ from intervals_mcp_server.server import (
     get_wellness_data,
     get_activity_intervals,
 )
-from tests.sample_data import INTERVALS_DATA
+from tests.sample_data import INTERVALS_DATA  # pylint: disable=wrong-import-position
 
 
 def test_get_activities(monkeypatch):
