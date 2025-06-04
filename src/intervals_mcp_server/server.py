@@ -39,6 +39,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any
+import json
 
 import httpx  # pylint: disable=import-error
 from mcp.server.fastmcp import FastMCP  # pylint: disable=import-error
@@ -174,6 +175,61 @@ async def make_intervals_request(
         return {"error": True, "message": f"HTTP client error: {str(e)}"}
 
 
+async def post_intervals_data(
+    data, url: str, api_key: str | None = None, params: dict[str, Any] | None = None
+) -> dict[str, Any] | list[dict[str, Any]]:
+    """Make a POST request to the Intervals.icu API with proper error handling."""
+
+    headers = {"User-Agent": USER_AGENT, "Accept": "application/json", "Content-Type": "application/json"}
+
+    # Use provided api_key or fall back to global API_KEY
+    key_to_use = api_key if api_key is not None else API_KEY
+    auth = httpx.BasicAuth("API_KEY", key_to_use)
+    full_url = f"{INTERVALS_API_BASE_URL}{url}"
+    final_data=json.dumps(data)
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                full_url, headers=headers, params=params, auth=auth, timeout=30.0, data=final_data
+            )
+
+            # Assign to _ to indicate intentional ignoring of return value
+            _ = response.raise_for_status()
+            return response.json() if response.content else {}
+
+        except httpx.HTTPStatusError as e:
+            error_code = e.response.status_code
+            error_text = e.response.text
+
+            logger.error("HTTP error: %s - %s", error_code, error_text)
+
+            # Provide specific messages for common error codes
+            error_messages = {
+                HTTPStatus.UNAUTHORIZED: f"{HTTPStatus.UNAUTHORIZED.value} {HTTPStatus.UNAUTHORIZED.phrase}: Please check your API key.",
+                HTTPStatus.FORBIDDEN: f"{HTTPStatus.FORBIDDEN.value} {HTTPStatus.FORBIDDEN.phrase}: You may not have permission to access this resource.",
+                HTTPStatus.NOT_FOUND: f"{HTTPStatus.NOT_FOUND.value} {HTTPStatus.NOT_FOUND.phrase}: The requested endpoint or ID doesn't exist.",
+                HTTPStatus.UNPROCESSABLE_ENTITY: f"{HTTPStatus.UNPROCESSABLE_ENTITY.value} {HTTPStatus.UNPROCESSABLE_ENTITY.phrase}: The server couldn't process the request (invalid parameters or unsupported operation).",
+                HTTPStatus.TOO_MANY_REQUESTS: f"{HTTPStatus.TOO_MANY_REQUESTS.value} {HTTPStatus.TOO_MANY_REQUESTS.phrase}: Too many requests in a short time period.",
+                HTTPStatus.INTERNAL_SERVER_ERROR: f"{HTTPStatus.INTERNAL_SERVER_ERROR.value} {HTTPStatus.INTERNAL_SERVER_ERROR.phrase}: The Intervals.icu server encountered an internal error.",
+                HTTPStatus.SERVICE_UNAVAILABLE: f"{HTTPStatus.SERVICE_UNAVAILABLE.value} {HTTPStatus.SERVICE_UNAVAILABLE.phrase}: The Intervals.icu server might be down or undergoing maintenance.",
+            }
+
+            # Get a specific message or default to the server's response
+            try:
+                status = HTTPStatus(error_code)
+                custom_message = error_messages.get(status, error_text)
+            except ValueError:
+                # If the status code doesn't map to HTTPStatus, use the error_text
+                custom_message = error_text
+
+            return {"error": True, "status_code": error_code, "message": custom_message}
+        except httpx.RequestError as e:
+            logger.error("Request error: %s", str(e))
+            return {"error": True, "message": f"Request error: {str(e)}"}
+        except Exception as e:
+            logger.error("Unexpected error: %s", str(e))
+            return {"error": True, "message": f"Unexpected error: {str(e)}"}
 # ----- MCP Tool Implementations ----- #
 
 
@@ -375,6 +431,39 @@ async def get_activity_details(activity_id: str, api_key: str | None = None) -> 
 
     return detailed_view
 
+@mcp.tool()
+async def get_activity_intervals(activity_id: str, api_key: str | None = None) -> str:
+    """Get interval data for a specific activity from Intervals.icu
+
+    This endpoint returns detailed metrics for each interval in an activity, including power, heart rate,
+    cadence, speed, and environmental data. It also includes grouped intervals if applicable.
+
+    Args:
+        activity_id: The Intervals.icu activity ID
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+    """
+    # Call the Intervals.icu API
+    result = await make_intervals_request(
+        url=f"/activity/{activity_id}/intervals", api_key=api_key
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error fetching intervals: {error_message}"
+
+    # Format the response
+    if not result:
+        return f"No interval data found for activity {activity_id}."
+
+    # If the result is empty or doesn't contain expected fields
+    if not isinstance(result, dict) or not any(
+        key in result for key in ["icu_intervals", "icu_groups"]
+    ):
+        return f"No interval data or unrecognized format for activity {activity_id}."
+
+    # Format the intervals data
+    return format_intervals(result)
+
 
 @mcp.tool()
 async def get_events(
@@ -526,41 +615,113 @@ async def get_wellness_data(
 
     return wellness_summary
 
+def convert_duration(duration):
+    if "km" in duration:
+        return float(duration.replace("km", "")) * 1000  # Convert km to meters
+    elif "m" in duration and not duration.endswith("km"):
+        return int(duration.replace("m", "")) * 60  # Convert minutes to seconds
+    elif "s" in duration:
+        return int(duration.replace("s", ""))  # Keep seconds as is
+    else:
+        return int(duration)  # Default for unknown formats
+
+# Expand repeated intervals into separate blocks
+def expand_repeats(steps):
+    expanded_steps = []
+    for step in steps:
+        if "description" in step and step["description"].endswith("x"):
+            repeat_count = int(step["description"].replace("x", "").strip())
+            for _ in range(repeat_count):
+                expanded_steps.extend(steps[steps.index(step) + 1:steps.index(step) + 3])
+        elif "duration" in step:
+            expanded_steps.append(step)
+    return expanded_steps
 
 @mcp.tool()
-async def get_activity_intervals(activity_id: str, api_key: str | None = None) -> str:
-    """Get interval data for a specific activity from Intervals.icu
+async def post_events(
+    athlete_id: str | None = None,
+    api_key: str | None = None,
+    start_date: str | None = None,
+    name: str | None = None,
+    data: dict | None = None,
 
-    This endpoint returns detailed metrics for each interval in an activity, including power, heart rate,
-    cadence, speed, and environmental data. It also includes grouped intervals if applicable.
+) -> str:
+    """Post events for an athlete to Intervals.icu this follows the event api from intervals.icu as listed 
+    in https://intervals.icu/api-docs.html#post-/api/v1/athlete/-id-/events
+
+    An example used from https://github.com/h3xh0und/intervals.icu-api/blob/main/upload_training.py how to format the data for percentage of ftp in power
+        {
+            "start_date": "2025-01-14",
+            "name": "Run - VO2 Max Intervals",
+            "steps": [
+                {"duration": "15m", "power": "80%",  "description": "Warm-up"},
+                {"duration": "3m", "power": "110%",  "description": "High-intensity interval"},
+                {"duration": "3m", "power": "80%",  "description": "Recovery"},
+                {"duration": "3m", "power": "110%",  "description": "High-intensity interval"},
+                {"duration": "10m", "power": "80%", "description": "Cool-down"}
+            ]
+        }
 
     Args:
-        activity_id: The Intervals.icu activity ID
+        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
+        name: Name of the activity
+        description: General description of the workout to post.
     """
+    # Use provided athlete_id or fall back to global ATHLETE_ID
+    athlete_id_to_use = athlete_id if athlete_id is not None else ATHLETE_ID
+    if not athlete_id_to_use:
+        return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
+
+    # Parse date parameters
+    if not start_date:
+        start_date = datetime.now().strftime("%Y-%m-%d")
+
+    description_lines = []
+    expanded_steps = data["steps"]
+
+    for step in expanded_steps:
+        description_lines.append(f"- {step['duration']} {step['power']}")
+        if "cadence" in step:
+            description_lines[-1] += f" ({step['cadence']})"
+
+    final_data = {}
+
+    final_data.update({
+            "start_date_local": start_date + "T00:00:00",
+            "category": "WORKOUT",
+            "name": name,
+            "description": "\n".join(description_lines).strip(),
+            "type": "Ride" if "Bike" in name else "Run" if "Run" in name else "Swim",
+            "target": "POWER" if "Power" in name else "PACE" if "pace" in name else "HR" if "hr" in name else "AUTO",
+            "moving_time": sum(
+                convert_duration(step["duration"]) for step in expanded_steps
+            ),
+        })
+    
     # Call the Intervals.icu API
-    result = await make_intervals_request(
-        url=f"/activity/{activity_id}/intervals", api_key=api_key
+
+    result = await post_intervals_data(
+        url=f"/athlete/{athlete_id_to_use}/events", api_key=api_key, data=final_data
     )
 
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")
-        return f"Error fetching intervals: {error_message}"
+        return f"Error fetching events: {error_message}" f" data used:{final_data}"
 
     # Format the response
     if not result:
-        return f"No interval data found for activity {activity_id}."
-
-    # If the result is empty or doesn't contain expected fields
-    if not isinstance(result, dict) or not any(
-        key in result for key in ["icu_intervals", "icu_groups"]
-    ):
-        return f"No interval data or unrecognized format for activity {activity_id}."
-
-    # Format the intervals data
-    return format_intervals(result)
+        return f"No events posted for athlete {athlete_id_to_use}."
 
 
+    # Ensure result is a dict
+    events = result if isinstance(result, dict) else []
+
+    if not events:
+        return f"format error, verify intervals for correct event at {start_date}"
+
+    return events
 # Run the server
 if __name__ == "__main__":
     mcp.run()
