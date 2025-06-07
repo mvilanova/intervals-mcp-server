@@ -27,6 +27,7 @@ Usage:
         - get_event_by_id
         - get_wellness_data
         - get_activity_intervals
+        - add_events
 
     See the README for more details on configuration and usage.
 """
@@ -39,6 +40,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any
+import json
 
 import httpx  # pylint: disable=import-error
 from mcp.server.fastmcp import FastMCP  # pylint: disable=import-error
@@ -109,29 +111,41 @@ if not re.fullmatch(r"i\d+", ATHLETE_ID):
 
 
 async def make_intervals_request(
-    url: str, api_key: str | None = None, params: dict[str, Any] | None = None
+    url: str, api_key: str | None = None, params: dict[str, Any] | None = None, method: str = "GET", data = None
 ) -> dict[str, Any] | list[dict[str, Any]]:
     """
-    Make a GET request to the Intervals.icu API with proper error handling.
+    Make a request to the Intervals.icu API with proper error handling.
 
     Args:
         url (str): The API endpoint path (e.g., '/athlete/{id}/activities').
         api_key (str | None): Optional API key to use for authentication. Defaults to the global API_KEY.
         params (dict[str, Any] | None): Optional query parameters for the request.
+        method (str): HTTP method to use (GET, POST, etc.). Defaults to GET.
+        data (dict[str, Any] | None): Optional data to send in the request body.
 
     Returns:
         dict[str, Any] | list[dict[str, Any]]: The parsed JSON response from the API, or an error dict.
     """
     headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
 
+    if method == "POST":
+        headers["Content-Type"] = "application/json"
+
     # Use provided api_key or fall back to global API_KEY
     key_to_use = api_key if api_key is not None else API_KEY
     auth = httpx.BasicAuth("API_KEY", key_to_use)
     full_url = f"{INTERVALS_API_BASE_URL}{url}"
+    final_data=json.dumps(data)
 
     try:
-        response = await httpx_client.get(
-            full_url, headers=headers, params=params, auth=auth, timeout=30.0
+        response = await httpx_client.request(
+            method=method,
+            url=full_url,
+            headers=headers,
+            params=params,
+            auth=auth,
+            timeout=30.0,
+            data=final_data
         )
         try:
             data = response.json() if response.content else {}
@@ -172,7 +186,6 @@ async def make_intervals_request(
     except httpx.HTTPError as e:
         logger.error("HTTP client error: %s", str(e))
         return {"error": True, "message": f"HTTP client error: {str(e)}"}
-
 
 # ----- MCP Tool Implementations ----- #
 
@@ -375,6 +388,39 @@ async def get_activity_details(activity_id: str, api_key: str | None = None) -> 
 
     return detailed_view
 
+@mcp.tool()
+async def get_activity_intervals(activity_id: str, api_key: str | None = None) -> str:
+    """Get interval data for a specific activity from Intervals.icu
+
+    This endpoint returns detailed metrics for each interval in an activity, including power, heart rate,
+    cadence, speed, and environmental data. It also includes grouped intervals if applicable.
+
+    Args:
+        activity_id: The Intervals.icu activity ID
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+    """
+    # Call the Intervals.icu API
+    result = await make_intervals_request(
+        url=f"/activity/{activity_id}/intervals", api_key=api_key
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error fetching intervals: {error_message}"
+
+    # Format the response
+    if not result:
+        return f"No interval data found for activity {activity_id}."
+
+    # If the result is empty or doesn't contain expected fields
+    if not isinstance(result, dict) or not any(
+        key in result for key in ["icu_intervals", "icu_groups"]
+    ):
+        return f"No interval data or unrecognized format for activity {activity_id}."
+
+    # Format the intervals data
+    return format_intervals(result)
+
 
 @mcp.tool()
 async def get_events(
@@ -515,7 +561,7 @@ async def get_wellness_data(
     # Handle both list and dictionary responses
     if isinstance(result, dict):
         for date_str, data in result.items():
-            # Add the date to the data dictionary if it's not already presen
+            # Add the date to the data dictionary if it's not already present
             if isinstance(data, dict) and "date" not in data:
                 data["date"] = date_str
             wellness_summary += format_wellness_entry(data) + "\n\n"
@@ -526,41 +572,192 @@ async def get_wellness_data(
 
     return wellness_summary
 
+def convert_distance(distance):
+    if "km" in distance:
+        return float(distance.replace("km", "").strip()) * 1000  # Convert km to meters
+    elif "m" in distance:
+        return int(distance.replace("mtr", "").strip())  # Keep meters as is
+
+def convert_duration(duration):
+    if "h" in duration:
+        return int(duration.replace("h", "").strip()) * 3600  # Convert hours to seconds
+    elif "m" in duration:
+        return int(duration.replace("m", "").strip()) * 60  # Convert minutes to seconds
+    elif "s" in duration:
+        return int(duration.replace("s", "").strip())  # Keep seconds as is
+    else:
+        return int(duration)  # Default for unknown formats
 
 @mcp.tool()
-async def get_activity_intervals(activity_id: str, api_key: str | None = None) -> str:
-    """Get interval data for a specific activity from Intervals.icu
+async def add_events(
+    athlete_id: str | None = None,
+    api_key: str | None = None,
+    start_date: str | None = None,
+    name: str | None = None,
+    steps: list | None = None,
+    workout_type: str | None = None,
+    target_type: str | None = None,
+    moving_time: str | None = None,
+    distance: str | None = None,
 
-    This endpoint returns detailed metrics for each interval in an activity, including power, heart rate,
-    cadence, speed, and environmental data. It also includes grouped intervals if applicable.
+) -> str:
+    """Post events for an athlete to Intervals.icu this follows the event api from intervals.icu as listed 
+    in https://intervals.icu/api-docs.html#post-/api/v1/athlete/-id-/events
+
+    Example:
+    {
+            "start_date": "2025-01-14",
+            "name": "Run - VO2 Max Intervals",
+            "workout_type": "Run",  # Workout type (Ride, Run, Swim, etc.)
+            "target_type": "POWER",  # Target (POWER, PACE, HR, AUTO)
+            "moving_time": "1h",  # Total time of the workout
+            "distance": "10km",  # Total distance of the workout
+            "steps": [
+                {"duration": "15m", "target": "80%",  "description": "Warm-up"},
+                {"distance": "500m", "target": "110%",  "description": "High-intensity interval"},
+                {"duration": "90s", "target": "80%",  "description": "Recovery"},
+                {"distance": "500m", "target": "110%",  "description": "High-intensity interval"},
+                {"duration": "10m", "target": "80%", "description": "Cool-down"}
+            ]
+        }
+    
+    Common workout types:
+        - "Run" for running workouts
+        - "Ride" for cycling workouts  
+        - "Swim" for swimming workouts
+        - "Walk" for walking/hiking
+        - "Row" for rowing
+    
+    Target options:
+        - "POWER" for power-based workouts (cycling)
+        - "PACE" for pace-based workouts (running)
+        - "HR" for heart rate-based workouts
+        - "AUTO" for automatic detection
 
     Args:
-        activity_id: The Intervals.icu activity ID
+        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
+        name: Name of the activity
+        steps: List of workout steps (each one should have one of duration or distance)
+            - duration: Duration of the step (90s, 15m, 1h, etc.)
+            - distance: Distance of the step (100mtr, 1km, 10km, etc.)
+            - target: Target for the step (given in %, W, pace, etc. as matching the target_type given)
+            - description: Description of the step
+        workout_type: Workout type (Run, Ride, Swim, etc.)
+        target_type: Target metric (POWER, PACE, HR, AUTO)
+        moving_time: Total expected moving time of the workout
+        distance: Total expected distance of the workout
     """
+    # Use provided athlete_id or fall back to global ATHLETE_ID
+    athlete_id_to_use = athlete_id if athlete_id is not None else ATHLETE_ID
+    if not athlete_id_to_use:
+        return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
+
+    # Parse date parameters
+    if not start_date:
+        start_date = datetime.now().strftime("%Y-%m-%d")
+
+    description_lines = []
+    for step in steps:
+        if "duration" in step and "distance" in step:
+            raise ValueError("Step must have either duration or distance, not both")
+        if "duration" not in step and "distance" not in step:
+            raise ValueError("Step must have either duration or distance")
+        if "target" not in step:
+            raise ValueError("Step must have target")
+
+        description_lines.append("- ")
+        if "duration" in step:
+            description_lines[-1] += f"{step['duration']}"
+        if "distance" in step:
+            description_lines[-1] += f"{step['distance']}"
+        description_lines[-1] += f" {step['target']}"
+        if "description" in step:
+            description_lines[-1] += f" ({step['description']})"
+        if "cadence" in step:
+            description_lines[-1] += f" ({step['cadence']})"
+
+    final_data = {}
+    
+    # Determine workout type
+    if not workout_type:
+        # Fall back to keyword detection in name
+        name_lower = name.lower() if name else ""
+        if any(keyword in name_lower for keyword in ["bike", "cycle", "cycling", "ride"]):
+            workout_type = "Ride"
+        elif any(keyword in name_lower for keyword in ["run", "running", "jog", "jogging"]):
+            workout_type = "Run"
+        elif any(keyword in name_lower for keyword in ["swim", "swimming", "pool"]):
+            workout_type = "Swim"
+        elif any(keyword in name_lower for keyword in ["walk", "walking", "hike", "hiking"]):
+            workout_type = "Walk"
+        elif any(keyword in name_lower for keyword in ["row", "rowing"]):
+            workout_type = "Row"
+        else:
+            # Default to Ride, probably the most common type on Intervals
+            # IMPORTANT: This default means workouts without clear keywords will be created as Rides
+            # To avoid this, always specify "type" in the data dict when creating workouts
+            workout_type = "Ride"
+
+    # Determine target type
+    if target_type not in ["POWER", "PACE", "HR", "AUTO"]:
+        # Fall back to keyword detection in name
+        name_lower = name.lower() if name else ""
+        if any(keyword in name_lower for keyword in ["power"]):
+            target_type = "POWER"
+        elif any(keyword in name_lower for keyword in ["pace"]):
+            target_type = "PACE"
+        elif any(keyword in name_lower for keyword in ["hr"]):
+            target_type = "HR"
+        else:
+            target_type = "AUTO"
+
+    if moving_time:
+        moving_time = convert_duration(moving_time)
+    else:
+        if all("duration" in step for step in steps):
+            moving_time = sum(convert_duration(step["duration"]) for step in steps)
+
+    if distance:
+        distance = convert_distance(distance)
+    else:
+        if all("distance" in step for step in steps):
+            distance = sum(convert_distance(step["distance"]) for step in steps)
+
+    final_data.update({
+            "start_date_local": start_date + "T00:00:00",
+            "category": "WORKOUT",
+            "name": name,
+            "description": "\n".join(description_lines).strip(),
+            "type": workout_type,
+            "target": target_type,
+            "moving_time": moving_time,
+            "distance": distance,
+        })
+    
     # Call the Intervals.icu API
+
     result = await make_intervals_request(
-        url=f"/activity/{activity_id}/intervals", api_key=api_key
+        url=f"/athlete/{athlete_id_to_use}/events", api_key=api_key, data=final_data, method="POST"
     )
 
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")
-        return f"Error fetching intervals: {error_message}"
+        return f"Error fetching events: {error_message}" f" data used:{final_data}"
 
     # Format the response
     if not result:
-        return f"No interval data found for activity {activity_id}."
-
-    # If the result is empty or doesn't contain expected fields
-    if not isinstance(result, dict) or not any(
-        key in result for key in ["icu_intervals", "icu_groups"]
-    ):
-        return f"No interval data or unrecognized format for activity {activity_id}."
-
-    # Format the intervals data
-    return format_intervals(result)
+        return f"No events posted for athlete {athlete_id_to_use}."
 
 
+    # Ensure result is a dict
+    events = result if isinstance(result, dict) else []
+
+    if not events:
+        return f"format error, verify intervals for correct event at {start_date}"
+
+    return events
 # Run the server
 if __name__ == "__main__":
     mcp.run()

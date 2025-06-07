@@ -28,6 +28,7 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_event_by_id,
     get_wellness_data,
     get_activity_intervals,
+    add_events,
 )
 from tests.sample_data import INTERVALS_DATA  # pylint: disable=wrong-import-position
 
@@ -150,3 +151,37 @@ def test_get_activity_intervals(monkeypatch):
     result = asyncio.run(get_activity_intervals("123"))
     assert "Intervals Analysis:" in result
     assert "Rep 1" in result
+
+
+def test_add_events(monkeypatch):
+    """
+    Test add_events successfully posts an event and returns the response data.
+    """
+    expected_response = {
+        "id": "e123",
+        "start_date_local": "2024-01-15T00:00:00",
+        "category": "WORKOUT",
+        "name": "Test Workout",
+        "type": "Ride"
+    }
+    
+    sample_data = {
+        "steps": [
+            {"duration": "15m", "target": "80%", "description": "Warm-up"},
+            {"duration": "3m", "target": "110%", "description": "High-intensity interval"},
+            {"duration": "3m", "target": "80%", "description": "Recovery"},
+            {"duration": "10m", "target": "80%", "description": "Cool-down"}
+        ]
+    }
+
+    async def fake_post_request(*_args, **_kwargs):
+        return expected_response
+
+    monkeypatch.setattr("intervals_mcp_server.server.make_intervals_request", fake_post_request)
+    result = asyncio.run(add_events(
+        athlete_id="i1", 
+        start_date="2024-01-15", 
+        name="Test Workout", 
+        **sample_data
+    ))
+    assert result == expected_response
