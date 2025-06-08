@@ -24,9 +24,21 @@ Usage:
         - get_activities
         - get_activity_details
         - get_events
+        - list_events
         - get_event_by_id
         - get_wellness_data
         - get_activity_intervals
+        - get_races
+        - get_power_curves
+        - get_activity_power_curves
+        - get_pace_curves
+        - get_activity_pace_curve
+        - get_athlete
+        - get_power_hr_curve
+        - get_activity_power_vs_hr
+        - get_activity_hr_curve
+        - get_workout_format_examples
+        - create_workout
 
     See the README for more details on configuration and usage.
 """
@@ -150,7 +162,75 @@ async def make_intervals_request(
             HTTPStatus.UNAUTHORIZED: f"{HTTPStatus.UNAUTHORIZED.value} {HTTPStatus.UNAUTHORIZED.phrase}: Please check your API key.",
             HTTPStatus.FORBIDDEN: f"{HTTPStatus.FORBIDDEN.value} {HTTPStatus.FORBIDDEN.phrase}: You may not have permission to access this resource.",
             HTTPStatus.NOT_FOUND: f"{HTTPStatus.NOT_FOUND.value} {HTTPStatus.NOT_FOUND.phrase}: The requested endpoint or ID doesn't exist.",
-            HTTPStatus.UNPROCESSABLE_ENTITY: f"{HTTPStatus.UNPROCESSABLE_ENTITY.value} {HTTPStatus.UNPROCESSABLE_ENTITY.phrase}: The server couldn't process the request (invalid parameters or unsupported operation).",
+            HTTPStatus.UNPROCESSABLE_ENTITY: f"{HTTPStatus.UNPROCESSABLE_ENTITY.value} {HTTPStatus.UNPROCESSABLE_ENTITY.phrase}: The server couldn't process the request (invalid parameters or unsupported operation). Details: {error_text}",
+            HTTPStatus.TOO_MANY_REQUESTS: f"{HTTPStatus.TOO_MANY_REQUESTS.value} {HTTPStatus.TOO_MANY_REQUESTS.phrase}: Too many requests in a short time period.",
+            HTTPStatus.INTERNAL_SERVER_ERROR: f"{HTTPStatus.INTERNAL_SERVER_ERROR.value} {HTTPStatus.INTERNAL_SERVER_ERROR.phrase}: The Intervals.icu server encountered an internal error.",
+            HTTPStatus.SERVICE_UNAVAILABLE: f"{HTTPStatus.SERVICE_UNAVAILABLE.value} {HTTPStatus.SERVICE_UNAVAILABLE.phrase}: The Intervals.icu server might be down or undergoing maintenance.",
+        }
+
+        # Get a specific message or default to the server's response
+        try:
+            status = HTTPStatus(error_code)
+            custom_message = error_messages.get(status, error_text)
+        except ValueError:
+            # If the status code doesn't map to HTTPStatus, use the error_text
+            custom_message = error_text
+
+        return {"error": True, "status_code": error_code, "message": custom_message}
+    except httpx.RequestError as e:
+        logger.error("Request error: %s", str(e))
+        return {"error": True, "message": f"Request error: {str(e)}"}
+    except Exception as e:
+        logger.error("Unexpected error: %s", str(e))
+        return {"error": True, "message": f"Unexpected error: {str(e)}"}
+
+
+async def make_intervals_post_request(
+    url: str, data: dict[str, Any], api_key: str | None = None
+) -> dict[str, Any] | list[dict[str, Any]]:
+    """
+    Make a POST request to the Intervals.icu API with proper error handling.
+
+    Args:
+        url (str): The API endpoint path (e.g., '/athlete/{id}/events').
+        data (dict[str, Any]): The JSON data to send in the request body.
+        api_key (str | None): Optional API key to use for authentication. Defaults to the global API_KEY.
+
+    Returns:
+        dict[str, Any] | list[dict[str, Any]]: The parsed JSON response from the API, or an error dict.
+    """
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+
+    # Use provided api_key or fall back to global API_KEY
+    key_to_use = api_key if api_key is not None else API_KEY
+    auth = httpx.BasicAuth("API_KEY", key_to_use)
+    full_url = f"{INTERVALS_API_BASE_URL}{url}"
+
+    try:
+        response = await httpx_client.post(full_url, headers=headers, json=data, auth=auth, timeout=30.0)
+        try:
+            response_data = response.json() if response.content else {}
+        except JSONDecodeError:
+            logger.error("Invalid JSON in response from: %s", full_url)
+            return {"error": True, "message": "Invalid JSON in response"}
+        _ = response.raise_for_status()
+        return response_data
+    except httpx.HTTPStatusError as e:
+        error_code = e.response.status_code
+        error_text = e.response.text
+
+        logger.error("HTTP error: %s - %s", error_code, error_text)
+
+        # Provide specific messages for common error codes
+        error_messages = {
+            HTTPStatus.UNAUTHORIZED: f"{HTTPStatus.UNAUTHORIZED.value} {HTTPStatus.UNAUTHORIZED.phrase}: Please check your API key.",
+            HTTPStatus.FORBIDDEN: f"{HTTPStatus.FORBIDDEN.value} {HTTPStatus.FORBIDDEN.phrase}: You may not have permission to access this resource.",
+            HTTPStatus.NOT_FOUND: f"{HTTPStatus.NOT_FOUND.value} {HTTPStatus.NOT_FOUND.phrase}: The requested endpoint or ID doesn't exist.",
+            HTTPStatus.UNPROCESSABLE_ENTITY: f"{HTTPStatus.UNPROCESSABLE_ENTITY.value} {HTTPStatus.UNPROCESSABLE_ENTITY.phrase}: The server couldn't process the request (invalid parameters or unsupported operation). Details: {error_text}",
             HTTPStatus.TOO_MANY_REQUESTS: f"{HTTPStatus.TOO_MANY_REQUESTS.value} {HTTPStatus.TOO_MANY_REQUESTS.phrase}: Too many requests in a short time period.",
             HTTPStatus.INTERNAL_SERVER_ERROR: f"{HTTPStatus.INTERNAL_SERVER_ERROR.value} {HTTPStatus.INTERNAL_SERVER_ERROR.phrase}: The Intervals.icu server encountered an internal error.",
             HTTPStatus.SERVICE_UNAVAILABLE: f"{HTTPStatus.SERVICE_UNAVAILABLE.value} {HTTPStatus.SERVICE_UNAVAILABLE.phrase}: The Intervals.icu server might be down or undergoing maintenance.",
@@ -996,6 +1076,145 @@ async def get_activity_hr_curve(
         return f"Error fetching activity HR curve: {result.get('message')}"
 
     return result if isinstance(result, dict) else {}
+
+
+@mcp.tool()
+async def get_workout_format_examples() -> str:
+    """Get workout format examples for creating structured workout descriptions
+
+    This tool returns the contents of workout_samples.md which contains examples
+    of how to format workout descriptions in the native Intervals.icu format.
+    Use this to understand the proper syntax for power zones, pace zones,
+    percentages, intervals, and time/distance formats.
+
+    Returns:
+        String containing workout format examples and explanations
+    """
+    try:
+        import os
+
+        # Get the path to workout_samples.md relative to this file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(os.path.dirname(current_dir))
+        workout_samples_path = os.path.join(project_root, "workout_samples.md")
+
+        with open(workout_samples_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        return content
+    except FileNotFoundError:
+        return (
+            "Error: workout_samples.md file not found. Please ensure the file exists in the project root."
+        )
+    except Exception as e:
+        return f"Error reading workout_samples.md: {str(e)}"
+
+
+@mcp.tool()
+async def create_workout(
+    name: str,
+    description: str,
+    date: str,
+    athlete_id: str | None = None,
+    api_key: str | None = None,
+    category: str = "WORKOUT",
+    workout_type: str = "Ride",
+    indoor: bool | None = None,
+    moving_time: int | None = None,
+    color: str | None = None,
+) -> str:
+    """Create a workout event on an athlete's Intervals.icu calendar
+
+    This tool creates a workout event with a structured description using the native
+    Intervals.icu workout format.
+
+    Args:
+        name: The name/title of the workout
+        description: The workout description in Intervals.icu format
+        date: The date for the workout in YYYY-MM-DD format (local date)
+        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        category: The event category (default: "WORKOUT", options: WORKOUT, RACE_A, RACE_B, RACE_C, NOTE, HOLIDAY, SICK, INJURED, SET_EFTP, FITNESS_DAYS, SEASON_START, TARGET, SET_FITNESS)
+        workout_type: The activity type for the workout (default: "Ride", options: Ride, Run, Swim, OpenWaterSwim, etc.)
+        indoor: Whether the workout is intended to be done indoors (optional)
+        moving_time: Expected moving time in seconds (optional)
+        color: Hex color code for the event (optional, e.g., "#FF0000")
+
+    Returns:
+        Success message with the created event ID or error message
+    """
+    # Use provided athlete_id or fall back to global ATHLETE_ID
+    athlete_id_to_use = athlete_id if athlete_id is not None else ATHLETE_ID
+    if not athlete_id_to_use:
+        return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
+
+    # Validate date format
+    try:
+        from datetime import datetime
+
+        datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        return "Error: Date must be in YYYY-MM-DD format."
+
+    # Validate category
+    valid_categories = [
+        "WORKOUT",
+        "RACE_A",
+        "RACE_B",
+        "RACE_C",
+        "NOTE",
+        "HOLIDAY",
+        "SICK",
+        "INJURED",
+        "SET_EFTP",
+        "FITNESS_DAYS",
+        "SEASON_START",
+        "TARGET",
+        "SET_FITNESS",
+    ]
+    if category not in valid_categories:
+        return f"Error: Invalid category. Must be one of: {', '.join(valid_categories)}"
+
+    # Build the event data with proper date format
+    # Convert YYYY-MM-DD to YYYY-MM-DDTHH:MM:SS format
+    if len(date) == 10:  # YYYY-MM-DD format
+        formatted_date = f"{date}T00:00:00"
+    else:
+        formatted_date = date
+
+    event_data = {
+        "start_date_local": formatted_date,
+        "name": name,
+        "description": description,
+        "category": category,
+        "type": workout_type,
+    }
+
+    # Add optional fields if provided
+    if indoor is not None:
+        event_data["indoor"] = indoor
+    if moving_time is not None:
+        event_data["moving_time"] = moving_time
+    if color is not None:
+        if not color.startswith("#") or len(color) != 7:
+            return "Error: Color must be a hex color code like #FF0000"
+        event_data["color"] = color
+
+    # Call the Intervals.icu API
+    result = await make_intervals_post_request(
+        url=f"/athlete/{athlete_id_to_use}/events", data=event_data, api_key=api_key
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error creating workout: {error_message}"
+
+    # Check if we got a valid response
+    if isinstance(result, dict) and "id" in result:
+        event_id = result["id"]
+        return f"Successfully created workout '{name}' on {date} (Event ID: {event_id})"
+    else:
+        return "Workout created but response format was unexpected."
 
 
 # Run the server
