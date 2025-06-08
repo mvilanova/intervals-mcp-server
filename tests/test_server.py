@@ -27,6 +27,7 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_activities,
     get_activity_details,
     get_activity_intervals,
+    get_current_date_info,
     get_events,
     get_event_by_id,
     get_wellness_data,
@@ -270,6 +271,49 @@ def test_create_workout_no_athlete_id(monkeypatch):
     assert (
         "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables." in result
     )
+
+
+def test_get_current_date_info():
+    """
+    Test get_current_date_info returns current date and time information
+    """
+    from datetime import datetime
+
+    result = asyncio.run(get_current_date_info())
+
+    # Verify the structure
+    assert isinstance(result, dict)
+    assert "current_date" in result
+    assert "day_of_week" in result
+    assert "week_number" in result
+    assert "days_until_weekend" in result
+    assert "is_weekend" in result
+    assert "year" in result
+    assert "month" in result
+    assert "day" in result
+
+    # Verify data types and ranges
+    assert isinstance(result["current_date"], str)
+    assert isinstance(result["day_of_week"], str)
+    assert isinstance(result["week_number"], int)
+    assert isinstance(result["days_until_weekend"], int)
+    assert isinstance(result["is_weekend"], bool)
+    assert isinstance(result["year"], int)
+    assert isinstance(result["month"], int)
+    assert isinstance(result["day"], int)
+
+    # Verify reasonable ranges
+    assert 0 <= result["days_until_weekend"] <= 6
+    assert 1 <= result["month"] <= 12
+    assert 1 <= result["day"] <= 31
+    assert result["year"] >= 2025
+
+    # Verify date format
+    datetime.strptime(result["current_date"], "%Y-%m-%d")  # Should not raise
+
+    # Verify day of week is valid
+    valid_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    assert result["day_of_week"] in valid_days
 
 
 def test_get_workout_format_examples():
