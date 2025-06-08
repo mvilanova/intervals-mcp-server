@@ -23,6 +23,7 @@ os.environ.setdefault("API_KEY", "test")
 os.environ.setdefault("ATHLETE_ID", "i1")
 
 from intervals_mcp_server.server import (  # pylint: disable=wrong-import-position
+    calculate_date_info,
     create_workout,
     get_activities,
     get_activity_details,
@@ -314,6 +315,81 @@ def test_get_current_date_info():
     # Verify day of week is valid
     valid_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     assert result["day_of_week"] in valid_days
+
+
+def test_calculate_date_info():
+    """
+    Test calculate_date_info returns correct information for given dates
+    """
+    from datetime import datetime, timedelta
+
+    # Test with today's date
+    today = datetime.now().strftime("%Y-%m-%d")
+    result = asyncio.run(calculate_date_info(today))
+
+    assert isinstance(result, dict)
+    assert result["date"] == today
+    assert result["is_today"] is True
+    assert result["is_past"] is False
+    assert result["is_future"] is False
+    assert result["days_from_today"] == 0
+
+    # Test with future date
+    future_date = (datetime.now() + timedelta(days=5)).strftime("%Y-%m-%d")
+    result = asyncio.run(calculate_date_info(future_date))
+
+    assert result["date"] == future_date
+    assert result["is_today"] is False
+    assert result["is_past"] is False
+    assert result["is_future"] is True
+    assert result["days_from_today"] == 5
+
+    # Test with past date
+    past_date = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
+    result = asyncio.run(calculate_date_info(past_date))
+
+    assert result["date"] == past_date
+    assert result["is_today"] is False
+    assert result["is_past"] is True
+    assert result["is_future"] is False
+    assert result["days_from_today"] == -3
+
+    # Test with known weekend date (Saturday June 7, 2025)
+    result = asyncio.run(calculate_date_info("2025-06-07"))
+
+    assert result["date"] == "2025-06-07"
+    assert result["day_of_week"] == "Saturday"
+    assert result["is_weekend"] is True
+    assert result["year"] == 2025
+    assert result["month"] == 6
+    assert result["day"] == 7
+
+    # Test with known weekday (Monday June 9, 2025)
+    result = asyncio.run(calculate_date_info("2025-06-09"))
+
+    assert result["date"] == "2025-06-09"
+    assert result["day_of_week"] == "Monday"
+    assert result["is_weekend"] is False
+
+
+def test_calculate_date_info_invalid_format():
+    """
+    Test calculate_date_info handles invalid date formats gracefully
+    """
+    result = asyncio.run(calculate_date_info("invalid-date"))
+
+    assert "error" in result
+    assert result["error"] is True
+    assert "Invalid date format" in result["message"]
+
+    # Test other invalid formats
+    result = asyncio.run(calculate_date_info("2025/06/09"))
+    assert "error" in result
+    assert result["error"] is True
+
+    result = asyncio.run(calculate_date_info("June 9, 2025"))
+    assert "error" in result
+    assert result["error"] is True
 
 
 def test_get_workout_format_examples():

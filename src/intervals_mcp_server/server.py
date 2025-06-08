@@ -38,6 +38,7 @@ Usage:
         - get_activity_power_vs_hr
         - get_activity_hr_curve
         - get_current_date_info
+        - calculate_date_info
         - get_workout_format_examples
         - create_workout
 
@@ -1116,6 +1117,64 @@ async def get_current_date_info() -> dict[str, Any]:
         "month": now.month,
         "day": now.day,
     }
+
+
+@mcp.tool()
+async def calculate_date_info(date: str) -> dict[str, Any]:
+    """Calculate date information for any given date
+
+    Given a date string, returns comprehensive information about that date
+    including day of week, relative position to today, and weekend status.
+
+    Args:
+        date: Date in YYYY-MM-DD format (e.g., "2025-06-09")
+
+    Returns:
+        Dictionary containing date information:
+        - date: The input date in YYYY-MM-DD format
+        - day_of_week: Full day name (e.g., "Monday")
+        - days_from_today: Number of days from today (negative = past, positive = future)
+        - is_weekend: Whether the date is Saturday or Sunday
+        - week_number: ISO week number (1-53)
+        - year: Year of the date
+        - month: Month of the date (1-12)
+        - day: Day of month (1-31)
+        - is_past: Whether the date is in the past
+        - is_future: Whether the date is in the future
+        - is_today: Whether the date is today
+    """
+    from datetime import datetime, timedelta
+
+    try:
+        # Parse the input date
+        target_date = datetime.strptime(date, "%Y-%m-%d")
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        target_date_normalized = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # Calculate days difference
+        days_diff = (target_date_normalized - today).days
+
+        # Get weekday (0=Monday, 6=Sunday)
+        weekday = target_date.weekday()
+
+        return {
+            "date": date,
+            "day_of_week": target_date.strftime("%A"),
+            "days_from_today": days_diff,
+            "is_weekend": weekday in [5, 6],  # Saturday=5, Sunday=6
+            "week_number": int(target_date.strftime("%W")),
+            "year": target_date.year,
+            "month": target_date.month,
+            "day": target_date.day,
+            "is_past": days_diff < 0,
+            "is_future": days_diff > 0,
+            "is_today": days_diff == 0,
+        }
+    except ValueError as e:
+        return {
+            "error": True,
+            "message": f"Invalid date format. Expected YYYY-MM-DD, got: {date}. Error: {str(e)}",
+        }
 
 
 @mcp.tool()
