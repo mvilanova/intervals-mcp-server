@@ -20,6 +20,9 @@ def format_activity_summary(activity: dict[str, Any]) -> str:
         except ValueError:
             pass
 
+    rpe = activity.get("perceived_exertion", None)
+    if rpe is None:
+        rpe = activity.get("icu_rpe", "N/A")
     return f"""
 Activity: {activity.get("name", "Unnamed")}
 ID: {activity.get("id", "N/A")}
@@ -57,7 +60,7 @@ Max Speed: {activity.get("max_speed", "N/A")} m/s
 Average Stride: {activity.get("average_stride", "N/A")}
 L/R Balance: {activity.get("avg_lr_balance", "N/A")}
 Weight: {activity.get("icu_weight", "N/A")} kg
-RPE: {activity.get("perceived_exertion", activity.get("icu_rpe", "N/A"))}/10
+RPE: {rpe}/10
 Session RPE: {activity.get("session_rpe", "N/A")}
 Feel: {activity.get("feel", "N/A")}/10
 
