@@ -37,7 +37,7 @@ Usage:
         - get_power_hr_curve
         - get_activity_power_vs_hr
         - get_activity_hr_curve
-        - get_current_date_info
+        - get_current_date_and_time_info
         - calculate_date_info
         - get_workout_format_examples
         - create_workout
@@ -1081,15 +1081,21 @@ async def get_activity_hr_curve(
 
 
 @mcp.tool()
-async def get_current_date_info() -> dict[str, Any]:
+async def get_current_date_and_time_info() -> dict[str, Any]:
     """Get current date and time information
 
-    Returns comprehensive information about the current date including
-    day of week, week number, and relative day calculations.
+    Returns comprehensive information about the current date and time including
+    day of week, week number, time details, timezone, and relative day calculations.
 
     Returns:
-        Dictionary containing current date information:
+        Dictionary containing current date and time information:
         - current_date: ISO format date (YYYY-MM-DD)
+        - current_time: 24-hour format time (HH:MM:SS)
+        - current_datetime: ISO format datetime (YYYY-MM-DDTHH:MM:SS)
+        - current_datetime_with_tz: ISO format datetime with timezone (YYYY-MM-DDTHH:MM:SS±HH:MM)
+        - timezone_name: Timezone name (e.g., "UTC", "America/New_York")
+        - timezone_offset: UTC offset in format ±HH:MM
+        - utc_datetime: UTC datetime (YYYY-MM-DDTHH:MM:SSZ)
         - day_of_week: Full day name (e.g., "Sunday")
         - week_number: ISO week number (1-53)
         - days_until_weekend: Days until Saturday (0-6)
@@ -1097,25 +1103,48 @@ async def get_current_date_info() -> dict[str, Any]:
         - year: Current year
         - month: Current month (1-12)
         - day: Current day of month (1-31)
+        - hour: Current hour (0-23)
+        - minute: Current minute (0-59)
+        - second: Current second (0-59)
     """
-    from datetime import datetime
+    import time
+    from datetime import datetime, timezone
 
-    now = datetime.now()
+    # Get local time with timezone info
+    now_local = datetime.now()
+    now_utc = datetime.now(timezone.utc)
+    now_with_tz = datetime.now().astimezone()
+
+    # Get timezone information
+    timezone_name = time.tzname[time.daylight] if time.daylight else time.tzname[0]
+    utc_offset_seconds = -time.timezone if not time.daylight else -time.altzone
+    utc_offset_hours = utc_offset_seconds // 3600
+    utc_offset_minutes = abs(utc_offset_seconds % 3600) // 60
+    utc_offset_str = f"{utc_offset_hours:+03d}:{utc_offset_minutes:02d}"
 
     # Calculate days until weekend (Saturday = 5, Sunday = 6 in weekday())
     # weekday(): Monday=0, Tuesday=1, ..., Sunday=6
-    current_weekday = now.weekday()  # 0=Monday, 6=Sunday
+    current_weekday = now_local.weekday()  # 0=Monday, 6=Sunday
     days_until_saturday = (5 - current_weekday) % 7  # Saturday is weekday 5
 
     return {
-        "current_date": now.strftime("%Y-%m-%d"),
-        "day_of_week": now.strftime("%A"),
-        "week_number": int(now.strftime("%W")),  # ISO week number
+        "current_date": now_local.strftime("%Y-%m-%d"),
+        "current_time": now_local.strftime("%H:%M:%S"),
+        "current_datetime": now_local.strftime("%Y-%m-%dT%H:%M:%S"),
+        "current_datetime_with_tz": now_with_tz.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "timezone_name": timezone_name,
+        "timezone_offset": utc_offset_str,
+        "utc_datetime": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "day_of_week": now_local.strftime("%A"),
+        "week_number": int(now_local.strftime("%W")),  # ISO week number
         "days_until_weekend": days_until_saturday,
         "is_weekend": current_weekday in [5, 6],  # Saturday=5, Sunday=6
-        "year": now.year,
-        "month": now.month,
-        "day": now.day,
+        "year": now_local.year,
+        "month": now_local.month,
+        "day": now_local.day,
+        "hour": now_local.hour,
+        "minute": now_local.minute,
+        "second": now_local.second,
     }
 
 

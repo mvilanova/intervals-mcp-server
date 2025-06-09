@@ -28,9 +28,9 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_activities,
     get_activity_details,
     get_activity_intervals,
-    get_current_date_info,
-    get_events,
+    get_current_date_and_time_info,
     get_event_by_id,
+    get_events,
     get_wellness_data,
     get_workout_format_examples,
 )
@@ -274,17 +274,23 @@ def test_create_workout_no_athlete_id(monkeypatch):
     )
 
 
-def test_get_current_date_info():
+def test_get_current_date_and_time_info():
     """
-    Test get_current_date_info returns current date and time information
+    Test get_current_date_and_time_info returns current date and time information
     """
     from datetime import datetime
 
-    result = asyncio.run(get_current_date_info())
+    result = asyncio.run(get_current_date_and_time_info())
 
     # Verify the structure
     assert isinstance(result, dict)
     assert "current_date" in result
+    assert "current_time" in result
+    assert "current_datetime" in result
+    assert "current_datetime_with_tz" in result
+    assert "timezone_name" in result
+    assert "timezone_offset" in result
+    assert "utc_datetime" in result
     assert "day_of_week" in result
     assert "week_number" in result
     assert "days_until_weekend" in result
@@ -292,9 +298,18 @@ def test_get_current_date_info():
     assert "year" in result
     assert "month" in result
     assert "day" in result
+    assert "hour" in result
+    assert "minute" in result
+    assert "second" in result
 
     # Verify data types and ranges
     assert isinstance(result["current_date"], str)
+    assert isinstance(result["current_time"], str)
+    assert isinstance(result["current_datetime"], str)
+    assert isinstance(result["current_datetime_with_tz"], str)
+    assert isinstance(result["timezone_name"], str)
+    assert isinstance(result["timezone_offset"], str)
+    assert isinstance(result["utc_datetime"], str)
     assert isinstance(result["day_of_week"], str)
     assert isinstance(result["week_number"], int)
     assert isinstance(result["days_until_weekend"], int)
@@ -302,15 +317,32 @@ def test_get_current_date_info():
     assert isinstance(result["year"], int)
     assert isinstance(result["month"], int)
     assert isinstance(result["day"], int)
+    assert isinstance(result["hour"], int)
+    assert isinstance(result["minute"], int)
+    assert isinstance(result["second"], int)
 
     # Verify reasonable ranges
     assert 0 <= result["days_until_weekend"] <= 6
     assert 1 <= result["month"] <= 12
     assert 1 <= result["day"] <= 31
     assert result["year"] >= 2025
+    assert 0 <= result["hour"] <= 23
+    assert 0 <= result["minute"] <= 59
+    assert 0 <= result["second"] <= 59
 
-    # Verify date format
+    # Verify date and time formats
     datetime.strptime(result["current_date"], "%Y-%m-%d")  # Should not raise
+    datetime.strptime(result["current_time"], "%H:%M:%S")  # Should not raise
+    datetime.strptime(result["current_datetime"], "%Y-%m-%dT%H:%M:%S")  # Should not raise
+    assert result["utc_datetime"].endswith("Z")  # UTC should end with Z
+
+    # Verify timezone offset format (±HH:MM)
+    import re
+
+    assert re.match(r"^[+-]\d{2}:\d{2}$", result["timezone_offset"])
+
+    # Verify timezone name is not empty
+    assert len(result["timezone_name"]) > 0
 
     # Verify day of week is valid
     valid_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
