@@ -65,6 +65,7 @@ from intervals_mcp_server.utils.formatting import (
     format_event_summary,
     format_intervals,
     format_wellness_entry,
+    format_athlete_data,
 )
 
 # Try to load environment variables from .env file if it exists
@@ -921,7 +922,7 @@ async def get_activity_pace_curve(
 async def get_athlete(
     athlete_id: str | None = None,
     api_key: str | None = None,
-) -> dict | str:
+) -> str:
     """Get detailed information for an athlete from Intervals.icu
 
     Args:
@@ -929,7 +930,7 @@ async def get_athlete(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
 
     Returns:
-        Dictionary containing comprehensive athlete data including sport settings and custom items
+        Formatted Markdown string containing comprehensive athlete data including sport settings and training zones
     """
     # Use provided athlete_id or fall back to global ATHLETE_ID
     athlete_id_to_use = athlete_id if athlete_id is not None else ATHLETE_ID
@@ -947,7 +948,11 @@ async def get_athlete(
         error_message = result.get("message", "Unknown error")
         return f"Error fetching athlete data: {error_message}"
 
-    return result if isinstance(result, dict) else {}
+    if not isinstance(result, dict):
+        return "Error: Invalid response format from Intervals.icu API"
+
+    # Format the athlete data as Markdown
+    return format_athlete_data(result)
 
 
 @mcp.tool()

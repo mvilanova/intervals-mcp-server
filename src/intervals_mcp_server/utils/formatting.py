@@ -379,3 +379,167 @@ Cadence: Avg {group.get("average_cadence", 0)}, Max {group.get("max_cadence", 0)
 """
 
     return result
+
+
+def format_athlete_data(athlete: dict[str, Any]) -> str:
+    """Format athlete data into a readable Markdown string focused on key sports performance metrics.
+
+    Args:
+        athlete: The athlete data from the Intervals.icu API
+
+    Returns:
+        A formatted Markdown string representation of the athlete data
+    """
+    if not athlete or not isinstance(athlete, dict):
+        return "No athlete data available"
+
+    # Basic athlete information
+    weight_str = (
+        f"{athlete.get('icu_weight', athlete.get('weight', 'N/A'))} kg"
+        if athlete.get("icu_weight") or athlete.get("weight")
+        else "N/A"
+    )
+    height_str = f"{athlete.get('height', 'N/A')} m" if athlete.get("height") else "N/A"
+
+    result = f"""# Athlete Profile: {athlete.get('name', 'Unknown')}
+
+## Basic Information
+- **ID**: {athlete.get('id', 'N/A')}
+- **Gender**: {athlete.get('sex', 'N/A')}
+- **Location**: {', '.join(filter(None, [athlete.get('city'), athlete.get('state'), athlete.get('country')]))}
+- **Height**: {height_str}
+- **Weight**: {weight_str}
+- **Resting HR**: {athlete.get('icu_resting_hr', 'N/A')} bpm
+- **Date of Birth**: {athlete.get('icu_date_of_birth', 'N/A')}
+- **Timezone**: {athlete.get('timezone', 'N/A')}
+- **Units**: {athlete.get('measurement_preference', 'N/A')}
+
+"""
+
+    # Process sport settings
+    if "sportSettings" in athlete and athlete["sportSettings"]:
+        result += "## Sport-Specific Training Zones\n\n"
+
+        for sport_setting in athlete["sportSettings"]:
+            sport_types = sport_setting.get("types", [])
+            if not sport_types:
+                continue
+
+            # Group similar sports
+            primary_sport = sport_types[0]
+            if "Ride" in primary_sport:
+                sport_name = "Cycling"
+            elif "Run" in primary_sport:
+                sport_name = "Running"
+            elif "Swim" in primary_sport:
+                sport_name = "Swimming"
+            elif "Workout" in primary_sport:
+                sport_name = "General Workout"
+            else:
+                sport_name = primary_sport
+
+            result += f"### {sport_name}\n"
+            result += f"**Activity Types**: {', '.join(sport_types)}\n\n"
+
+            # Heart Rate data
+            if sport_setting.get("lthr") or sport_setting.get("max_hr"):
+                result += "**Heart Rate**:\n"
+                if sport_setting.get("lthr"):
+                    result += f"- LTHR: {sport_setting['lthr']} bpm\n"
+                if sport_setting.get("max_hr"):
+                    result += f"- Max HR: {sport_setting['max_hr']} bpm\n"
+
+                # HR Zones
+                if sport_setting.get("hr_zones") and sport_setting.get("hr_zone_names"):
+                    result += "- HR Zones:\n"
+                    hr_zones = sport_setting["hr_zones"]
+                    hr_names = sport_setting["hr_zone_names"]
+                    for i, (zone_name, zone_max) in enumerate(zip(hr_names, hr_zones)):
+                        zone_min = hr_zones[i - 1] if i > 0 else 0
+                        if i == len(hr_zones) - 1:  # Last zone
+                            result += f"  - **{zone_name}**: {zone_min + 1}+ bpm\n"
+                        else:
+                            result += f"  - **{zone_name}**: {zone_min + 1}-{zone_max} bpm\n"
+                result += "\n"
+
+            # Power data (cycling)
+            if sport_setting.get("ftp") or sport_setting.get("power_zones"):
+                result += "**Power**:\n"
+                if sport_setting.get("ftp"):
+                    result += f"- FTP: {sport_setting['ftp']} watts\n"
+                if sport_setting.get("w_prime"):
+                    result += f"- W': {sport_setting['w_prime']} joules\n"
+                if sport_setting.get("sweet_spot_min") and sport_setting.get("sweet_spot_max"):
+                    result += f"- Sweet Spot: {sport_setting['sweet_spot_min']}-{sport_setting['sweet_spot_max']}% FTP\n"
+
+                # Power Zones
+                if sport_setting.get("power_zones") and sport_setting.get("power_zone_names"):
+                    result += "- Power Zones:\n"
+                    power_zones = sport_setting["power_zones"]
+                    power_names = sport_setting["power_zone_names"]
+                    ftp = sport_setting.get("ftp", 0)
+                    for i, (zone_name, zone_percent) in enumerate(zip(power_names, power_zones)):
+                        zone_min_percent = power_zones[i - 1] if i > 0 else 0
+                        zone_min_watts = int(ftp * zone_min_percent / 100) if ftp else 0
+                        zone_max_watts = (
+                            int(ftp * zone_percent / 100) if ftp and zone_percent < 999 else "∞"
+                        )
+                        if zone_percent >= 999:  # Last zone
+                            result += f"  - **{zone_name}**: {zone_min_percent + 1}%+ FTP ({zone_min_watts}+ watts)\n"
+                        else:
+                            result += f"  - **{zone_name}**: {zone_min_percent + 1}-{zone_percent}% FTP ({zone_min_watts}-{zone_max_watts} watts)\n"
+                result += "\n"
+
+            # Pace data (running/swimming)
+            if sport_setting.get("threshold_pace") or sport_setting.get("pace_zones"):
+                result += "**Pace**:\n"
+                if sport_setting.get("threshold_pace"):
+                    pace_value = sport_setting["threshold_pace"]
+                    pace_units = sport_setting.get("pace_units", "MINS_KM")
+                    if pace_units == "MINS_KM":
+                        # Convert from m/s to min/km
+                        pace_display = f"{pace_value:.2f} min/km"
+                    elif pace_units == "SECS_100M":
+                        pace_display = f"{pace_value:.2f} sec/100m"
+                    else:
+                        pace_display = f"{pace_value:.2f} {pace_units}"
+                    result += f"- Threshold Pace: {pace_display}\n"
+
+                # Pace Zones
+                if sport_setting.get("pace_zones") and sport_setting.get("pace_zone_names"):
+                    result += "- Pace Zones:\n"
+                    pace_zones = sport_setting["pace_zones"]
+                    pace_names = sport_setting["pace_zone_names"]
+                    for i, (zone_name, zone_percent) in enumerate(zip(pace_names, pace_zones)):
+                        zone_min_percent = pace_zones[i - 1] if i > 0 else 0
+                        if zone_percent >= 999:  # Last zone
+                            result += f"  - **{zone_name}**: {zone_min_percent + 1}%+ threshold\n"
+                        else:
+                            result += f"  - **{zone_name}**: {zone_min_percent + 1}-{zone_percent:.1f}% threshold\n"
+                result += "\n"
+
+            # Training settings
+            if sport_setting.get("warmup_time") or sport_setting.get("cooldown_time"):
+                result += "**Training Settings**:\n"
+                if sport_setting.get("warmup_time"):
+                    result += f"- Warmup Time: {sport_setting['warmup_time'] // 60} minutes\n"
+                if sport_setting.get("cooldown_time"):
+                    result += f"- Cooldown Time: {sport_setting['cooldown_time'] // 60} minutes\n"
+                result += "\n"
+
+            result += "---\n\n"
+
+    # Bio if available
+    if athlete.get("bio"):
+        result += f"## Bio\n{athlete['bio']}\n\n"
+
+    # Additional info
+    result += "## Additional Information\n"
+    if athlete.get("plan"):
+        result += f"- **Plan**: {athlete['plan']}\n"
+    if athlete.get("icu_activated"):
+        result += f"- **Member Since**: {athlete['icu_activated'][:10]}\n"
+    if athlete.get("website"):
+        result += f"- **Website**: {athlete['website']}\n"
+
+    return result.rstrip()
