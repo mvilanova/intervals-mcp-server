@@ -16,7 +16,9 @@ The tests ensure that the server's public API returns expected strings and handl
 import asyncio
 import os
 import pathlib
+import re
 import sys
+from datetime import datetime, timedelta
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 os.environ.setdefault("API_KEY", "test")
@@ -278,8 +280,6 @@ def test_get_current_date_and_time_info():
     """
     Test get_current_date_and_time_info returns current date and time information
     """
-    from datetime import datetime
-
     result = asyncio.run(get_current_date_and_time_info())
 
     # Verify the structure
@@ -337,8 +337,6 @@ def test_get_current_date_and_time_info():
     assert result["utc_datetime"].endswith("Z")  # UTC should end with Z
 
     # Verify timezone offset format (±HH:MM)
-    import re
-
     assert re.match(r"^[+-]\d{2}:\d{2}$", result["timezone_offset"])
 
     # Verify timezone name is not empty
@@ -353,8 +351,6 @@ def test_calculate_date_info():
     """
     Test calculate_date_info returns correct information for given dates
     """
-    from datetime import datetime, timedelta
-
     # Test with today's date
     today = datetime.now().strftime("%Y-%m-%d")
     result = asyncio.run(calculate_date_info(today))

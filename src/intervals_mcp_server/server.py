@@ -49,8 +49,9 @@ from json import JSONDecodeError
 import logging
 import os
 import re
+import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from typing import Any
 
@@ -1107,9 +1108,6 @@ async def get_current_date_and_time_info() -> dict[str, Any]:
         - minute: Current minute (0-59)
         - second: Current second (0-59)
     """
-    import time
-    from datetime import datetime, timezone
-
     # Get local time with timezone info
     now_local = datetime.now()
     now_utc = datetime.now(timezone.utc)
@@ -1172,8 +1170,6 @@ async def calculate_date_info(date: str) -> dict[str, Any]:
         - is_future: Whether the date is in the future
         - is_today: Whether the date is today
     """
-    from datetime import datetime, timedelta
-
     try:
         # Parse the input date
         target_date = datetime.strptime(date, "%Y-%m-%d")
@@ -1219,8 +1215,6 @@ async def get_workout_format_examples() -> str:
         String containing workout format examples and explanations
     """
     try:
-        import os
-
         # Get the path to workout_samples.md relative to this file
         current_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(os.path.dirname(current_dir))
