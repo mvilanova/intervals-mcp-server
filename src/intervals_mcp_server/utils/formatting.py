@@ -23,6 +23,8 @@ def format_activity_summary(activity: dict[str, Any]) -> str:
     rpe = activity.get("perceived_exertion", None)
     if rpe is None:
         rpe = activity.get("icu_rpe", "N/A")
+    if isinstance(rpe, (int, float)):
+        rpe = f"{rpe}/10"
     return f"""
 Activity: {activity.get("name", "Unnamed")}
 ID: {activity.get("id", "N/A")}
