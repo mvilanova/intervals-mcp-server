@@ -102,9 +102,10 @@ USER_AGENT = "intervalsicu-mcp-server/1.0"
 if API_KEY == "":
     raise ValueError("API_KEY environment variable is not set or empty")
 
-if not re.fullmatch(r"i\d+", ATHLETE_ID):
+# Accept athlete IDs that are either all digits or start with 'i' followed by digits
+if not re.fullmatch(r"(i\d+|\d+)", ATHLETE_ID):
     raise ValueError(
-        "ATHLETE_ID must start with 'i' followed by digits, e.g. i123456"
+        "ATHLETE_ID must be all digits (e.g. 123456) or start with 'i' followed by digits (e.g. i123456)"
     )
 
 
