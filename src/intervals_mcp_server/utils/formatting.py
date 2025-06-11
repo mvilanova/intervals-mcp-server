@@ -25,6 +25,11 @@ def format_activity_summary(activity: dict[str, Any]) -> str:
         rpe = activity.get("icu_rpe", "N/A")
     if isinstance(rpe, (int, float)):
         rpe = f"{rpe}/10"
+
+    feel = activity.get("feel", "N/A")
+    if isinstance(feel, int):
+        feel = f"{feel}/5"
+
     return f"""
 Activity: {activity.get("name", "Unnamed")}
 ID: {activity.get("id", "N/A")}
@@ -64,7 +69,7 @@ L/R Balance: {activity.get("avg_lr_balance", "N/A")}
 Weight: {activity.get("icu_weight", "N/A")} kg
 RPE: {rpe}
 Session RPE: {activity.get("session_rpe", "N/A")}
-Feel: {activity.get("feel", "N/A")}/10
+Feel: {feel}
 
 Environment:
 Trainer: {activity.get("trainer", "N/A")}
