@@ -24,6 +24,7 @@ class MockBadJSONResponse:
     Simulates an httpx response object that returns invalid JSON content.
     Used to test error handling for JSONDecodeError in make_intervals_request.
     """
+
     def __init__(self):
         self.content = b"bad"
         self.status_code = 200
@@ -42,6 +43,7 @@ class MockAsyncClient:
     Simulates an httpx.AsyncClient for use in monkeypatching.
     Always returns a MockBadJSONResponse from get().
     """
+
     def __init__(self, *args, **kwargs):
         # Accept any arguments to match httpx.AsyncClient's interface
         pass

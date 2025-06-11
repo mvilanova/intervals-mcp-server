@@ -204,14 +204,13 @@ Comments: {entry.get("comments", "No comments")}
 Status: {"Locked" if entry.get("locked") else "Unlocked"}
 Last Updated: {entry.get("updated", "Unknown")}"""
 
+
 def format_event_summary(event: dict[str, Any]) -> str:
     """Format a basic event summary into a readable string."""
 
     # Update to check for "date" if "start_date_local" is not provided
     event_date = event.get("start_date_local", event.get("date", "Unknown"))
-    event_type = (
-        "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
-    )
+    event_type = "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
     event_name = event.get("name", "Unnamed")
     event_id = event.get("id", "N/A")
     event_desc = event.get("description", "No description")
@@ -289,47 +288,47 @@ Analyzed: {intervals_data.get("analyzed", "N/A")}
         result += "Individual Intervals:\n\n"
 
         for i, interval in enumerate(intervals_data["icu_intervals"], 1):
-            result += f"""[{i}] {interval.get('label', f'Interval {i}')} ({interval.get('type', 'Unknown')})
-Duration: {interval.get('elapsed_time', 0)} seconds (moving: {interval.get('moving_time', 0)} seconds)
-Distance: {interval.get('distance', 0)} meters
-Start-End Indices: {interval.get('start_index', 0)}-{interval.get('end_index', 0)}
+            result += f"""[{i}] {interval.get("label", f"Interval {i}")} ({interval.get("type", "Unknown")})
+Duration: {interval.get("elapsed_time", 0)} seconds (moving: {interval.get("moving_time", 0)} seconds)
+Distance: {interval.get("distance", 0)} meters
+Start-End Indices: {interval.get("start_index", 0)}-{interval.get("end_index", 0)}
 
 Power Metrics:
-  Average Power: {interval.get('average_watts', 0)} watts ({interval.get('average_watts_kg', 0)} W/kg)
-  Max Power: {interval.get('max_watts', 0)} watts ({interval.get('max_watts_kg', 0)} W/kg)
-  Weighted Avg Power: {interval.get('weighted_average_watts', 0)} watts
-  Intensity: {interval.get('intensity', 0)}
-  Training Load: {interval.get('training_load', 0)}
-  Joules: {interval.get('joules', 0)}
-  Joules > FTP: {interval.get('joules_above_ftp', 0)}
-  Power Zone: {interval.get('zone', 'N/A')} ({interval.get('zone_min_watts', 0)}-{interval.get('zone_max_watts', 0)} watts)
-  W' Balance: Start {interval.get('wbal_start', 0)}, End {interval.get('wbal_end', 0)}
-  L/R Balance: {interval.get('avg_lr_balance', 0)}
-  Variability: {interval.get('w5s_variability', 0)}
-  Torque: Avg {interval.get('average_torque', 0)}, Min {interval.get('min_torque', 0)}, Max {interval.get('max_torque', 0)}
+  Average Power: {interval.get("average_watts", 0)} watts ({interval.get("average_watts_kg", 0)} W/kg)
+  Max Power: {interval.get("max_watts", 0)} watts ({interval.get("max_watts_kg", 0)} W/kg)
+  Weighted Avg Power: {interval.get("weighted_average_watts", 0)} watts
+  Intensity: {interval.get("intensity", 0)}
+  Training Load: {interval.get("training_load", 0)}
+  Joules: {interval.get("joules", 0)}
+  Joules > FTP: {interval.get("joules_above_ftp", 0)}
+  Power Zone: {interval.get("zone", "N/A")} ({interval.get("zone_min_watts", 0)}-{interval.get("zone_max_watts", 0)} watts)
+  W' Balance: Start {interval.get("wbal_start", 0)}, End {interval.get("wbal_end", 0)}
+  L/R Balance: {interval.get("avg_lr_balance", 0)}
+  Variability: {interval.get("w5s_variability", 0)}
+  Torque: Avg {interval.get("average_torque", 0)}, Min {interval.get("min_torque", 0)}, Max {interval.get("max_torque", 0)}
 
 Heart Rate & Metabolic:
-  Heart Rate: Avg {interval.get('average_heartrate', 0)}, Min {interval.get('min_heartrate', 0)}, Max {interval.get('max_heartrate', 0)} bpm
-  Decoupling: {interval.get('decoupling', 0)}
-  DFA α1: {interval.get('average_dfa_a1', 0)}
-  Respiration: {interval.get('average_respiration', 0)} breaths/min
-  EPOC: {interval.get('average_epoc', 0)}
-  SmO2: {interval.get('average_smo2', 0)}% / {interval.get('average_smo2_2', 0)}%
-  THb: {interval.get('average_thb', 0)} / {interval.get('average_thb_2', 0)}
+  Heart Rate: Avg {interval.get("average_heartrate", 0)}, Min {interval.get("min_heartrate", 0)}, Max {interval.get("max_heartrate", 0)} bpm
+  Decoupling: {interval.get("decoupling", 0)}
+  DFA α1: {interval.get("average_dfa_a1", 0)}
+  Respiration: {interval.get("average_respiration", 0)} breaths/min
+  EPOC: {interval.get("average_epoc", 0)}
+  SmO2: {interval.get("average_smo2", 0)}% / {interval.get("average_smo2_2", 0)}%
+  THb: {interval.get("average_thb", 0)} / {interval.get("average_thb_2", 0)}
 
 Speed & Cadence:
-  Speed: Avg {interval.get('average_speed', 0)}, Min {interval.get('min_speed', 0)}, Max {interval.get('max_speed', 0)} m/s
-  GAP: {interval.get('gap', 0)} m/s
-  Cadence: Avg {interval.get('average_cadence', 0)}, Min {interval.get('min_cadence', 0)}, Max {interval.get('max_cadence', 0)} rpm
-  Stride: {interval.get('average_stride', 0)}
+  Speed: Avg {interval.get("average_speed", 0)}, Min {interval.get("min_speed", 0)}, Max {interval.get("max_speed", 0)} m/s
+  GAP: {interval.get("gap", 0)} m/s
+  Cadence: Avg {interval.get("average_cadence", 0)}, Min {interval.get("min_cadence", 0)}, Max {interval.get("max_cadence", 0)} rpm
+  Stride: {interval.get("average_stride", 0)}
 
 Elevation & Environment:
-  Elevation Gain: {interval.get('total_elevation_gain', 0)} meters
-  Altitude: Min {interval.get('min_altitude', 0)}, Max {interval.get('max_altitude', 0)} meters
-  Gradient: {interval.get('average_gradient', 0)}%
-  Temperature: {interval.get('average_temp', 0)}°C (Weather: {interval.get('average_weather_temp', 0)}°C, Feels like: {interval.get('average_feels_like', 0)}°C)
-  Wind: Speed {interval.get('average_wind_speed', 0)} km/h, Gust {interval.get('average_wind_gust', 0)} km/h, Direction {interval.get('prevailing_wind_deg', 0)}°
-  Headwind: {interval.get('headwind_percent', 0)}%, Tailwind: {interval.get('tailwind_percent', 0)}%
+  Elevation Gain: {interval.get("total_elevation_gain", 0)} meters
+  Altitude: Min {interval.get("min_altitude", 0)}, Max {interval.get("max_altitude", 0)} meters
+  Gradient: {interval.get("average_gradient", 0)}%
+  Temperature: {interval.get("average_temp", 0)}°C (Weather: {interval.get("average_weather_temp", 0)}°C, Feels like: {interval.get("average_feels_like", 0)}°C)
+  Wind: Speed {interval.get("average_wind_speed", 0)} km/h, Gust {interval.get("average_wind_gust", 0)} km/h, Direction {interval.get("prevailing_wind_deg", 0)}°
+  Headwind: {interval.get("headwind_percent", 0)}%, Tailwind: {interval.get("tailwind_percent", 0)}%
 
 """
 
@@ -338,16 +337,16 @@ Elevation & Environment:
         result += "Interval Groups:\n\n"
 
         for i, group in enumerate(intervals_data["icu_groups"], 1):
-            result += f"""Group: {group.get('id', f'Group {i}')} (Contains {group.get('count', 0)} intervals)
-Duration: {group.get('elapsed_time', 0)} seconds (moving: {group.get('moving_time', 0)} seconds)
-Distance: {group.get('distance', 0)} meters
-Start-End Indices: {group.get('start_index', 0)}-N/A
+            result += f"""Group: {group.get("id", f"Group {i}")} (Contains {group.get("count", 0)} intervals)
+Duration: {group.get("elapsed_time", 0)} seconds (moving: {group.get("moving_time", 0)} seconds)
+Distance: {group.get("distance", 0)} meters
+Start-End Indices: {group.get("start_index", 0)}-N/A
 
-Power: Avg {group.get('average_watts', 0)} watts ({group.get('average_watts_kg', 0)} W/kg), Max {group.get('max_watts', 0)} watts
-W. Avg Power: {group.get('weighted_average_watts', 0)} watts, Intensity: {group.get('intensity', 0)}
-Heart Rate: Avg {group.get('average_heartrate', 0)}, Max {group.get('max_heartrate', 0)} bpm
-Speed: Avg {group.get('average_speed', 0)}, Max {group.get('max_speed', 0)} m/s
-Cadence: Avg {group.get('average_cadence', 0)}, Max {group.get('max_cadence', 0)} rpm
+Power: Avg {group.get("average_watts", 0)} watts ({group.get("average_watts_kg", 0)} W/kg), Max {group.get("max_watts", 0)} watts
+W. Avg Power: {group.get("weighted_average_watts", 0)} watts, Intensity: {group.get("intensity", 0)}
+Heart Rate: Avg {group.get("average_heartrate", 0)}, Max {group.get("max_heartrate", 0)} bpm
+Speed: Avg {group.get("average_speed", 0)}, Max {group.get("max_speed", 0)} m/s
+Cadence: Avg {group.get("average_cadence", 0)}, Max {group.get("max_cadence", 0)} rpm
 
 """
 

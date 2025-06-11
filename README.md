@@ -82,7 +82,7 @@ git checkout main && git pull
 ```
 
 ### 2. Update Python dependencies
- 
+
 Activate your virtual environment and sync dependencies:
 
 ```bash

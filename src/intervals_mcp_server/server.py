@@ -91,9 +91,7 @@ async def lifespan(_app: FastMCP):
 mcp = FastMCP("intervals-icu", lifespan=lifespan)
 
 # Constants
-INTERVALS_API_BASE_URL = os.getenv(
-    "INTERVALS_API_BASE_URL", "https://intervals.icu/api/v1"
-)
+INTERVALS_API_BASE_URL = os.getenv("INTERVALS_API_BASE_URL", "https://intervals.icu/api/v1")
 API_KEY = os.getenv("API_KEY", "")  # Provide default empty string
 ATHLETE_ID = os.getenv("ATHLETE_ID", "")  # Default athlete ID from .env
 USER_AGENT = "intervalsicu-mcp-server/1.0"
@@ -186,14 +184,12 @@ def _parse_activities_from_result(result: Any) -> list[dict[str, Any]]:
         activities = [item for item in result if isinstance(item, dict)]
     elif isinstance(result, dict):
         # Result is a single activity or a container
-        for key, value in result.items():
+        for _key, value in result.items():
             if isinstance(value, list):
                 activities = [item for item in value if isinstance(item, dict)]
                 break
         # If no list was found but the dict has typical activity fields, treat it as a single activity
-        if not activities and any(
-            key in result for key in ["name", "startTime", "distance"]
-        ):
+        if not activities and any(key in result for key in ["name", "startTime", "distance"]):
             activities = [result]
 
     return activities
@@ -246,7 +242,9 @@ def _format_activities_response(
     """Format the activities response based on the results."""
     if not activities:
         if include_unnamed:
-            return f"No valid activities found for athlete {athlete_id} in the specified date range."
+            return (
+                f"No valid activities found for athlete {athlete_id} in the specified date range."
+            )
         return f"No named activities found for athlete {athlete_id} in the specified date range. Try with include_unnamed=True to see all activities."
 
     # Format the output
@@ -339,9 +337,7 @@ async def get_activity_details(activity_id: str, api_key: str | None = None) -> 
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
     # Call the Intervals.icu API
-    result = await make_intervals_request(
-        url=f"/activity/{activity_id}", api_key=api_key
-    )
+    result = await make_intervals_request(url=f"/activity/{activity_id}", api_key=api_key)
 
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")
@@ -364,15 +360,11 @@ async def get_activity_details(activity_id: str, api_key: str | None = None) -> 
         zones = activity_data["zones"]
         detailed_view += "\nPower Zones:\n"
         for zone in zones.get("power", []):
-            detailed_view += (
-                f"Zone {zone.get('number')}: {zone.get('secondsInZone')} seconds\n"
-            )
+            detailed_view += f"Zone {zone.get('number')}: {zone.get('secondsInZone')} seconds\n"
 
         detailed_view += "\nHeart Rate Zones:\n"
         for zone in zones.get("hr", []):
-            detailed_view += (
-                f"Zone {zone.get('number')}: {zone.get('secondsInZone')} seconds\n"
-            )
+            detailed_view += f"Zone {zone.get('number')}: {zone.get('secondsInZone')} seconds\n"
 
     return detailed_view
 
@@ -509,7 +501,9 @@ async def get_wellness_data(
 
     # Format the response
     if not result:
-        return f"No wellness data found for athlete {athlete_id_to_use} in the specified date range."
+        return (
+            f"No wellness data found for athlete {athlete_id_to_use} in the specified date range."
+        )
 
     wellness_summary = "Wellness Data:\n\n"
 
@@ -540,9 +534,7 @@ async def get_activity_intervals(activity_id: str, api_key: str | None = None) -
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
     # Call the Intervals.icu API
-    result = await make_intervals_request(
-        url=f"/activity/{activity_id}/intervals", api_key=api_key
-    )
+    result = await make_intervals_request(url=f"/activity/{activity_id}/intervals", api_key=api_key)
 
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")

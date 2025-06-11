@@ -143,6 +143,7 @@ def test_get_activity_intervals(monkeypatch):
     """
     Test get_activity_intervals returns a formatted string with interval analysis for a given activity.
     """
+
     async def fake_request(*_args, **_kwargs):
         return INTERVALS_DATA
 
