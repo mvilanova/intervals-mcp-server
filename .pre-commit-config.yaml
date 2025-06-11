@@ -1,0 +1,56 @@
+# Quick Start:
+#
+# pip install pre-commit
+# pre-commit install && pre-commit install -t pre-push
+# pre-commit run --all-files
+#
+# To Skip Checks:
+#
+# git commit --no-verify
+# git push --no-verify
+# test
+#
+# To update all hooks automatically:
+#
+# pre-commit autoupdate
+fail_fast: false
+
+default_language_version:
+  python: python3.12
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: no-commit-to-branch # prevent direct commits to the `main` branch
+      - id: check-toml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  # ruff
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version.
+    rev: v0.11.11
+    hooks:
+      # Run the linter.
+      - id: ruff-check
+        args: [ --fix ]
+      # Run the formatter.
+      - id: ruff-format
+
+  # typos
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.32.0
+    hooks:
+      - id: typos
+
+  # pytest
+  - repo: local
+    hooks:
+      - id: tests
+        name: run tests
+        entry: pytest -v backend/tests
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
