@@ -1,0 +1,21 @@
+Wellness Data:
+Date: 2025-05-24
+
+Training Metrics:
+- Fitness (CTL): 70.87253
+- Fatigue (ATL): 91.97159
+- Ramp Rate: 6.997368
+- CTL Load: 299
+- ATL Load: 299
+
+Sport-Specific Info:
+- Ride: eFTP = 282.85992
+
+Vital Signs:
+- Weight: 78 kg
+- Resting HR: 50 bpm
+
+Activity:
+- Steps: 2303
+
+Status: Unlocked

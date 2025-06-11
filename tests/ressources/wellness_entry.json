@@ -1,0 +1,52 @@
+{
+  "id": "2025-05-24",
+  "ctl": 70.87253,
+  "atl": 91.97159,
+  "rampRate": 6.997368,
+  "ctlLoad": 299,
+  "atlLoad": 299,
+  "sportInfo": [
+    {
+      "type": "Ride",
+      "eftp": 282.85992
+    },
+    {
+      "type": "Run",
+      "eftp": null
+    }
+  ],
+  "updated": "2025-05-25T08:10:00.827+00:00",
+  "weight": 78,
+  "restingHR": 50,
+  "hrv": null,
+  "hrvSDNN": null,
+  "menstrualPhase": null,
+  "menstrualPhasePredicted": null,
+  "kcalConsumed": null,
+  "sleepSecs": null,
+  "sleepScore": null,
+  "sleepQuality": null,
+  "avgSleepingHR": null,
+  "soreness": null,
+  "fatigue": null,
+  "stress": null,
+  "mood": null,
+  "motivation": null,
+  "injury": null,
+  "spO2": null,
+  "systolic": null,
+  "diastolic": null,
+  "hydration": null,
+  "hydrationVolume": null,
+  "readiness": null,
+  "baevskySI": null,
+  "bloodGlucose": null,
+  "lactate": null,
+  "bodyFat": null,
+  "abdomen": null,
+  "vo2max": null,
+  "comments": null,
+  "steps": 2303,
+  "respiration": null,
+  "locked": null
+}
