@@ -498,7 +498,8 @@ def format_athlete_data(athlete: dict[str, Any]) -> str:
                     pace_units = sport_setting.get("pace_units", "MINS_KM")
                     if pace_units == "MINS_KM":
                         # Convert from m/s to min/km
-                        pace_display = f"{pace_value:.2f} min/km"
+                        min_per_km = 1000 / (pace_value * 60) if pace_value > 0 else 0
+                        pace_display = f"{min_per_km:.2f} min/km"
                     elif pace_units == "SECS_100M":
                         # Convert from m/s to sec/100m
                         sec_per_100m = 100 / pace_value if pace_value > 0 else 0
