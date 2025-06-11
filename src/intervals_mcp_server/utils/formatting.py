@@ -500,7 +500,9 @@ def format_athlete_data(athlete: dict[str, Any]) -> str:
                         # Convert from m/s to min/km
                         pace_display = f"{pace_value:.2f} min/km"
                     elif pace_units == "SECS_100M":
-                        pace_display = f"{pace_value:.2f} sec/100m"
+                        # Convert from m/s to sec/100m
+                        sec_per_100m = 100 / pace_value if pace_value > 0 else 0
+                        pace_display = f"{sec_per_100m:.1f} sec/100m"
                     else:
                         pace_display = f"{pace_value:.2f} {pace_units}"
                     result += f"- Threshold Pace: {pace_display}\n"
