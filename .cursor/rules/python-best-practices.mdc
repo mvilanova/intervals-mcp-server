@@ -1,0 +1,91 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Python Best Practices for Intervals MCP Server
+
+## Code Style and Readability
+
+- Follow **PEP 8** for formatting, indentation, and naming conventions
+- Write readable, maintainable code:
+  - Use descriptive names for variables, functions, and classes
+  - Keep functions short and single-purpose (see MCP tools in [server.py](mdc:src/intervals_mcp_server/server.py))
+  - Keep indentation and spacing consistent
+- Embrace Pythonic idioms:
+  - Use list/dict comprehensions and generators where appropriate
+  - Prefer built-in functions and stdlib modules
+  - Use context managers (like the `lifespan` manager for httpx client)
+- Avoid global variables except for validated constants (API_KEY, ATHLETE_ID)
+- Use lazy **`%`** formatting in logging calls: `logger.debug("val=%s", val)`
+- Represent datetimes as timezone-aware UTC objects when possible
+
+## Type Annotations and Documentation
+
+- Add **type hints** to all function signatures (see examples in [server.py](mdc:src/intervals_mcp_server/server.py))
+- Use built-in collection types (`list`, `dict`, `set`, `tuple`) instead of `typing.List`, etc.
+- Provide clear **docstrings** for:
+  - All MCP tool functions (required by FastMCP)
+  - Public utility functions in [utils/formatting.py](mdc:src/intervals_mcp_server/utils/formatting.py)
+  - The main module docstring explaining the server's purpose
+- Use inline comments only for non-obvious logic
+
+## Error Handling and Validation
+
+- Handle errors gracefully with explicit `try/except` blocks (see `make_intervals_request()`)
+- Catch specific exceptions: `httpx.HTTPStatusError`, `httpx.RequestError`, etc.
+- Return consistent error structures with user-friendly messages
+- Validate inputs:
+  - Check API key and athlete ID on startup
+  - Validate date formats in MCP tools
+  - Use regex pattern `r"i?\d+"` for athlete ID validation
+
+## Async Programming Patterns
+
+- Use `async/await` consistently for all MCP tools and API calls
+- Share a single `httpx.AsyncClient` instance across requests
+- Properly close async resources using lifespan context manager
+- Follow FastMCP's async patterns for tool implementations
+
+## Testing Standards
+
+- Write unit tests for all MCP tools and utilities
+- Use **pytest** with `pytest-asyncio` for async function testing
+- Use **pytest-mock** (`MockerFixture`) for mocking HTTP requests
+- Test both success and error paths
+- Mock external API calls to avoid dependencies in tests
+
+## Development Environment
+
+- Target **Python 3.12+** as specified in [pyproject.toml](mdc:pyproject.toml)
+- Use **uv** for package management: `uv sync --all-extras`
+- Manage dependencies in `pyproject.toml` with lock file (`uv.lock`)
+- Always use virtual environments (`.venv/`)
+- Run quality checks before commits:
+  - `ruff .` for linting
+  - `mypy src tests` for type checking
+  - `pytest` for tests
+
+## Security Practices
+
+- Never hard-code secrets - use environment variables via `.env` file
+- Load sensitive data (API_KEY, ATHLETE_ID) from environment
+- Use HTTP Basic Auth for API authentication
+- Validate all external inputs before processing
+- Follow least-privilege principles for API access
+
+## Project-Specific Patterns
+
+- All API communication through `make_intervals_request()` function
+- Consistent error response format: `{"error": True, "status_code": int, "message": str}`
+- Use formatting utilities from [utils/formatting.py](mdc:src/intervals_mcp_server/utils/formatting.py)
+- Follow MCP tool naming conventions: `get_*` for retrieval operations
+- Support both numeric and i-prefixed athlete IDs
+
+## Code Organization
+
+- Keep all MCP tools in [server.py](mdc:src/intervals_mcp_server/server.py)
+- Place formatting utilities in [utils/formatting.py](mdc:src/intervals_mcp_server/utils/formatting.py)
+- Organize tests by functionality in [tests/](mdc:tests) directory
+- Use `__init__.py` files to mark Python packages
+- Include `py.typed` for type checking support

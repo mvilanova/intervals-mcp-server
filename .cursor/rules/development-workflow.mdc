@@ -1,0 +1,54 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Development Workflow Guide
+
+## Environment Setup
+
+1. **Use uv for package management**: This project uses [uv](mdc:https:/github.com/astral-sh/uv) instead of pip
+   ```bash
+   uv venv --python 3.12
+   source .venv/bin/activate
+   uv sync --all-extras
+   ```
+
+2. **Environment Configuration**: Copy [.env.example](mdc:.env.example) to `.env` and configure:
+   - `API_KEY` - Your Intervals.icu API key
+   - `ATHLETE_ID` - Your athlete ID (digits or i-prefixed)
+
+## Running the Server
+
+- **Manual Testing**: `mcp run src/intervals_mcp_server/server.py`
+- **Claude Desktop Integration**: Use `mcp install` command as documented in [README.md](mdc:README.md)
+
+## Code Quality Checks
+
+Before committing, ensure all three checks pass:
+
+1. **Linting**: `ruff .` - Uses default ruff rules, config in [pyproject.toml](mdc:pyproject.toml)
+2. **Type Checking**: `mypy src tests` - Static type analysis
+3. **Testing**: `pytest` - Unit tests in [tests/](mdc:tests) directory
+
+## Code Organization
+
+- **Main Logic**: All MCP tools are implemented in [src/intervals_mcp_server/server.py](mdc:src/intervals_mcp_server/server.py)
+- **Utilities**: Helper functions in [src/intervals_mcp_server/utils/](mdc:src/intervals_mcp_server/utils)
+- **API Communication**: `make_intervals_request()` function handles all Intervals.icu API calls
+- **Error Handling**: Comprehensive HTTP error handling with user-friendly messages
+
+## Adding New MCP Tools
+
+1. Create async function decorated with `@mcp.tool()`
+2. Add proper type hints and docstrings
+3. Use `make_intervals_request()` for API calls
+4. Add formatting utilities to [src/intervals_mcp_server/utils/formatting.py](mdc:src/intervals_mcp_server/utils/formatting.py) if needed
+5. Write unit tests in [tests/](mdc:tests)
+
+## Commit Guidelines
+
+- Use concise commit messages
+- Title PRs as `[intervals-mcp-server] <brief description>`
+- Ensure `ruff`, `mypy`, and `pytest` all pass
+- Document manual testing steps in PR description

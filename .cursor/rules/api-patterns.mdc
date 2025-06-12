@@ -1,0 +1,75 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# API Communication Patterns
+
+## Intervals.icu API Integration
+
+This project communicates with the Intervals.icu API using consistent patterns defined in [src/intervals_mcp_server/server.py](mdc:src/intervals_mcp_server/server.py).
+
+## Core API Function
+
+All API communication goes through `make_intervals_request()`:
+
+```python
+async def make_intervals_request(
+    url: str, 
+    api_key: str | None = None, 
+    params: dict[str, Any] | None = None
+) -> dict[str, Any] | list[dict[str, Any]]
+```
+
+### Usage Pattern
+- **URL Format**: Relative paths like `/athlete/{id}/activities`
+- **Authentication**: HTTP Basic Auth with username "API_KEY" and password as the API key
+- **Headers**: Includes User-Agent and Accept: application/json
+- **Timeout**: 30 seconds for all requests
+
+## Error Handling Strategy
+
+### HTTP Status Code Mapping
+The system provides user-friendly messages for common HTTP errors:
+- `401 Unauthorized` - Invalid API key
+- `403 Forbidden` - Permission denied
+- `404 Not Found` - Resource doesn't exist
+- `422 Unprocessable Entity` - Invalid parameters
+- `429 Too Many Requests` - Rate limiting
+- `500 Internal Server Error` - Server issues
+- `503 Service Unavailable` - Maintenance/downtime
+
+### Error Response Format
+All errors return a consistent structure:
+```python
+{
+    "error": True,
+    "status_code": int,  # HTTP status code
+    "message": str       # User-friendly error message
+}
+```
+
+## MCP Tool Implementation Pattern
+
+1. **Parameter Validation**: Check required parameters and provide defaults
+2. **API Key Resolution**: Use provided key or fall back to global `API_KEY`
+3. **Athlete ID Handling**: Support both numeric and i-prefixed formats
+4. **Date Validation**: Parse and validate date strings
+5. **API Request**: Call `make_intervals_request()` with appropriate parameters
+6. **Error Checking**: Return formatted error messages for API failures
+7. **Data Formatting**: Use utilities from [src/intervals_mcp_server/utils/formatting.py](mdc:src/intervals_mcp_server/utils/formatting.py)
+
+## Environment Variables
+
+Required configuration (validated on startup):
+- `API_KEY` - Cannot be empty
+- `ATHLETE_ID` - Must match pattern `r"i?\d+"` (digits or i-prefixed digits)
+
+Optional configuration:
+- `INTERVALS_API_BASE_URL` - Defaults to `https://intervals.icu/api/v1`
+
+## Shared HTTP Client
+
+Uses a single `httpx.AsyncClient` instance (`httpx_client`) managed by the FastMCP lifespan context manager to:
+- Reuse connections for better performance
+- Ensure proper cleanup when server stops

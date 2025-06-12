@@ -1,0 +1,89 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Testing Patterns and Practices
+
+## Test Organization
+
+Tests are organized in the [tests/](mdc:tests) directory with the following structure:
+
+- **[tests/test_server.py](mdc:tests/test_server.py)** - Main MCP tool testing
+- **[tests/test_formatting.py](mdc:tests/test_formatting.py)** - Utility function tests
+- **[tests/test_make_intervals_request.py](mdc:tests/test_make_intervals_request.py)** - API communication tests
+- **[tests/sample_data.py](mdc:tests/sample_data.py)** - Mock data for testing
+
+## Testing Framework Setup
+
+- **Framework**: pytest with async support (`pytest-asyncio`)
+- **Mocking**: pytest-mock for HTTP request mocking
+- **Configuration**: Test settings in [pyproject.toml](mdc:pyproject.toml) under `[tool.pytest.ini_options]`
+
+## Testing Patterns
+
+### Async Testing
+All MCP tools are async functions, so tests use:
+```python
+@pytest.mark.asyncio
+async def test_function_name():
+    # Test async MCP tools
+```
+
+### Mock API Responses
+HTTP requests are mocked using `pytest-mock`:
+```python
+def test_api_call(mocker):
+    mock_response = mocker.Mock()
+    mock_response.json.return_value = {"test": "data"}
+    mock_response.raise_for_status.return_value = None
+    
+    mocker.patch("httpx.AsyncClient.get", return_value=mock_response)
+```
+
+### Test Data Management
+- **Sample Data**: [tests/sample_data.py](mdc:tests/sample_data.py) contains realistic mock data
+- **Isolation**: Each test uses fresh mock data to avoid side effects
+- **Coverage**: Tests cover both success and error scenarios
+
+## Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with verbose output
+pytest -v
+
+# Run specific test file
+pytest tests/test_server.py
+
+# Run with coverage (if installed)
+pytest --cov=src/intervals_mcp_server
+```
+
+## Test Requirements
+
+Before committing code, ensure:
+1. **All tests pass**: `pytest` returns exit code 0
+2. **No new linting errors**: `ruff .` passes
+3. **Type checking passes**: `mypy src tests` succeeds
+
+## Writing New Tests
+
+When adding new MCP tools or utilities:
+
+1. **Create test cases** in appropriate test file
+2. **Mock external dependencies** (HTTP requests, file I/O)
+3. **Test both success and error paths**
+4. **Use realistic test data** from [tests/sample_data.py](mdc:tests/sample_data.py)
+5. **Follow async testing patterns** for MCP tools
+6. **Verify error message formatting** for user-facing errors
+
+## Mock Strategy
+
+The project uses comprehensive mocking to:
+- **Avoid real API calls** during testing
+- **Test error handling** by simulating various HTTP error responses
+- **Ensure deterministic results** with controlled test data
+- **Speed up test execution** by eliminating network requests

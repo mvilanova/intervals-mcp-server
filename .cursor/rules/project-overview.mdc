@@ -1,0 +1,48 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Intervals.icu MCP Server Project Overview
+
+This is a Model Context Protocol (MCP) server for connecting Claude with the Intervals.icu API. The project enables Claude to retrieve and analyze athlete data including activities, events, workouts, and wellness metrics.
+
+## Project Structure
+
+- **Main Entry Point**: [src/intervals_mcp_server/server.py](mdc:src/intervals_mcp_server/server.py) - Contains the FastMCP server implementation with all MCP tools
+- **Configuration**: [pyproject.toml](mdc:pyproject.toml) - Project configuration, dependencies, and build settings
+- **Environment Setup**: [.env.example](mdc:.env.example) - Template for environment variables (API_KEY, ATHLETE_ID)
+- **Documentation**: [README.md](mdc:README.md) - Comprehensive setup and usage guide
+- **Developer Guide**: [AGENTS.md](mdc:AGENTS.md) - Contributor and development instructions
+
+## Core Components
+
+### MCP Tools (in server.py)
+- `get_activities` - Retrieve athlete activities with filtering options
+- `get_activity_details` - Get detailed information for specific activities
+- `get_activity_intervals` - Get detailed interval data for activities
+- `get_events` - Retrieve upcoming events (workouts, races, etc.)
+- `get_event_by_id` - Get detailed information for specific events  
+- `get_wellness_data` - Fetch wellness metrics and data
+
+### Utilities
+- **Formatting**: [src/intervals_mcp_server/utils/formatting.py](mdc:src/intervals_mcp_server/utils/formatting.py) - Data formatting utilities for MCP responses
+
+### Testing
+- **Tests Directory**: [tests/](mdc:tests) - Unit tests for server functionality and utilities
+- **Sample Data**: [tests/sample_data.py](mdc:tests/sample_data.py) - Test data for development
+
+## Key Technologies
+- **Python 3.12+** - Required runtime version
+- **FastMCP** - MCP server framework
+- **httpx** - Async HTTP client for API calls
+- **uv** - Package manager and virtual environment tool
+- **pytest** - Testing framework
+- **ruff** - Linting and code formatting
+- **mypy** - Static type checking
+
+## Environment Variables
+- `API_KEY` - Intervals.icu API key (required)
+- `ATHLETE_ID` - Target athlete ID (required)
+- `INTERVALS_API_BASE_URL` - API base URL (optional, defaults to intervals.icu)
+- `LOG_LEVEL` - Logging level (optional, defaults to INFO)
