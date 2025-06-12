@@ -181,25 +181,25 @@ Vital Signs:
 
 Sleep & Recovery:
   Sleep: {sleep_hours} hours
-  Sleep Score: {entry.get("sleepScore", "N/A")}/100
-  Sleep Quality: {entry.get("sleepQuality", "N/A")}/10
-  Readiness: {entry.get("readiness", "N/A")}/10
+  Sleep Score: {entry.get("sleepScore", "N/A")}
+  Sleep Quality: {entry.get("sleepQuality", "N/A")}/4
+  Readiness Score: {entry.get("readiness", "N/A")}
 
 Menstrual Tracking:
   Menstrual Phase: {menstrual_phase}
   Predicted Phase: {menstrual_phase_predicted}
 
 Subjective Feelings:
-  Soreness: {entry.get("soreness", "N/A")}/10
-  Fatigue: {entry.get("fatigue", "N/A")}/10
-  Stress: {entry.get("stress", "N/A")}/10
-  Mood: {entry.get("mood", "N/A")}/10
-  Motivation: {entry.get("motivation", "N/A")}/10
-  Injury Level: {entry.get("injury", "N/A")}/10
+  Soreness: {entry.get("soreness", "N/A")}/14
+  Fatigue: {entry.get("fatigue", "N/A")}/4
+  Stress: {entry.get("stress", "N/A")}/4
+  Mood: {entry.get("mood", "N/A")}/4
+  Motivation: {entry.get("motivation", "N/A")}/4
+  Injury Level: {entry.get("injury", "N/A")}/4
 
 Nutrition & Hydration:
   Calories Consumed: {entry.get("kcalConsumed", "N/A")} kcal
-  Hydration Score: {entry.get("hydration", "N/A")}/10
+  Hydration Score: {entry.get("hydration", "N/A")}/4
   Hydration Volume: {entry.get("hydrationVolume", "N/A")} ml
 
 Activity:
