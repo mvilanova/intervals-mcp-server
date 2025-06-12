@@ -1,6 +1,6 @@
 ---
-description: 
-globs: 
+description:
+globs:
 alwaysApply: true
 ---
 # API Communication Patterns
@@ -15,8 +15,8 @@ All API communication goes through `make_intervals_request()`:
 
 ```python
 async def make_intervals_request(
-    url: str, 
-    api_key: str | None = None, 
+    url: str,
+    api_key: str | None = None,
     params: dict[str, Any] | None = None
 ) -> dict[str, Any] | list[dict[str, Any]]
 ```

@@ -1,6 +1,6 @@
 ---
-description: 
-globs: 
+description:
+globs:
 alwaysApply: true
 ---
 # Intervals.icu MCP Server Project Overview
@@ -22,7 +22,7 @@ This is a Model Context Protocol (MCP) server for connecting Claude with the Int
 - `get_activity_details` - Get detailed information for specific activities
 - `get_activity_intervals` - Get detailed interval data for activities
 - `get_events` - Retrieve upcoming events (workouts, races, etc.)
-- `get_event_by_id` - Get detailed information for specific events  
+- `get_event_by_id` - Get detailed information for specific events
 - `get_wellness_data` - Fetch wellness metrics and data
 
 ### Utilities

@@ -1,6 +1,6 @@
 ---
-description: 
-globs: 
+description:
+globs:
 alwaysApply: true
 ---
 # Testing Patterns and Practices
@@ -37,7 +37,7 @@ def test_api_call(mocker):
     mock_response = mocker.Mock()
     mock_response.json.return_value = {"test": "data"}
     mock_response.raise_for_status.return_value = None
-    
+
     mocker.patch("httpx.AsyncClient.get", return_value=mock_response)
 ```
 
