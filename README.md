@@ -3,6 +3,8 @@
 
 Model Context Protocol (MCP) server for connecting Claude with the Intervals.icu API. It provides tools for authentication and data retrieval for activities, events, and wellness data.
 
+If you find the Model Context Protocol (MCP) server useful, please consider supporting its continued development with a donation.
+
 ## Requirements
 
 - Python 3.12 or higher
