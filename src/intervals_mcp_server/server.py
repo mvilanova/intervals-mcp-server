@@ -35,7 +35,6 @@ Usage:
 from json import JSONDecodeError
 import logging
 import os
-import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from http import HTTPStatus
@@ -98,15 +97,6 @@ API_KEY = os.getenv("API_KEY", "")  # Provide default empty string
 ATHLETE_ID = os.getenv("ATHLETE_ID", "")  # Default athlete ID from .env
 USER_AGENT = "intervalsicu-mcp-server/1.0"
 
-# Validate environment variables on import
-if API_KEY == "":
-    raise ValueError("API_KEY environment variable is not set or empty")
-
-# Accept athlete IDs that are either all digits or start with 'i' followed by digits
-if not re.fullmatch(r"i?\d+", ATHLETE_ID):
-    raise ValueError(
-        "ATHLETE_ID must be all digits (e.g. 123456) or start with 'i' followed by digits (e.g. i123456)"
-    )
 
 
 def _get_error_message(error_code: int, error_text: str) -> str:
@@ -154,6 +144,13 @@ async def make_intervals_request(
 
     # Use provided api_key or fall back to global API_KEY
     key_to_use = api_key if api_key is not None else API_KEY
+    if not key_to_use:
+        logger.error("No API key provided for request to: %s", url)
+        return {
+            "error": True,
+            "message": "API key is required. Set API_KEY env var or pass api_key",
+        }
+
     auth = httpx.BasicAuth("API_KEY", key_to_use)
     full_url = f"{INTERVALS_API_BASE_URL}{url}"
 
@@ -612,6 +609,7 @@ async def add_events(  # pylint: disable=too-many-arguments,too-many-locals,too-
     workout_type: str | None = None,
     moving_time: int | None = None,
     distance: int | None = None,
+    steps: list[dict[str, Any]] | None = None,
 ) -> str:
     """Post events for an athlete to Intervals.icu this follows the event api from intervals.icu as listed
     in https://intervals.icu/api-docs.html#post-/api/v1/athlete/-id-/events
@@ -625,17 +623,17 @@ async def add_events(  # pylint: disable=too-many-arguments,too-many-locals,too-
         "distance": "5000",  # Total expected distance of the workout in meters
         "description": "- 15m 80% Warm-up\n- 500m 110% High-intensity interval\n- 90s 80% Recovery\n- 500m 110% High-intensity interval\n- 10m 80% Cool-down"  # Important! See formatting details below
     }
-    
+
     Common workout types:
         - "Run" for running workouts
         - "Ride" for cycling workouts
         - "Swim" for swimming workouts
         - "Walk" for walking/hiking
         - "Row" for rowing
-    
+
     Description:
         Description of the workout including steps and target (see details on formatting at https://forum.intervals.icu/t/workout-builder/1163/12)
-        Each step is on a line starting with a dash (-) and then the duration/distance, intensity, and description. Sections of steps can be repeated 
+        Each step is on a line starting with a dash (-) and then the duration/distance, intensity, and description. Sections of steps can be repeated
         by preceding them with a line starting with "Nx" and an optional description, where N is the number of times to repeat the section.
         Other lines can be used to add additional information such as a description of the workout or a note.
         Important: m = minutes, mtr = meters
@@ -694,6 +692,7 @@ async def add_events(  # pylint: disable=too-many-arguments,too-many-locals,too-
         workout_type: Workout type (Run, Ride, Swim, etc.)
         moving_time: Total expected moving time of the workout
         distance: Total expected distance of the workout
+        steps: Optional structured workout steps (currently unused)
     """
     message = None
     athlete_id_to_use = athlete_id if athlete_id is not None else ATHLETE_ID
