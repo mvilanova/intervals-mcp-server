@@ -35,6 +35,7 @@ Usage:
 from json import JSONDecodeError
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from http import HTTPStatus
@@ -97,6 +98,11 @@ API_KEY = os.getenv("API_KEY", "")  # Provide default empty string
 ATHLETE_ID = os.getenv("ATHLETE_ID", "")  # Default athlete ID from .env
 USER_AGENT = "intervalsicu-mcp-server/1.0"
 
+# Accept athlete IDs that are either all digits or start with 'i' followed by digits
+if not re.fullmatch(r"i?\d+", ATHLETE_ID):
+    raise ValueError(
+        "ATHLETE_ID must be all digits (e.g. 123456) or start with 'i' followed by digits (e.g. i123456)"
+    )
 
 
 def _get_error_message(error_code: int, error_text: str) -> str:
