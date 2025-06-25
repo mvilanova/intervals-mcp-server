@@ -615,7 +615,6 @@ async def add_events(  # pylint: disable=too-many-arguments,too-many-locals,too-
     workout_type: str | None = None,
     moving_time: int | None = None,
     distance: int | None = None,
-    steps: list[dict[str, Any]] | None = None,
 ) -> str:
     """Post events for an athlete to Intervals.icu this follows the event api from intervals.icu as listed
     in https://intervals.icu/api-docs.html#post-/api/v1/athlete/-id-/events
