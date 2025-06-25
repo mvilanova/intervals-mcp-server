@@ -698,7 +698,6 @@ async def add_events(  # pylint: disable=too-many-arguments,too-many-locals,too-
         workout_type: Workout type (Run, Ride, Swim, etc.)
         moving_time: Total expected moving time of the workout
         distance: Total expected distance of the workout
-        steps: Optional structured workout steps (currently unused)
     """
     message = None
     athlete_id_to_use = athlete_id if athlete_id is not None else ATHLETE_ID
