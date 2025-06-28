@@ -154,8 +154,8 @@ class Value:
     def __str__(self) -> str:
         val = ""
         if self.start is not None and self.end is not None:
-            val += f"{self.start} - {self.end} "
-        if self.value is not None:
+            val += f"{self._format_value(self.start)} - {self._format_value(self.end)} "
+        elif self.value is not None:
             val += f"{self._format_value(self.value)} "
         if self.units is not None:
             val += f"{self._format_units()} "
@@ -326,7 +326,7 @@ class Step:
         val = ""
         if self.reps is not None:
             if nested:
-                raise ValueError("Nested steps not supported")
+                raise ValueError("Nested reps not supported")
             val += f"\n{self.reps}x "
         else:
             if not nested and self.warmup:
@@ -362,7 +362,9 @@ class Step:
         if self.text is not None:
             val += f"{self.text} "
         
-        if self.reps is not None and self.steps is not None:
+        if self.reps is not None:
+            if not self.steps:
+                raise ValueError("Nested steps are required if reps is specified")
             for step in self.steps:
                 val += "\n" + step.__str__(nested=True)
             val += "\n"
