@@ -23,11 +23,14 @@ Usage:
     MCP tools provided:
         - get_activities
         - get_activity_details
+        - get_athlete
         - get_events
         - get_event_by_id
         - get_wellness_data
         - get_activity_intervals
         - add_events
+        - calculate_date_info
+        - get_current_date_and_time_info
 
     See the README for more details on configuration and usage.
 """
@@ -36,8 +39,9 @@ from json import JSONDecodeError
 import logging
 import os
 import re
+import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from typing import Any
 import json
@@ -48,6 +52,7 @@ from mcp.server.fastmcp import FastMCP  # pylint: disable=import-error
 # Import formatting utilities
 from intervals_mcp_server.utils.formatting import (
     format_activity_summary,
+    format_athlete_data,
     format_event_details,
     format_event_summary,
     format_intervals,
@@ -787,6 +792,165 @@ async def add_or_update_event(
         except ValueError as e:
             message = f"Error: {e}"
     return message
+
+
+@mcp.tool()
+async def get_athlete(
+    athlete_id: str | None = None,
+    api_key: str | None = None,
+) -> str:
+    """Get detailed information for an athlete from Intervals.icu
+
+    Args:
+        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+
+    Returns:
+        Formatted Markdown string containing comprehensive athlete data including sport settings and training zones
+    """
+    # Use provided athlete_id or fall back to global ATHLETE_ID
+    athlete_id_to_use = athlete_id if athlete_id is not None else ATHLETE_ID
+    if not athlete_id_to_use:
+        return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
+
+    # Call the Intervals.icu API
+    result = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}",
+        api_key=api_key,
+        params={},
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error fetching athlete data: {error_message}"
+
+    if not isinstance(result, dict):
+        return "Error: Invalid response format from Intervals.icu API"
+
+    # Format the athlete data as Markdown
+    return format_athlete_data(result)
+
+
+@mcp.tool()
+async def get_current_date_and_time_info() -> dict[str, Any]:
+    """Get current date and time information
+
+    Returns comprehensive information about the current date and time including
+    day of week, week number, time details, timezone, and relative day calculations.
+
+    Returns:
+        Dictionary containing current date and time information:
+        - current_date: ISO format date (YYYY-MM-DD)
+        - current_time: 24-hour format time (HH:MM:SS)
+        - current_datetime: ISO format datetime (YYYY-MM-DDTHH:MM:SS)
+        - current_datetime_with_tz: ISO format datetime with timezone (YYYY-MM-DDTHH:MM:SS±HH:MM)
+        - timezone_name: Timezone name (e.g., "UTC", "America/New_York")
+        - timezone_offset: UTC offset in format ±HH:MM
+        - utc_datetime: UTC datetime (YYYY-MM-DDTHH:MM:SSZ)
+        - day_of_week: Full day name (e.g., "Sunday")
+        - week_number: ISO week number (1-53)
+        - days_until_weekend: Days until Saturday (0-6)
+        - is_weekend: Whether today is Saturday or Sunday
+        - year: Current year
+        - month: Current month (1-12)
+        - day: Current day of month (1-31)
+        - hour: Current hour (0-23)
+        - minute: Current minute (0-59)
+        - second: Current second (0-59)
+    """
+    # Capture the current time once with UTC timezone
+    base_time = datetime.now(timezone.utc)
+    now_utc = base_time
+    now_local = base_time.astimezone()  # Convert to local timezone
+    now_with_tz = base_time.astimezone()  # System's timezone-aware datetime
+
+    # Get timezone information
+    timezone_name = time.tzname[time.daylight] if time.daylight else time.tzname[0]
+    utc_offset_seconds = -time.timezone if not time.daylight else -time.altzone
+    utc_offset_hours = utc_offset_seconds // 3600
+    utc_offset_minutes = abs(utc_offset_seconds % 3600) // 60
+    utc_offset_str = f"{utc_offset_hours:+03d}:{utc_offset_minutes:02d}"
+
+    # Calculate days until weekend (Saturday = 5, Sunday = 6 in weekday())
+    # weekday(): Monday=0, Tuesday=1, ..., Sunday=6
+    current_weekday = now_local.weekday()  # 0=Monday, 6=Sunday
+    days_until_saturday = (5 - current_weekday) % 7  # Saturday is weekday 5
+
+    return {
+        "current_date": now_local.strftime("%Y-%m-%d"),
+        "current_time": now_local.strftime("%H:%M:%S"),
+        "current_datetime": now_local.strftime("%Y-%m-%dT%H:%M:%S"),
+        "current_datetime_with_tz": now_with_tz.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "timezone_name": timezone_name,
+        "timezone_offset": utc_offset_str,
+        "utc_datetime": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "day_of_week": now_local.strftime("%A"),
+        "week_number": now_local.isocalendar().week,  # ISO week number
+        "days_until_weekend": days_until_saturday,
+        "is_weekend": current_weekday in [5, 6],  # Saturday=5, Sunday=6
+        "year": now_local.year,
+        "month": now_local.month,
+        "day": now_local.day,
+        "hour": now_local.hour,
+        "minute": now_local.minute,
+        "second": now_local.second,
+    }
+
+
+@mcp.tool()
+async def calculate_date_info(date: str) -> dict[str, Any]:
+    """Calculate date information for any given date
+
+    Given a date string, returns comprehensive information about that date
+    including day of week, relative position to today, and weekend status.
+
+    Args:
+        date: Date in YYYY-MM-DD format (e.g., "2025-06-09")
+
+    Returns:
+        Dictionary containing date information:
+        - date: The input date in YYYY-MM-DD format
+        - day_of_week: Full day name (e.g., "Monday")
+        - days_from_today: Number of days from today (negative = past, positive = future)
+        - is_weekend: Whether the date is Saturday or Sunday
+        - week_number: ISO week number (1-53)
+        - year: Year of the date
+        - month: Month of the date (1-12)
+        - day: Day of month (1-31)
+        - is_past: Whether the date is in the past
+        - is_future: Whether the date is in the future
+        - is_today: Whether the date is today
+    """
+    try:
+        # Parse the input date
+        target_date = datetime.strptime(date, "%Y-%m-%d")
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        target_date_normalized = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # Calculate days difference
+        days_diff = (target_date_normalized - today).days
+
+        # Get weekday (0=Monday, 6=Sunday)
+        weekday = target_date.weekday()
+
+        return {
+            "date": date,
+            "day_of_week": target_date.strftime("%A"),
+            "days_from_today": days_diff,
+            "is_weekend": weekday in [5, 6],  # Saturday=5, Sunday=6
+            "week_number": target_date.isocalendar().week,
+            "year": target_date.year,
+            "month": target_date.month,
+            "day": target_date.day,
+            "is_past": days_diff < 0,
+            "is_future": days_diff > 0,
+            "is_today": days_diff == 0,
+        }
+    except ValueError as e:
+        return {
+            "error": True,
+            "message": f"Invalid date format. Expected YYYY-MM-DD, got: {date}. Error: {str(e)}",
+        }
 
 
 # Run the server
