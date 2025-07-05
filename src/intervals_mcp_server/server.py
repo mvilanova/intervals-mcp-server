@@ -155,7 +155,9 @@ async def make_intervals_request(
     """
     headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
 
-    if method in ["POST", "PUT"]:
+    has_body = method in ["POST", "PUT"]
+
+    if has_body:
         headers["Content-Type"] = "application/json"
 
     # Use provided api_key or fall back to global API_KEY
@@ -171,25 +173,15 @@ async def make_intervals_request(
     full_url = f"{INTERVALS_API_BASE_URL}{url}"
 
     try:
-        if method == "POST" and data is not None:
-            response = await httpx_client.request(
-                method=method,
-                url=full_url,
-                headers=headers,
-                params=params,
-                auth=auth,
-                timeout=30.0,
-                content=json.dumps(data),
-            )
-        else:
-            response = await httpx_client.request(
-                method=method,
-                url=full_url,
-                headers=headers,
-                params=params,
-                auth=auth,
-                timeout=30.0,
-            )
+        response = await httpx_client.request(
+            method=method,
+            url=full_url,
+            headers=headers,
+            params=params,
+            auth=auth,
+            timeout=30.0,
+            content=json.dumps(data) if has_body and data is not None else None,
+        )
         try:
             response_data = response.json() if response.content else {}
         except JSONDecodeError:
