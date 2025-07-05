@@ -155,7 +155,9 @@ async def make_intervals_request(
     """
     headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
 
-    if method in ["POST", "PUT"]:
+    has_body = method in ["POST", "PUT"]
+
+    if has_body:
         headers["Content-Type"] = "application/json"
 
     # Use provided api_key or fall back to global API_KEY
@@ -171,25 +173,15 @@ async def make_intervals_request(
     full_url = f"{INTERVALS_API_BASE_URL}{url}"
 
     try:
-        if method == "POST" and data is not None:
-            response = await httpx_client.request(
-                method=method,
-                url=full_url,
-                headers=headers,
-                params=params,
-                auth=auth,
-                timeout=30.0,
-                content=json.dumps(data),
-            )
-        else:
-            response = await httpx_client.request(
-                method=method,
-                url=full_url,
-                headers=headers,
-                params=params,
-                auth=auth,
-                timeout=30.0,
-            )
+        response = await httpx_client.request(
+            method=method,
+            url=full_url,
+            headers=headers,
+            params=params,
+            auth=auth,
+            timeout=30.0,
+            content=json.dumps(data) if has_body and data is not None else None,
+        )
         try:
             response_data = response.json() if response.content else {}
         except JSONDecodeError:
@@ -291,12 +283,13 @@ def _format_activities_response(
         return f"No named activities found for athlete {athlete_id} in the specified date range. Try with include_unnamed=True to see all activities."
 
     # Format the output
-    activities_summary = "Activities:\n\n"
+    activities_summary = "Activities:"
     for activity in activities:
+        activities_summary += "\n\n"
         if isinstance(activity, dict):
-            activities_summary += format_activity_summary(activity) + "\n"
+            activities_summary += format_activity_summary(activity)
         else:
-            activities_summary += f"Invalid activity format: {activity}\n\n"
+            activities_summary += f"Invalid activity format: {activity}"
 
     return activities_summary
 
@@ -521,7 +514,7 @@ async def get_event_by_id(
 
     # Call the Intervals.icu API
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/event/{event_id}", api_key=api_key
+        url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key
     )
 
     if isinstance(result, dict) and "error" in result:

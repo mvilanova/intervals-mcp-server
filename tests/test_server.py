@@ -124,8 +124,7 @@ def test_get_wellness_data(monkeypatch):
     """
     wellness = {
         "2024-01-01": {
-            "id": "w1",
-            "date": "2024-01-01",
+            "id": "2024-01-01",
             "ctl": 75,
             "sleepSecs": 28800,
         }
