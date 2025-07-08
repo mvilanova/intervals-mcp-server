@@ -4,6 +4,7 @@ Unit tests for formatting utilities in intervals_mcp_server.utils.formatting.
 These tests verify that the formatting functions produce expected output strings for activities, workouts, wellness entries, events, and intervals.
 """
 
+import json
 from intervals_mcp_server.utils.formatting import (
     format_activity_summary,
     format_workout,
@@ -53,15 +54,13 @@ def test_format_wellness_entry():
     """
     Test that format_wellness_entry returns a string containing the date and fitness (CTL).
     """
-    entry = {
-        "date": "2024-01-01",
-        "ctl": 70,
-        "sleepSecs": 28800,
-        "weight": 70,
-    }
+    with open("tests/ressources/wellness_entry.json", "r") as f:
+        entry = json.load(f)
     result = format_wellness_entry(entry)
-    assert "Date: 2024-01-01" in result
-    assert "Fitness (CTL): 70" in result
+
+    with open("tests/ressources/wellness_entry_formatted.txt", "r") as f:
+        expected_result = f.read()
+    assert result == expected_result
 
 
 def test_format_event_summary():
@@ -69,7 +68,7 @@ def test_format_event_summary():
     Test that format_event_summary returns a string containing the event date and type.
     """
     event = {
-        "date": "2024-01-01",
+        "start_date_local": "2024-01-01",
         "id": "e1",
         "name": "Event1",
         "description": "desc",

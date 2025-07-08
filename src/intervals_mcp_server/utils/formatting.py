@@ -108,106 +108,150 @@ TSS: {workout.get("tss", "N/A")}
 Intervals: {len(workout.get("intervals", []))}
 """
 
+def format_wellness_entry(entries: dict[str, Any]) -> str:
+    lines = ["Wellness Data:"]
+    lines.append(f"Date: {entries.get('id', 'N/A')}")
+    lines.append("")
 
-def format_wellness_entry(entry: dict[str, Any]) -> str:
-    """Format a wellness data entry into a readable string with all available fields."""
+    # Training Metrics
+    training_metrics = []
+    for k, label in [
+        ("ctl", "Fitness (CTL)"),
+        ("atl", "Fatigue (ATL)"),
+        ("rampRate", "Ramp Rate"),
+        ("ctlLoad", "CTL Load"),
+        ("atlLoad", "ATL Load"),
+    ]:
+        if entries.get(k) is not None:
+            training_metrics.append(f"- {label}: {entries[k]}")
+    if training_metrics:
+        lines.append("Training Metrics:")
+        lines.extend(training_metrics)
+        lines.append("")
 
-    # Convert sleep seconds to hours if available
-    sleep_hours = "N/A"
-    if entry.get("sleepSecs") is not None:
-        sleep_seconds = entry.get("sleepSecs")
-        if sleep_seconds is not None:  # Extra check to avoid None division
-            sleep_hours = f"{sleep_seconds / 3600:.2f}"
-    elif entry.get("sleepHours") is not None:
-        # Some responses might use sleepHours directly
-        sleep_hours = f"{entry.get('sleepHours')}"
-
-    # Format menstrual phase with proper capitalization if present
-    menstrual_phase = entry.get("menstrualPhase", "N/A")
-    if menstrual_phase != "N/A" and menstrual_phase is not None:
-        menstrual_phase = menstrual_phase.capitalize()
-    else:
-        menstrual_phase = "N/A"
-
-    menstrual_phase_predicted = entry.get("menstrualPhasePredicted", "N/A")
-    if menstrual_phase_predicted != "N/A" and menstrual_phase_predicted is not None:
-        menstrual_phase_predicted = menstrual_phase_predicted.capitalize()
-    else:
-        menstrual_phase_predicted = "N/A"
-
-    # Format sport information if available
+    # Sport-Specific Info
     sport_info_list = []
-    if entry.get("sportInfo"):
-        for sport in entry.get("sportInfo", []):
+    if entries.get("sportInfo"):
+        for sport in entries.get("sportInfo", []):
             if isinstance(sport, dict):
-                sport_info_list.append(
-                    f"  * {sport.get('type', 'Unknown')}: eFTP = {sport.get('eftp', 'N/A')}"
-                )
-
-    # Create sport info string
+                if sport.get("eftp") is not None:
+                    sport_info_list.append(
+                        f"- {sport.get('type')}: eFTP = {sport['eftp']}"
+                    )
     if sport_info_list:
-        sport_info = "\n".join(sport_info_list)
-    else:
-        sport_info = "  None available"
+        lines.append("Sport-Specific Info:")
+        lines.extend(sport_info_list)
+        lines.append("")
 
-    return f"""Date: {entry.get("date", "Unknown date")}
-ID: {entry.get("id", "N/A")}
+    # Vital Signs
+    vital_signs = []
+    for k, label, unit in [
+        ("weight", "Weight", "kg"),
+        ("restingHR", "Resting HR", "bpm"),
+        ("hrv", "HRV", ""),
+        ("hrvSDNN", "HRV SDNN", ""),
+        ("avgSleepingHR", "Average Sleeping HR", "bpm"),
+        ("spO2", "SpO2", "%"),
+        ("systolic", "Systolic BP", ""),
+        ("diastolic", "Diastolic BP", ""),
+        ("respiration", "Respiration", "breaths/min"),
+        ("bloodGlucose", "Blood Glucose", "mmol/L"),
+        ("lactate", "Lactate", "mmol/L"),
+        ("vo2max", "VO2 Max", "ml/kg/min"),
+        ("bodyFat", "Body Fat", "%"),
+        ("abdomen", "Abdomen", "cm"),
+        ("baevskySI", "Baevsky Stress Index", ""),
+    ]:
+        if entries.get(k) is not None:
+            value = entries[k]
+            if k == "systolic" and entries.get("diastolic") is not None:
+                vital_signs.append(f"-Blood Pressure: {entries['systolic']}/{entries['diastolic']} mmHg")
+            elif k not in ("systolic", "diastolic"):
+                vital_signs.append(f"- {label}: {value}{(' ' + unit) if unit else ''}")
+    if vital_signs:
+        lines.append("Vital Signs:")
+        lines.extend(vital_signs)
+        lines.append("")
 
-Training Metrics:
-  Fitness (CTL): {entry.get("ctl", "N/A")}
-  Fatigue (ATL): {entry.get("atl", "N/A")}
-  Ramp Rate: {entry.get("rampRate", "N/A")}
-  CTL Load: {entry.get("ctlLoad", "N/A")}
-  ATL Load: {entry.get("atlLoad", "N/A")}
+    # Sleep & Recovery
+    sleep_lines = []
+    sleep_hours = None
+    if entries.get("sleepSecs") is not None:
+        sleep_hours = f"{entries['sleepSecs'] / 3600:.2f}"
+    elif entries.get("sleepHours") is not None:
+        sleep_hours = f"{entries['sleepHours']}"
+    if sleep_hours is not None:
+        sleep_lines.append(f"  Sleep: {sleep_hours} hours")
+    for k, label, unit in [
+        ("sleepScore", "Sleep Score", "/100"),
+        ("sleepQuality", "Sleep Quality", "/10"),
+        ("readiness", "Readiness", "/10"),
+    ]:
+        if entries.get(k) is not None:
+            sleep_lines.append(f"  {label}: {entries[k]}{unit}")
+    if sleep_lines:
+        lines.append("Sleep & Recovery:")
+        lines.extend(sleep_lines)
+        lines.append("")
 
-Sport-Specific Info:
-{sport_info}
+    # Menstrual Tracking
+    menstrual_lines = []
+    if entries.get("menstrualPhase") is not None:
+        menstrual_lines.append(f"  Menstrual Phase: {str(entries['menstrualPhase']).capitalize()}")
+    if entries.get("menstrualPhasePredicted") is not None:
+        menstrual_lines.append(f"  Predicted Phase: {str(entries['menstrualPhasePredicted']).capitalize()}")
+    if menstrual_lines:
+        lines.append("Menstrual Tracking:")
+        lines.extend(menstrual_lines)
+        lines.append("")
 
-Vital Signs:
-  Weight: {entry.get("weight", "N/A")} kg
-  Resting HR: {entry.get("restingHR", "N/A")} bpm
-  HRV: {entry.get("hrv", "N/A")}
-  HRV SDNN: {entry.get("hrvSDNN", "N/A")}
-  Average Sleeping HR: {entry.get("avgSleepingHR", "N/A")} bpm
-  SpO2: {entry.get("spO2", "N/A")}%
-  Blood Pressure: {entry.get("systolic", "N/A")}/{entry.get("diastolic", "N/A")} mmHg
-  Respiration: {entry.get("respiration", "N/A")} breaths/min
-  Blood Glucose: {entry.get("bloodGlucose", "N/A")} mmol/L
-  Lactate: {entry.get("lactate", "N/A")} mmol/L
-  VO2 Max: {entry.get("vo2max", "N/A")} ml/kg/min
-  Body Fat: {entry.get("bodyFat", "N/A")}%
-  Abdomen: {entry.get("abdomen", "N/A")} cm
-  Baevsky Stress Index: {entry.get("baevskySI", "N/A")}
+    # Subjective Feelings
+    subjective_lines = []
+    for k, label in [
+        ("soreness", "Soreness"),
+        ("fatigue", "Fatigue"),
+        ("stress", "Stress"),
+        ("mood", "Mood"),
+        ("motivation", "Motivation"),
+        ("injury", "Injury Level"),
+    ]:
+        if entries.get(k) is not None:
+            subjective_lines.append(f"  {label}: {entries[k]}/10")
+    if subjective_lines:
+        lines.append("Subjective Feelings:")
+        lines.extend(subjective_lines)
+        lines.append("")
 
-Sleep & Recovery:
-  Sleep: {sleep_hours} hours
-  Sleep Score: {entry.get("sleepScore", "N/A")}
-  Sleep Quality: {entry.get("sleepQuality", "N/A")}/4
-  Readiness Score: {entry.get("readiness", "N/A")}
+    # Nutrition & Hydration
+    nutrition_lines = []
+    for k, label in [
+        ("kcalConsumed", "Calories Consumed"),
+        ("hydrationVolume", "Hydration Volume"),
+    ]:
+        if entries.get(k) is not None:
+            nutrition_lines.append(f"- {label}: {entries[k]}")
 
-Menstrual Tracking:
-  Menstrual Phase: {menstrual_phase}
-  Predicted Phase: {menstrual_phase_predicted}
+    if entries.get("hydration") is not None:
+        nutrition_lines.append(f"  Hydration Score: {entries['hydration']}/10")
 
-Subjective Feelings:
-  Soreness: {entry.get("soreness", "N/A")}/14
-  Fatigue: {entry.get("fatigue", "N/A")}/4
-  Stress: {entry.get("stress", "N/A")}/4
-  Mood: {entry.get("mood", "N/A")}/4
-  Motivation: {entry.get("motivation", "N/A")}/4
-  Injury Level: {entry.get("injury", "N/A")}/4
+    if nutrition_lines:
+        lines.append("Nutrition & Hydration:")
+        lines.extend(nutrition_lines)
+        lines.append("")
 
-Nutrition & Hydration:
-  Calories Consumed: {entry.get("kcalConsumed", "N/A")} kcal
-  Hydration Score: {entry.get("hydration", "N/A")}/4
-  Hydration Volume: {entry.get("hydrationVolume", "N/A")} ml
+    # Activity
+    if entries.get("steps") is not None:
+        lines.append("Activity:")
+        lines.append(f"- Steps: {entries['steps']}")
+        lines.append("")
 
-Activity:
-  Steps: {entry.get("steps", "N/A")}
+    # Comments, Status, Updated
+    if entries.get("comments"):
+        lines.append(f"Comments: {entries['comments']}")
+    if "locked" in entries:
+        lines.append(f"Status: {'Locked' if entries.get('locked') else 'Unlocked'}")
 
-Comments: {entry.get("comments", "No comments")}
-Status: {"Locked" if entry.get("locked") else "Unlocked"}
-Last Updated: {entry.get("updated", "Unknown")}"""
+    return "\n".join(lines)
 
 
 def format_event_summary(event: dict[str, Any]) -> str:

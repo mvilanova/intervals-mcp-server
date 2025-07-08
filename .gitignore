@@ -173,4 +173,10 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# VSCode
+.vscode
+
+# TODO
+TODO
+
 .gitconfig
