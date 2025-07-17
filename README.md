@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/mvilanova-intervals-mcp-server-badge.png)](https://mseep.ai/app/mvilanova-intervals-mcp-server)
+
 # Intervals.icu MCP Server
 [![smithery badge](https://smithery.ai/badge/@mvilanova/intervals-mcp-server)](https://smithery.ai/server/@mvilanova/intervals-mcp-server)
 
