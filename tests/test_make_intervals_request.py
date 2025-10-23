@@ -46,7 +46,7 @@ class MockAsyncClient:
 
     def __init__(self, *_args, **_kwargs):
         # Accept any arguments to match httpx.AsyncClient's interface
-        pass
+        self.is_closed = False
 
     async def __aenter__(self):
         return self
@@ -61,6 +61,10 @@ class MockAsyncClient:
     async def request(self, *_args, **_kwargs):
         """Mock request method that returns MockBadJSONResponse."""
         return MockBadJSONResponse()
+
+    async def aclose(self):
+        """Simulate closing the AsyncClient."""
+        self.is_closed = True
 
 
 def test_make_intervals_request_bad_json(monkeypatch, caplog):
