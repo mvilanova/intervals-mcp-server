@@ -2,8 +2,9 @@
 Intervals.icu MCP Server
 
 This module implements a Model Context Protocol (MCP) server for connecting
-Claude with the Intervals.icu API. It provides tools for retrieving and managing
-athlete data, including activities, events, workouts, and wellness metrics.
+modern MCP clients (Claude Desktop, ChatGPT MCP, Smithery, etc.) with the
+Intervals.icu API. It provides tools for retrieving and managing athlete data,
+including activities, events, workouts, and wellness metrics.
 
 Main Features:
     - Activity retrieval and detailed analysis
@@ -14,8 +15,9 @@ Main Features:
 
 Usage:
     This server is designed to be run as a standalone script and exposes several MCP tools
-    for use with Claude Desktop or other MCP-compatible clients. The server loads configuration
-    from environment variables (optionally via a .env file) and communicates with the Intervals.icu API.
+    for use with Claude Desktop, ChatGPT's MCP connectors, or any other MCP-compatible
+    client. The server loads configuration from environment variables (optionally via a
+    .env file) and communicates with the Intervals.icu API.
 
     To run the server:
         $ python src/intervals_mcp_server/server.py
@@ -77,6 +79,15 @@ logger = logging.getLogger("intervals_icu_mcp_server")
 httpx_client = httpx.AsyncClient()
 
 
+def _get_httpx_client() -> httpx.AsyncClient:
+    """Return a live HTTPX client, recreating it if it was closed."""
+
+    global httpx_client  # noqa: PLW0603 - shared client managed here
+    if getattr(httpx_client, "is_closed", False):
+        httpx_client = httpx.AsyncClient()
+    return httpx_client
+
+
 @asynccontextmanager
 async def lifespan(_app: FastMCP):
     """
@@ -105,6 +116,32 @@ if not re.fullmatch(r"i?\d+", ATHLETE_ID):
     raise ValueError(
         "ATHLETE_ID must be all digits (e.g. 123456) or start with 'i' followed by digits (e.g. i123456)"
     )
+
+_PLACEHOLDER_TOKENS = {
+    "your_athlete_id",
+    "your_athlete_id_here",
+}
+
+
+def _resolve_athlete_id(candidate: str | None) -> str | None:
+    """Return a sanitized athlete ID, falling back to env and ignoring placeholders."""
+
+    value = candidate if candidate and candidate.strip() else ATHLETE_ID
+    if not value:
+        return None
+
+    normalized = value.strip().strip("\"' <>")
+    token = normalized.lower()
+    if token in _PLACEHOLDER_TOKENS:
+        normalized = ATHLETE_ID.strip()
+
+    if not normalized:
+        return None
+
+    if not re.fullmatch(r"i?\d+", normalized):
+        return None
+
+    return normalized
 
 
 def validate_date(date_str: str) -> str:
@@ -172,7 +209,8 @@ async def make_intervals_request(
 
     try:
         if method == "POST" and data is not None:
-            response = await httpx_client.request(
+            client = _get_httpx_client()
+            response = await client.request(
                 method=method,
                 url=full_url,
                 headers=headers,
@@ -182,7 +220,8 @@ async def make_intervals_request(
                 content=json.dumps(data),
             )
         else:
-            response = await httpx_client.request(
+            client = _get_httpx_client()
+            response = await client.request(
                 method=method,
                 url=full_url,
                 headers=headers,
@@ -321,7 +360,7 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
         include_unnamed: Whether to include unnamed activities (optional, defaults to False)
     """
     # Use provided athlete_id or fall back to global ATHLETE_ID
-    athlete_id_to_use = athlete_id if athlete_id is not None else ATHLETE_ID
+    athlete_id_to_use = _resolve_athlete_id(athlete_id)
     if not athlete_id_to_use:
         return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
 
@@ -460,7 +499,7 @@ async def get_events(
         end_date: End date in YYYY-MM-DD format (optional, defaults to 30 days from today)
     """
     # Use provided athlete_id or fall back to global ATHLETE_ID
-    athlete_id_to_use = athlete_id if athlete_id is not None else ATHLETE_ID
+    athlete_id_to_use = _resolve_athlete_id(athlete_id)
     if not athlete_id_to_use:
         return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
 
@@ -515,7 +554,7 @@ async def get_event_by_id(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
     # Use provided athlete_id or fall back to global ATHLETE_ID
-    athlete_id_to_use = athlete_id if athlete_id is not None else ATHLETE_ID
+    athlete_id_to_use = _resolve_athlete_id(athlete_id)
     if not athlete_id_to_use:
         return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
 
@@ -554,7 +593,7 @@ async def get_wellness_data(
         end_date: End date in YYYY-MM-DD format (optional, defaults to today)
     """
     # Use provided athlete_id or fall back to global ATHLETE_ID
-    athlete_id_to_use = athlete_id if athlete_id is not None else ATHLETE_ID
+    athlete_id_to_use = _resolve_athlete_id(athlete_id)
     if not athlete_id_to_use:
         return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
 
@@ -627,7 +666,7 @@ async def delete_event(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         event_id: The Intervals.icu event ID
     """
-    athlete_id_to_use = athlete_id if athlete_id is not None else ATHLETE_ID
+    athlete_id_to_use = _resolve_athlete_id(athlete_id)
     if not athlete_id_to_use:
         return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
     if not event_id:
@@ -655,7 +694,7 @@ async def delete_events_by_date_range(
         start_date: Start date in YYYY-MM-DD format
         end_date: End date in YYYY-MM-DD format
     """
-    athlete_id_to_use = athlete_id if athlete_id is not None else ATHLETE_ID
+    athlete_id_to_use = _resolve_athlete_id(athlete_id)
     if not athlete_id_to_use:
         return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
     params = {"oldest": validate_date(start_date), "newest": validate_date(end_date)}
@@ -751,7 +790,7 @@ async def add_or_update_event(
         - Define one of "power", "hr" or "pace" to define step intensity
     """
     message = None
-    athlete_id_to_use = athlete_id if athlete_id is not None else ATHLETE_ID
+    athlete_id_to_use = _resolve_athlete_id(athlete_id)
     if not athlete_id_to_use:
         message = "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
     else:

@@ -24,34 +24,43 @@ def main():
 
     try:
         with httpx.Client(follow_redirects=True, timeout=10.0) as client:
-            resp = client.get(url)
+            with client.stream("GET", url) as resp:
+                print(f"Status: {resp.status_code}")
+                ct = resp.headers.get("content-type", "")
+                print(f"Content-Type: {ct}")
+
+                if resp.status_code != 200:
+                    print(resp.text[:2000])
+                    sys.exit(5)
+
+                if "text/event-stream" not in ct.lower():
+                    # Pull a small chunk anyway to give context.
+                    chunk = resp.iter_text()
+                    try:
+                        first = next(chunk)
+                    except StopIteration:
+                        first = ""
+                    if first.strip().startswith(("event:", "data:")):
+                        print("Looks like SSE by content even though header is missing.\n", first[:2000])
+                        sys.exit(0)
+                    print("Unexpected content-type; first chunk:\n", first[:2000])
+                    sys.exit(4)
+
+                # Read only the first data chunk; SSE streams never end.
+                chunk = resp.iter_text()
+                try:
+                    first = next(chunk)
+                except StopIteration:
+                    first = ""
+
+                if first:
+                    print("First SSE chunk:\n", first[:2000])
+                else:
+                    print("Connection opened but no data yet (this is fine for idle SSE streams).")
+                sys.exit(0)
     except Exception as exc:
         print(f"Request failed: {exc}")
         sys.exit(2)
-
-    print(f"Status: {resp.status_code}")
-    ct = resp.headers.get("content-type", "")
-    print(f"Content-Type: {ct}")
-
-    text = resp.text[:2000]
-    if "text/event-stream" in ct.lower():
-        print("Looks like an SSE stream (content-type header present).")
-        print("First chunk of response:\n", text)
-        sys.exit(0)
-
-    # Heuristics: SSE responses start with 'event:' or 'data:' lines
-    if text.strip().startswith("event:") or text.strip().startswith("data:"):
-        print("Looks like SSE by content. First chunk:\n", text)
-        sys.exit(0)
-
-    # Otherwise, likely HTML (ngrok landing page)
-    if "ngrok" in text.lower() or text.lower().strip().startswith("<!doctype html"):
-        print("Response appears to be an ngrok landing page or HTML, not an SSE stream.")
-        print(text)
-        sys.exit(3)
-
-    print("Unknown response type. Dumping snippet:\n", text)
-    sys.exit(4)
 
 
 if __name__ == "__main__":

@@ -9,7 +9,10 @@ description = "A Model Context Protocol server for Intervals.icu"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.12"
 license = { text = "GPL-3.0-only" }
-authors = [{ name = "Marc Vilanova", email = "barker-riddle.8z@icloud.com" }]
+authors = [
+    { name = "Marc Vilanova", email = "barker-riddle.8z@icloud.com" },
+    { name = "al1sse Maintainers" },
+]
 dependencies = ["mcp[cli]>=1.4.0", "httpx>=0.25.0", "python-dotenv>=1.0.0", "openai>=1.0.0"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -21,8 +24,8 @@ classifiers = [
 keywords = ["intervals", "cycling", "running", "mcp", "ai"]
 
 [project.urls]
-"Homepage" = "https://github.com/mvilanova/intervals-mcp-server"
-"Bug Tracker" = "https://github.com/mvilanova/intervals-mcp-server/issues"
+"Homepage" = "https://github.com/al1sse/intervals-mcp-server"
+"Bug Tracker" = "https://github.com/al1sse/intervals-mcp-server/issues"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.3.5", "mypy>=1.0.0", "ruff>=0.1.0", "pytest-asyncio>=0.21", "pre-commit", "hatch", "pytest-mock==3.12.0"]

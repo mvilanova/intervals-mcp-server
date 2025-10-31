@@ -15,7 +15,7 @@ Thank you for taking the time to contribute! This project uses **Python 3.12** a
    ```
 3. When working on or manually running the server, use:
    ```bash
-   mcp run src/intervals_mcp_server/server.py
+      mcp run -t sse src/intervals_mcp_server/sse_server.py:mcp
    ```
 
 ## Dependency changes

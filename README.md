@@ -1,16 +1,17 @@
 # Intervals.icu MCP Server
-[![smithery badge](https://smithery.ai/badge/@mvilanova/intervals-mcp-server)](https://smithery.ai/server/@mvilanova/intervals-mcp-server)
 
-Model Context Protocol (MCP) server for connecting Claude with the Intervals.icu API. It provides tools for authentication and data retrieval for activities, events, and wellness data.
+Model Context Protocol (MCP) server for connecting AI assistants (Claude, ChatGPT, Smithery, and custom MCP clients) with the Intervals.icu API. It exposes tools that retrieve and manipulate activities, workouts, events, intervals, and wellness metrics for a configured athlete.
 
-If you find the Model Context Protocol (MCP) server useful, please consider supporting its continued development with a donation.
+> **About this fork**
+>
+> This repository is a maintained fork of [@mvilanova/intervals-mcp-server](https://github.com/mvilanova/intervals-mcp-server), now hosted at [@al1sse/intervals-mcp-server](https://github.com/al1sse/intervals-mcp-server). It keeps the original FastMCP tooling while adding first-class support for ChatGPT's SSE transport, one-command launch scripts, and debugging utilities for ngrok/remote MCP clients.
 
 ## Requirements
 
 - Python 3.12 or higher
 - [Model Context Protocol (MCP) Python SDK](https://github.com/modelcontextprotocol/python-sdk)
-- httpx
-- python-dotenv
+- `httpx`
+- `python-dotenv`
 
 ## Setup
 
@@ -23,7 +24,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ### 2. Clone this repository
 
 ```bash
-git clone https://github.com/mvilanova/intervals-mcp-server.git
+git clone https://github.com/al1sse/intervals-mcp-server.git
 cd intervals-mcp-server
 ```
 
@@ -36,8 +37,8 @@ uv venv --python 3.12
 # Activate virtual environment
 # On macOS/Linux:
 source .venv/bin/activate
-# On Windows:
-.venv\Scripts\activate
+# On Windows (PowerShell):
+.venv\Scripts\Activate.ps1
 ```
 
 ### 4. Sync project dependencies
@@ -48,10 +49,14 @@ uv sync
 
 ### 5. Set up environment variables
 
-Make a copy of `.env.example` and name it `.env` by running the following command:
+Make a copy of `.env.example` and name it `.env`:
 
 ```bash
-cp .env.example .env
+cp .env.example .env              # macOS/Linux
+```
+
+```powershell
+copy .env.example .env            # Windows PowerShell
 ```
 
 Then edit the `.env` file and set your Intervals.icu athlete id and API key:
@@ -72,6 +77,72 @@ ATHLETE_ID=your_athlete_id_here
 Your athlete ID is typically visible in the URL when you're logged into Intervals.icu. It looks like:
 - `https://intervals.icu/athlete/i12345/...` where `i12345` is your athlete ID
 
+> **Tip:** Placeholder values such as `your_athlete_id_here` or `<YOUR_ATHLETE_ID>` are ignored by the server. If they slip through a client request, the code falls back to the real ID defined in `.env`.
+
+## Quick start: local server + ngrok tunnel
+
+The repository includes helper scripts so you can stand up the whole stack (FastMCP server + ngrok tunnel) with one command:
+
+```powershell
+python scripts/launch_stack.py
+```
+
+What happens under the hood:
+
+- `mcp run -t sse src/intervals_mcp_server/sse_server.py:mcp` starts automatically.
+- The script loads `.env` and forwards `API_KEY`, `ATHLETE_ID`, etc. to the child processes.
+- `ngrok http 8000` launches alongside the server and exposes the SSE endpoint.
+- Logs from both processes are streamed with prefixes (`[mcp]`, `[ngrok]`).
+
+Use `Ctrl+C` to stop both processes. On Windows you can also double-click `launch_stack.bat`, which wraps the same command.
+
+### Verify the tunnel
+
+Read the HTTPS URL printed by ngrok and probe it:
+
+```bash
+python scripts/test_ngrok_sse.py https://<ngrok-id>.ngrok-free.dev
+```
+
+The script connects to `<url>/sse/`, checks for `text/event-stream`, and prints the first SSE event so you know the stream is alive.
+
+### Call tools without an AI client
+
+Use the bundled minimal MCP client to list and call tools over SSE:
+
+```bash
+python scripts/quick_mcp_client.py --base-url https://<ngrok-id>.ngrok-free.dev list
+
+python scripts/quick_mcp_client.py --base-url https://<ngrok-id>.ngrok-free.dev \
+    call get_activities start_date=2025-10-25 end_date=2025-10-25 include_unnamed=true
+```
+
+If you want to bypass MCP entirely and invoke the coroutine directly, run:
+
+```bash
+python scripts/test_get_activities.py --start-date 2025-10-25 --end-date 2025-10-25
+```
+
+### Connect ChatGPT
+
+1. Keep `scripts/launch_stack.py` (or `launch_stack.bat`) running.
+2. In ChatGPT open **Settings → MCP Servers → Add Server**.
+3. Set **Type** to `sse`, **URL** to `https://<ngrok-id>.ngrok-free.dev/sse/`, and supply headers only if you do **not** want to load credentials from `.env`.
+4. Save; ChatGPT should show the connector as **connected**. Turn it on in a new chat and call tools like “List my activities on 25 Oct 2025.”
+
+### Connect Claude Desktop
+
+Claude still works with the classic CLI wiring:
+
+```bash
+mcp install src/intervals_mcp_server/server.py \
+  --name "Intervals.icu" \
+  --with-editable . \
+  --env-file .env
+```
+
+If Claude cannot find `uv` or `python`, open `claude_desktop_config.json` and replace the `command` with the fully qualified path (for example `"C:\\path\\to\\intervals-mcp-server\\.venv\\Scripts\\python.exe"`). Restart Claude afterwards. You can also point Claude at the ngrok SSE URL the same way as ChatGPT.
+
 ## Updating
 
 This project is actively developed, with new features and fixes added regularly. To stay up to date, follow these steps:
@@ -81,7 +152,8 @@ This project is actively developed, with new features and fixes added regularly.
 > ⚠️ Make sure you don’t have uncommitted changes before running this command.
 
 ```bash
-git checkout main && git pull
+git checkout main
+git pull
 ```
 
 ### 2. Update Python dependencies
@@ -89,142 +161,60 @@ git checkout main && git pull
 Activate your virtual environment and sync dependencies:
 
 ```bash
-source .venv/bin/activate
+source .venv/bin/activate   # macOS/Linux
 uv sync
 ```
 
-### Troubleshooting
-
-If Claude Desktop fails due to configuration changes, follow these steps:
-
-1. Delete the existing entry in claude_desktop_config.json.
-2. Reconfigure Claude Desktop from the intervals_mcp_server directory:
-
-```bash
-mcp install src/intervals_mcp_server/server.py --name "Intervals.icu" --with-editable . --env-file .env
+```powershell
+.\.venv\Scripts\Activate.ps1
+uv sync
 ```
 
 ## Usage
 
-### 1. Configure Claude Desktop
+Once the connector (ChatGPT, Claude, or a custom client) is configured, the following tools are available:
 
-To use this server with Claude Desktop, you need to add it to your Claude Desktop configuration.
+- `get_activities`: Retrieve a list of recent activities.
+- `get_activity_details`: Detailed information for a specific activity.
+- `get_activity_intervals`: Interval metrics for an activity.
+- `get_wellness_data`: Daily wellness metrics.
+- `get_events`: Upcoming events/workouts.
+- `get_event_by_id`: Detailed information for a specific event.
+- `add_or_update_event`, `delete_event`, and `delete_events_by_date_range`: Manage calendar entries.
 
-1. Run the following from the `intervals_mcp_server` directory to configure Claude Desktop:
+Explore tool signatures inside `src/intervals_mcp_server/server.py` or run `python scripts/quick_mcp_client.py --base-url <url> list` to see them dynamically.
 
-```bash
-mcp install src/intervals_mcp_server/server.py --name "Intervals.icu" --with-editable . --env-file .env
-```
+## Development
 
-2. If you open your Claude Desktop App configuration file `claude_desktop_config.json`, it should look like this:
-
-```json
-{
-  "mcpServers": {
-    "Intervals.icu": {
-      "command": "/Users/<USERNAME>/.cargo/bin/uv",
-      "args": [
-        "run",
-        "--with",
-        "mcp[cli]",
-        "--with-editable",
-        "/path/to/intervals-mcp-server",
-        "mcp",
-        "run",
-        "/path/to/intervals-mcp-server/src/intervals_mcp_server/server.py"
-      ],
-      "env": {
-        "INTERVALS_API_BASE_URL": "https://intervals.icu/api/v1",
-        "ATHLETE_ID": "<YOUR_ATHLETE_ID>",
-        "API_KEY": "<YOUR_API_KEY>",
-        "LOG_LEVEL": "INFO"
-      }
-    }
-  }
-}
-```
-
-Where `/path/to/` is the path to the `intervals-mcp-server` code folder in your system.
-
-If you observe the following error messages when you open Claude Desktop, include the full path to `uv` in the command key in the `claude_desktop_config.json` configuration file. You can get the full path by running `which uv` in the terminal.
-
-```
-2025-04-28T10:21:11.462Z [info] [Intervals.icu MCP Server] Initializing server...
-2025-04-28T10:21:11.477Z [error] [Intervals.icu MCP Server] spawn uv ENOENT
-2025-04-28T10:21:11.477Z [error] [Intervals.icu MCP Server] spawn uv ENOENT
-2025-04-28T10:21:11.481Z [info] [Intervals.icu MCP Server] Server transport closed
-2025-04-28T10:21:11.481Z [info] [Intervals.icu MCP Server] Client transport closed
-```
-
-3. Restart Claude Desktop.
-
-### 2. Use the MCP server with Claude
-
-Once the server is running and Claude Desktop is configured, you can use the following tools to ask questions about your past and future activities, events, and wellness data.
-
-- `get_activities`: Retrieve a list of activities
-- `get_activity_details`: Get detailed information for a specific activity
-- `get_activity_intervals`: Get detailed interval data for a specific activity
-- `get_wellness_data`: Fetch wellness data
-- `get_events`: Retrieve upcoming events (workouts, races, etc.)
-- `get_event_by_id`: Get detailed information for a specific event
-
-## Development and testing
-
-Install development dependencies and run the test suite with:
+Install development dependencies and run standard checks with:
 
 ```bash
 uv sync --all-extras
-pytest -v tests
+ruff check .
+mypy src tests
+pytest -q
 ```
 
-### Running the server locally
-
-To start the server manually (useful when developing or testing), run:
+During development you can run the FastMCP server directly:
 
 ```bash
-mcp run src/intervals_mcp_server/server.py
+mcp run -t sse src/intervals_mcp_server/sse_server.py:mcp
 ```
 
-## Run locally & connect to ChatGPT (quick start)
+For quick smoke tests without the MCP stack:
 
-If you want to test this MCP server with ChatGPT quickly, the easiest path is to run the existing FastMCP server locally and expose it via a tunnel (like ngrok) so ChatGPT can reach it.
+- `python scripts/smoke_register.py`: list registered tools.
+- `python scripts/test_get_activities.py --start-date YYYY-MM-DD --end-date YYYY-MM-DD`: call tools directly.
+- `python scripts/quick_mcp_client.py --base-url <url> call <tool>`: interact with the server over SSE.
 
-Steps (Windows / PowerShell):
+## Troubleshooting
 
-1. Activate your virtualenv and install dev deps if needed:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e .[dev]
-```
-
-2. Start the server in one terminal:
-
-```powershell
-python -m src.intervals_mcp_server.server
-```
-
-3. In another terminal start ngrok to expose port 8000 (or the port your server uses):
-
-```powershell
-ngrok http 8000
-```
-
-4. In ChatGPT settings → Connectors → add a new MCP server using the ngrok HTTPS URL and the `/sse/` SSE path (for example: `https://<ngrok-id>.ngrok.io/sse/`).
-
-5. Use `scripts/smoke_register.py` to see the list of registered tool names and update the allowed tools in ChatGPT accordingly.
-
-Notes: This keeps the current implementation intact and is the fastest way to validate the MCP integration with ChatGPT.
+- **403 Forbidden from Intervals.icu** – usually an API key or athlete ID mismatch. Confirm `.env` and restart `scripts/launch_stack.py`.
+- **`YOUR_ATHLETE_ID` appears in logs** – restart the stack. The server sanitises placeholder IDs, but a restart guarantees the real value is in memory.
+- **SSE probe hangs** – run `python scripts/test_ngrok_sse.py <url>` to confirm the tunnel is streaming. ngrok free endpoints often sleep; restart if needed.
+- **ChatGPT connector offline** – ensure the connector type is `sse`, the URL ends with `/sse/`, and the tunnel is live. `scripts/quick_mcp_client.py --base-url <url> list` is an easy sanity check.
+- **Claude Desktop runtime errors** – edit `claude_desktop_config.json` so the `command` field points to the fully-qualified `python.exe` or `uv` path, then restart Claude.
 
 ## License
 
 The GNU General Public License v3.0
-
-## Featured
-
-### Glama.ai
-
-<a href="https://glama.ai/mcp/servers/@mvilanova/intervals-mcp-server">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/@mvilanova/intervals-mcp-server/badge" alt="Intervals.icu Server MCP server" />
-</a>

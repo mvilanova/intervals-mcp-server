@@ -7,11 +7,11 @@ This project is a Python 3.12 backend service built with FastMCP and httpx. All 
   - `uv venv --python 3.12`
   - `source .venv/bin/activate`
 - Sync dependencies including dev extras with `uv sync --all-extras`.
-- When editing or running the server manually use `mcp run src/intervals_mcp_server/server.py`.
+- When running the server manually prefer `mcp run -t sse src/intervals_mcp_server/sse_server.py:mcp` or the convenience script `python scripts/launch_stack.py` (starts FastMCP + ngrok).
 
 ## Testing Instructions
 - Run unit tests with `pytest` from the repository root.
-- Ensure linting passes with `ruff .` (no configuration file means default rules).
+- Ensure linting passes with `ruff check .`.
 - Run static type checks using `mypy src tests`.
 - All three steps (`ruff`, `mypy`, and `pytest`) should succeed before committing.
 

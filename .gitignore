@@ -176,6 +176,9 @@ cython_debug/
 # VSCode
 .vscode
 
+# Cursor IDE metadata
+.cursor/
+
 # TODO
 TODO
 
