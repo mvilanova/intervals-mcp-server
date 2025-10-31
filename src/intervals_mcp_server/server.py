@@ -43,7 +43,7 @@ from typing import Any
 import json
 
 import httpx  # pylint: disable=import-error
-from mcp.server.fastmcp import FastMCP  # pylint: disable=import-error
+from intervals_mcp_server.mcp_compat import FastMCP
 
 # Import formatting utilities
 from intervals_mcp_server.utils.formatting import (

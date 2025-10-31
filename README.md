@@ -186,6 +186,37 @@ To start the server manually (useful when developing or testing), run:
 mcp run src/intervals_mcp_server/server.py
 ```
 
+## Run locally & connect to ChatGPT (quick start)
+
+If you want to test this MCP server with ChatGPT quickly, the easiest path is to run the existing FastMCP server locally and expose it via a tunnel (like ngrok) so ChatGPT can reach it.
+
+Steps (Windows / PowerShell):
+
+1. Activate your virtualenv and install dev deps if needed:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e .[dev]
+```
+
+2. Start the server in one terminal:
+
+```powershell
+python -m src.intervals_mcp_server.server
+```
+
+3. In another terminal start ngrok to expose port 8000 (or the port your server uses):
+
+```powershell
+ngrok http 8000
+```
+
+4. In ChatGPT settings → Connectors → add a new MCP server using the ngrok HTTPS URL and the `/sse/` SSE path (for example: `https://<ngrok-id>.ngrok.io/sse/`).
+
+5. Use `scripts/smoke_register.py` to see the list of registered tool names and update the allowed tools in ChatGPT accordingly.
+
+Notes: This keeps the current implementation intact and is the fastest way to validate the MCP integration with ChatGPT.
+
 ## License
 
 The GNU General Public License v3.0

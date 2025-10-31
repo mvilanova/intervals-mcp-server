@@ -18,8 +18,8 @@ import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
-os.environ.setdefault("API_KEY", "test")
-os.environ.setdefault("ATHLETE_ID", "i1")
+os.environ.setdefault("API_KEY", "13lkw4fb2ci5zzq7we7lssjk1")
+os.environ.setdefault("ATHLETE_ID", "i255701")
 
 from intervals_mcp_server.server import (  # pylint: disable=wrong-import-position
     get_activities,

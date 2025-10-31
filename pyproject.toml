@@ -10,7 +10,7 @@ readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.12"
 license = { text = "GPL-3.0-only" }
 authors = [{ name = "Marc Vilanova", email = "barker-riddle.8z@icloud.com" }]
-dependencies = ["mcp[cli]>=1.4.0", "httpx>=0.25.0", "python-dotenv>=1.0.0"]
+dependencies = ["mcp[cli]>=1.4.0", "httpx>=0.25.0", "python-dotenv>=1.0.0", "openai>=1.0.0"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
