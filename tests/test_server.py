@@ -165,21 +165,14 @@ def test_add_or_update_event(monkeypatch):
         "type": "Ride",
     }
 
-    sample_data = {
-        "steps": [
-            {"duration": "15m", "target": "80%", "description": "Warm-up"},
-            {"duration": "3m", "target": "110%", "description": "High-intensity interval"},
-            {"duration": "3m", "target": "80%", "description": "Recovery"},
-            {"duration": "10m", "target": "80%", "description": "Cool-down"},
-        ]
-    }
-
     async def fake_post_request(*_args, **_kwargs):
         return expected_response
 
     monkeypatch.setattr("intervals_mcp_server.server.make_intervals_request", fake_post_request)
     result = asyncio.run(
-        add_or_update_event(athlete_id="i1", start_date="2024-01-15", name="Test Workout", workout_type="Ride")
+        add_or_update_event(
+            athlete_id="i1", start_date="2024-01-15", name="Test Workout", workout_type="Ride"
+        )
     )
     assert "Successfully created event:" in result
     assert '"id": "e123"' in result

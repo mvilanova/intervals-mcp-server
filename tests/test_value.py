@@ -6,13 +6,14 @@ These tests verify that the Value dataclass correctly handles:
 - Ramp intervals (start/end values)
 """
 
-from intervals_mcp_server.utils.types import Value, ValueUnits, HrTarget
+from intervals_mcp_server.utils.types import Value, ValueUnits
 
 
 def test_str_percent_ftp():
     """Test formatting percentage FTP values."""
     val = Value(value=95.0, units=ValueUnits.PERCENT_FTP)
     assert str(val) == "95% ftp"
+
 
 def test_str_ramp_percent_ftp():
     """Test formatting ramp intervals with percentage FTP."""
