@@ -228,8 +228,9 @@ async def make_intervals_request(
                 raise
             logger.warning("HTTPX client was closed; creating a new instance for retries.")
             global httpx_client  # noqa: PLW0603 - we intentionally manage the shared client here
-            httpx_client = httpx.AsyncClient()
-            response = await _send_request(httpx_client)
+            httpx_client = None
+            client = await _get_httpx_client()
+            response = await _send_request(client)
 
         try:
             response_data = response.json() if response.content else {}
