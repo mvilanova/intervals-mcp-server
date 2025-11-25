@@ -1,3 +1,10 @@
+"""
+Type definitions for Intervals.icu MCP Server.
+
+This module contains dataclasses and enums for representing workout data structures
+used in the Intervals.icu API, including workout steps, values, and documentation.
+"""
+
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Any, Union
 from enum import Enum
@@ -5,26 +12,30 @@ import json
 
 
 __all__ = [
-    'Option',
-    'WorkoutTarget',
-    'HrTarget',
-    'Intensity',
-    'PaceUnits',
-    'ValueUnits',
-    'Value',
-    'Step',
-    'SportSettings',
-    'WorkoutDoc'
+    "Option",
+    "WorkoutTarget",
+    "HrTarget",
+    "Intensity",
+    "PaceUnits",
+    "ValueUnits",
+    "Value",
+    "Step",
+    "SportSettings",
+    "WorkoutDoc",
 ]
 
 
 class Option(Enum):
+    """Enumeration of workout option types."""
+
     CATEGORY = "category"
     POOL_LENGTH = "pool_length"
     POWER = "power"
 
 
 class WorkoutTarget(Enum):
+    """Enumeration of workout target types."""
+
     AUTO = "AUTO"
     POWER = "POWER"
     HR = "HR"
@@ -32,14 +43,18 @@ class WorkoutTarget(Enum):
 
 
 class HrTarget(Enum):
+    """Enumeration of heart rate target averaging methods."""
+
     LAP = "lap"
     INSTANT = "1s"
     THREE_SECOND = "3s"
     TEN_SECOND = "10s"
     THIRTY_SECOND = "30s"
-    
+
 
 class Intensity(Enum):
+    """Enumeration of workout step intensity types."""
+
     ACTIVE = "active"
     REST = "rest"
     WARMUP = "warmup"
@@ -50,6 +65,8 @@ class Intensity(Enum):
 
 
 class PaceUnits(Enum):
+    """Enumeration of pace unit types for swimming and running."""
+
     SECS_100M = "SECS_100M"
     SECS_100Y = "SECS_100Y"
     MINS_KM = "MINS_KM"
@@ -58,6 +75,8 @@ class PaceUnits(Enum):
 
 
 class ValueUnits(Enum):
+    """Enumeration of value unit types for workout steps (power, heart rate, pace, cadence)."""
+
     PERCENT_MMP = "%mmp"
     PERCENT_HR = "%hr"
     PERCENT_LTHR = "%lthr"
@@ -77,6 +96,12 @@ def float_to_str(value: float) -> str:
 
 @dataclass
 class Value:
+    """Represents a value with units for workout step intensity (power, heart rate, pace, cadence).
+
+    Can represent a single value, a range (start-end), or a ramp. Supports various unit types
+    including percentages, zones, and absolute values.
+    """
+
     value: Optional[float] = None
     start: Optional[float] = None
     end: Optional[float] = None
@@ -87,31 +112,31 @@ class Value:
         """Convert Value instance to dictionary for JSON serialization."""
         data = {}
         if self.value is not None:
-            data['value'] = self.value
+            data["value"] = self.value
         if self.start is not None:
-            data['start'] = self.start
+            data["start"] = self.start
         if self.end is not None:
-            data['end'] = self.end
+            data["end"] = self.end
         if self.units is not None:
-            data['units'] = self.units.value
+            data["units"] = self.units.value
         if self.target is not None:
-            data['target'] = self.target.value
+            data["target"] = self.target.value
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Value':
+    def from_dict(cls, data: Dict[str, Any]) -> "Value":
         """Create Value instance from dictionary."""
         kwargs = {}
-        if 'value' in data:
-            kwargs['value'] = data['value']
-        if 'start' in data:
-            kwargs['start'] = data['start']
-        if 'end' in data:
-            kwargs['end'] = data['end']
-        if 'units' in data:
-            kwargs['units'] = ValueUnits(data['units'])
-        if 'target' in data:
-            kwargs['target'] = HrTarget(data['target'])
+        if "value" in data:
+            kwargs["value"] = data["value"]
+        if "start" in data:
+            kwargs["start"] = data["start"]
+        if "end" in data:
+            kwargs["end"] = data["end"]
+        if "units" in data:
+            kwargs["units"] = ValueUnits(data["units"])
+        if "target" in data:
+            kwargs["target"] = HrTarget(data["target"])
         return cls(**kwargs)
 
     def to_json(self) -> str:
@@ -119,37 +144,41 @@ class Value:
         return json.dumps(self.to_dict())
 
     @classmethod
-    def from_json(cls, json_str: str) -> 'Value':
+    def from_json(cls, json_str: str) -> "Value":
         """Create Value instance from JSON string."""
         return cls.from_dict(json.loads(json_str))
 
     def _format_value(self, value: float) -> str:
-        if self.units in [ValueUnits.PERCENT_HR, ValueUnits.PERCENT_MMP, ValueUnits.PERCENT_LTHR, ValueUnits.PERCENT_PACE, ValueUnits.PERCENT_FTP]:
+        if self.units in [
+            ValueUnits.PERCENT_HR,
+            ValueUnits.PERCENT_MMP,
+            ValueUnits.PERCENT_LTHR,
+            ValueUnits.PERCENT_PACE,
+            ValueUnits.PERCENT_FTP,
+        ]:
             return f"{float_to_str(value)}%"
-        elif self.units in [ValueUnits.POWER_ZONE, ValueUnits.HR_ZONE, ValueUnits.PACE_ZONE]:
+        if self.units in [ValueUnits.POWER_ZONE, ValueUnits.HR_ZONE, ValueUnits.PACE_ZONE]:
             return f"Z{float_to_str(value)}"
-        elif self.units in [ValueUnits.WATTS]:
+        if self.units in [ValueUnits.WATTS]:
             return f"{float_to_str(value)}W"
-        elif self.units in [ValueUnits.CADENCE]:
+        if self.units in [ValueUnits.CADENCE]:
             return f"{float_to_str(value)}rpm"
         return float_to_str(value)
 
     def _format_units(self) -> str:
-        if self.units in [ValueUnits.PERCENT_HR, ValueUnits.HR_ZONE]:
-            return "HR"
-        elif self.units in [ValueUnits.PERCENT_MMP]:
-            return "MMP"
-        elif self.units in [ValueUnits.PERCENT_LTHR]:
-            return "LTHR"
-        elif self.units in [ValueUnits.PERCENT_PACE, ValueUnits.PACE_ZONE]:
-            return "Pace"
-        elif self.units in [ValueUnits.PERCENT_FTP]:
-            return "ftp"
-        elif self.units in [ValueUnits.POWER_ZONE]:
-            return "W"
-        elif self.units in [ValueUnits.CADENCE]:
-            return "Cadence"
-        return ""
+        """Format units into a human-readable string using dictionary mapping."""
+        units_map = {
+            ValueUnits.PERCENT_HR: "HR",
+            ValueUnits.HR_ZONE: "HR",
+            ValueUnits.PERCENT_MMP: "MMP",
+            ValueUnits.PERCENT_LTHR: "LTHR",
+            ValueUnits.PERCENT_PACE: "Pace",
+            ValueUnits.PACE_ZONE: "Pace",
+            ValueUnits.PERCENT_FTP: "ftp",
+            ValueUnits.POWER_ZONE: "W",
+            ValueUnits.CADENCE: "Cadence",
+        }
+        return units_map.get(self.units, "")
 
     def __str__(self) -> str:
         val = ""
@@ -165,7 +194,14 @@ class Value:
 
 
 @dataclass
-class Step:
+class Step:  # pylint: disable=too-many-instance-attributes
+    """Represents a single step in a workout.
+
+    A step can be a warmup, cooldown, interval, or repeat block. It can specify
+    duration, distance, intensity targets (power, heart rate, pace, cadence), and
+    contain nested steps for repeats.
+    """
+
     text: Optional[str] = None
     text_locale: Optional[Dict[str, str]] = None
     duration: Optional[int] = None
@@ -175,7 +211,7 @@ class Step:
     warmup: Optional[bool] = None
     cooldown: Optional[bool] = None
     intensity: Optional[Intensity] = None
-    steps: Optional[List['Step']] = None
+    steps: Optional[List["Step"]] = None
     ramp: Optional[bool] = None
     freeride: Optional[bool] = None
     maxeffort: Optional[bool] = None
@@ -190,103 +226,109 @@ class Step:
     _pace: Optional[Value] = None
     _distance: Optional[float] = None
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert Step instance to dictionary for JSON serialization."""
+    def to_dict(self) -> Dict[str, Any]:  # pylint: disable=too-many-branches
+        """Convert Step instance to dictionary for JSON serialization.
+
+        Many branches are required to handle all optional fields of the Step dataclass.
+        """
         data = {}
         if self.text is not None:
-            data['text'] = self.text
+            data["text"] = self.text
         if self.text_locale is not None:
-            data['text_locale'] = self.text_locale
+            data["text_locale"] = self.text_locale
         if self.duration is not None:
-            data['duration'] = self.duration
+            data["duration"] = self.duration
         if self.distance is not None:
-            data['distance'] = self.distance
+            data["distance"] = self.distance
         if self.until_lap_press is not None:
-            data['until_lap_press'] = self.until_lap_press
+            data["until_lap_press"] = self.until_lap_press
         if self.reps is not None:
-            data['reps'] = self.reps
+            data["reps"] = self.reps
         if self.warmup is not None:
-            data['warmup'] = self.warmup
+            data["warmup"] = self.warmup
         if self.cooldown is not None:
-            data['cooldown'] = self.cooldown
+            data["cooldown"] = self.cooldown
         if self.intensity is not None:
-            data['intensity'] = self.intensity.value
+            data["intensity"] = self.intensity.value
         if self.steps is not None:
-            data['steps'] = [step.to_dict() for step in self.steps]
+            data["steps"] = [step.to_dict() for step in self.steps]
         if self.ramp is not None:
-            data['ramp'] = self.ramp
+            data["ramp"] = self.ramp
         if self.freeride is not None:
-            data['freeride'] = self.freeride
+            data["freeride"] = self.freeride
         if self.maxeffort is not None:
-            data['maxeffort'] = self.maxeffort
+            data["maxeffort"] = self.maxeffort
         if self.power is not None:
-            data['power'] = self.power.to_dict()
+            data["power"] = self.power.to_dict()
         if self.hr is not None:
-            data['hr'] = self.hr.to_dict()
+            data["hr"] = self.hr.to_dict()
         if self.pace is not None:
-            data['pace'] = self.pace.to_dict()
+            data["pace"] = self.pace.to_dict()
         if self.cadence is not None:
-            data['cadence'] = self.cadence.to_dict()
+            data["cadence"] = self.cadence.to_dict()
         if self.hidepower is not None:
-            data['hidepower'] = self.hidepower
+            data["hidepower"] = self.hidepower
         if self._power is not None:
-            data['_power'] = self._power.to_dict()
+            data["_power"] = self._power.to_dict()
         if self._hr is not None:
-            data['_hr'] = self._hr.to_dict()
+            data["_hr"] = self._hr.to_dict()
         if self._pace is not None:
-            data['_pace'] = self._pace.to_dict()
+            data["_pace"] = self._pace.to_dict()
         if self._distance is not None:
-            data['_distance'] = self._distance
+            data["_distance"] = self._distance
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Step':
-        """Create Step instance from dictionary."""
+    def from_dict(cls, data: Dict[str, Any]) -> "Step":  # pylint: disable=too-many-branches
+        """Create Step instance from dictionary.
+
+        Many branches are required to handle all optional fields of the Step dataclass.
+        """
         kwargs = {}
-        if 'text' in data:
-            kwargs['text'] = data['text']
-        if 'text_locale' in data:
-            kwargs['text_locale'] = data['text_locale']
-        if 'duration' in data:
-            kwargs['duration'] = data['duration']
-        if 'distance' in data:
-            kwargs['distance'] = data['distance']
-        if 'until_lap_press' in data:
-            kwargs['until_lap_press'] = data['until_lap_press']
-        if 'reps' in data:
-            kwargs['reps'] = data['reps']
-        if 'warmup' in data:
-            kwargs['warmup'] = data['warmup']
-        if 'cooldown' in data:
-            kwargs['cooldown'] = data['cooldown']
-        if 'intensity' in data:
-            kwargs['intensity'] = Intensity(data['intensity'])
-        if 'steps' in data:
-            kwargs['steps'] = [cls.from_dict(step) for step in data['steps']]
-        if 'ramp' in data:
-            kwargs['ramp'] = data['ramp']
-        if 'freeride' in data:
-            kwargs['freeride'] = data['freeride']
-        if 'maxeffort' in data:
-            kwargs['maxeffort'] = data['maxeffort']
-        if 'power' in data:
-            kwargs['power'] = Value.from_dict(data['power'])
-        if 'hr' in data:
-            kwargs['hr'] = Value.from_dict(data['hr'])
-        if 'pace' in data:
-            kwargs['pace'] = Value.from_dict(data['pace'])
-        if 'cadence' in data:
-            kwargs['cadence'] = Value.from_dict(data['cadence'])
-        if 'hidepower' in data:
-            kwargs['hidepower'] = data['hidepower']
-        if '_power' in data:
-            kwargs['_power'] = Value.from_dict(data['_power'])
-        if '_hr' in data:
-            kwargs['_hr'] = Value.from_dict(data['_hr'])
-        if '_pace' in data:
-            kwargs['_pace'] = Value.from_dict(data['_pace'])
-        if '_distance' in data:
-            kwargs['_distance'] = data['_distance']
+        if "text" in data:
+            kwargs["text"] = data["text"]
+        if "text_locale" in data:
+            kwargs["text_locale"] = data["text_locale"]
+        if "duration" in data:
+            kwargs["duration"] = data["duration"]
+        if "distance" in data:
+            kwargs["distance"] = data["distance"]
+        if "until_lap_press" in data:
+            kwargs["until_lap_press"] = data["until_lap_press"]
+        if "reps" in data:
+            kwargs["reps"] = data["reps"]
+        if "warmup" in data:
+            kwargs["warmup"] = data["warmup"]
+        if "cooldown" in data:
+            kwargs["cooldown"] = data["cooldown"]
+        if "intensity" in data:
+            kwargs["intensity"] = Intensity(data["intensity"])
+        if "steps" in data:
+            kwargs["steps"] = [cls.from_dict(step) for step in data["steps"]]
+        if "ramp" in data:
+            kwargs["ramp"] = data["ramp"]
+        if "freeride" in data:
+            kwargs["freeride"] = data["freeride"]
+        if "maxeffort" in data:
+            kwargs["maxeffort"] = data["maxeffort"]
+        if "power" in data:
+            kwargs["power"] = Value.from_dict(data["power"])
+        if "hr" in data:
+            kwargs["hr"] = Value.from_dict(data["hr"])
+        if "pace" in data:
+            kwargs["pace"] = Value.from_dict(data["pace"])
+        if "cadence" in data:
+            kwargs["cadence"] = Value.from_dict(data["cadence"])
+        if "hidepower" in data:
+            kwargs["hidepower"] = data["hidepower"]
+        if "_power" in data:
+            kwargs["_power"] = Value.from_dict(data["_power"])
+        if "_hr" in data:
+            kwargs["_hr"] = Value.from_dict(data["_hr"])
+        if "_pace" in data:
+            kwargs["_pace"] = Value.from_dict(data["_pace"])
+        if "_distance" in data:
+            kwargs["_distance"] = data["_distance"]
         return cls(**kwargs)
 
     def to_json(self) -> str:
@@ -294,7 +336,7 @@ class Step:
         return json.dumps(self.to_dict())
 
     @classmethod
-    def from_json(cls, json_str: str) -> 'Step':
+    def from_json(cls, json_str: str) -> "Step":
         """Create Step instance from JSON string."""
         return cls.from_dict(json.loads(json_str))
 
@@ -322,7 +364,11 @@ class Step:
             return f"{float_to_str(self.distance)}mtr"
         return f"{float_to_str(self.distance / 1000)}km"
 
-    def __str__(self, nested: bool = False) -> str:
+    def __str__(self, nested: bool = False) -> str:  # pylint: disable=too-many-branches
+        """Convert Step to string representation.
+
+        Many branches are required to format all optional fields and handle different step types.
+        """
         val = ""
         if self.reps is not None:
             if nested:
@@ -361,7 +407,6 @@ class Step:
                 val += f"{self.cadence} "
         if self.text is not None:
             val += f"{self.text} "
-        
         if self.reps is not None and self.steps is not None:
             for step in self.steps:
                 val += "\n" + step.__str__(nested=True)
@@ -373,15 +418,18 @@ class Step:
 
 @dataclass
 class SportSettings:
-    # Add fields as needed based on the actual SportSettings class
-    pass
+    """Represents sport-specific settings for a workout.
+
+    Currently empty, but can be extended with sport-specific configuration
+    as needed by the Intervals.icu API.
+    """
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert SportSettings instance to dictionary for JSON serialization."""
         return {}
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'SportSettings':
+    def from_dict(cls, _data: Dict[str, Any]) -> "SportSettings":
         """Create SportSettings instance from dictionary."""
         return cls()
 
@@ -390,13 +438,21 @@ class SportSettings:
         return json.dumps(self.to_dict())
 
     @classmethod
-    def from_json(cls, json_str: str) -> 'SportSettings':
+    def from_json(cls, json_str: str) -> "SportSettings":
         """Create SportSettings instance from JSON string."""
         return cls.from_dict(json.loads(json_str))
 
 
 @dataclass
-class WorkoutDoc:
+class WorkoutDoc:  # pylint: disable=too-many-instance-attributes
+    """Represents a complete workout document with description, steps, and settings.
+
+    This is the main structure used to define workouts for the Intervals.icu API,
+    containing workout metadata, step definitions, and sport-specific settings.
+
+    Many instance attributes are required to match the Intervals.icu API schema exactly.
+    """
+
     description: Optional[str] = None
     description_locale: Optional[Dict[str, str]] = None
     duration: Optional[int] = None
@@ -405,83 +461,91 @@ class WorkoutDoc:
     lthr: Optional[int] = None
     threshold_pace: Optional[float] = None  # meters/sec
     pace_units: Optional[PaceUnits] = None
-    sportSettings: Optional[SportSettings] = None
+    sport_settings: Optional[SportSettings] = None
     category: Optional[str] = None
     target: Optional[WorkoutTarget] = None
     steps: Optional[List[Step]] = None
-    zoneTimes: Optional[List[Union[int, Any]]] = None  # sometimes array of ints otherwise array of objects
+    zone_times: Optional[List[Union[int, Any]]] = (
+        None  # sometimes array of ints otherwise array of objects
+    )
     options: Optional[Dict[str, str]] = None
     locales: Optional[List[str]] = None
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert WorkoutDoc instance to dictionary for JSON serialization."""
+    def to_dict(self) -> Dict[str, Any]:  # pylint: disable=too-many-branches
+        """Convert WorkoutDoc instance to dictionary for JSON serialization.
+
+        Many branches are required to handle all optional fields of the WorkoutDoc dataclass.
+        """
         data = {}
         if self.description is not None:
-            data['description'] = self.description
+            data["description"] = self.description
         if self.description_locale is not None:
-            data['description_locale'] = self.description_locale
+            data["description_locale"] = self.description_locale
         if self.duration is not None:
-            data['duration'] = self.duration
+            data["duration"] = self.duration
         if self.distance is not None:
-            data['distance'] = self.distance
+            data["distance"] = self.distance
         if self.ftp is not None:
-            data['ftp'] = self.ftp
+            data["ftp"] = self.ftp
         if self.lthr is not None:
-            data['lthr'] = self.lthr
+            data["lthr"] = self.lthr
         if self.threshold_pace is not None:
-            data['threshold_pace'] = self.threshold_pace
+            data["threshold_pace"] = self.threshold_pace
         if self.pace_units is not None:
-            data['pace_units'] = self.pace_units.value
-        if self.sportSettings is not None:
-            data['sportSettings'] = self.sportSettings.to_dict()
+            data["pace_units"] = self.pace_units.value
+        if self.sport_settings is not None:
+            data["sportSettings"] = self.sport_settings.to_dict()  # API uses camelCase
         if self.category is not None:
-            data['category'] = self.category
+            data["category"] = self.category
         if self.target is not None:
-            data['target'] = self.target.value
+            data["target"] = self.target.value
         if self.steps is not None:
-            data['steps'] = [step.to_dict() for step in self.steps]
-        if self.zoneTimes is not None:
-            data['zoneTimes'] = self.zoneTimes
+            data["steps"] = [step.to_dict() for step in self.steps]
+        if self.zone_times is not None:
+            data["zoneTimes"] = self.zone_times  # API uses camelCase
         if self.options is not None:
-            data['options'] = self.options
+            data["options"] = self.options
         if self.locales is not None:
-            data['locales'] = self.locales
+            data["locales"] = self.locales
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'WorkoutDoc':
-        """Create WorkoutDoc instance from dictionary."""
+    def from_dict(cls, data: Dict[str, Any]) -> "WorkoutDoc":  # pylint: disable=too-many-branches
+        """Create WorkoutDoc instance from dictionary.
+
+        Many branches are required to handle all optional fields of the WorkoutDoc dataclass.
+        """
         kwargs = {}
-        if 'description' in data:
-            kwargs['description'] = data['description']
-        if 'description_locale' in data:
-            kwargs['description_locale'] = data['description_locale']
-        if 'duration' in data:
-            kwargs['duration'] = data['duration']
-        if 'distance' in data:
-            kwargs['distance'] = data['distance']
-        if 'ftp' in data:
-            kwargs['ftp'] = data['ftp']
-        if 'lthr' in data:
-            kwargs['lthr'] = data['lthr']
-        if 'threshold_pace' in data:
-            kwargs['threshold_pace'] = data['threshold_pace']
-        if 'pace_units' in data:
-            kwargs['pace_units'] = PaceUnits(data['pace_units'])
-        if 'sportSettings' in data:
-            kwargs['sportSettings'] = SportSettings.from_dict(data['sportSettings'])
-        if 'category' in data:
-            kwargs['category'] = data['category']
-        if 'target' in data:
-            kwargs['target'] = WorkoutTarget(data['target'])
-        if 'steps' in data:
-            kwargs['steps'] = [Step.from_dict(step) for step in data['steps']]
-        if 'zoneTimes' in data:
-            kwargs['zoneTimes'] = data['zoneTimes']
-        if 'options' in data:
-            kwargs['options'] = data['options']
-        if 'locales' in data:
-            kwargs['locales'] = data['locales']
+        if "description" in data:
+            kwargs["description"] = data["description"]
+        if "description_locale" in data:
+            kwargs["description_locale"] = data["description_locale"]
+        if "duration" in data:
+            kwargs["duration"] = data["duration"]
+        if "distance" in data:
+            kwargs["distance"] = data["distance"]
+        if "ftp" in data:
+            kwargs["ftp"] = data["ftp"]
+        if "lthr" in data:
+            kwargs["lthr"] = data["lthr"]
+        if "threshold_pace" in data:
+            kwargs["threshold_pace"] = data["threshold_pace"]
+        if "pace_units" in data:
+            kwargs["pace_units"] = PaceUnits(data["pace_units"])
+        if "sportSettings" in data:  # API uses camelCase
+            kwargs["sport_settings"] = SportSettings.from_dict(data["sportSettings"])
+        if "category" in data:
+            kwargs["category"] = data["category"]
+        if "target" in data:
+            kwargs["target"] = WorkoutTarget(data["target"])
+        if "steps" in data:
+            kwargs["steps"] = [Step.from_dict(step) for step in data["steps"]]
+        if "zoneTimes" in data:  # API uses camelCase
+            kwargs["zone_times"] = data["zoneTimes"]
+        if "options" in data:
+            kwargs["options"] = data["options"]
+        if "locales" in data:
+            kwargs["locales"] = data["locales"]
         return cls(**kwargs)
 
     def to_json(self) -> str:
@@ -489,7 +553,7 @@ class WorkoutDoc:
         return json.dumps(self.to_dict())
 
     @classmethod
-    def from_json(cls, json_str: str) -> 'WorkoutDoc':
+    def from_json(cls, json_str: str) -> "WorkoutDoc":
         """Create WorkoutDoc instance from JSON string."""
         return cls.from_dict(json.loads(json_str))
 

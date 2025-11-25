@@ -108,12 +108,9 @@ TSS: {workout.get("tss", "N/A")}
 Intervals: {len(workout.get("intervals", []))}
 """
 
-def format_wellness_entry(entries: dict[str, Any]) -> str:
-    lines = ["Wellness Data:"]
-    lines.append(f"Date: {entries.get('id', 'N/A')}")
-    lines.append("")
 
-    # Training Metrics
+def _format_training_metrics(entries: dict[str, Any]) -> list[str]:
+    """Format training metrics section."""
     training_metrics = []
     for k, label in [
         ("ctl", "Fitness (CTL)"),
@@ -124,26 +121,21 @@ def format_wellness_entry(entries: dict[str, Any]) -> str:
     ]:
         if entries.get(k) is not None:
             training_metrics.append(f"- {label}: {entries[k]}")
-    if training_metrics:
-        lines.append("Training Metrics:")
-        lines.extend(training_metrics)
-        lines.append("")
+    return training_metrics
 
-    # Sport-Specific Info
+
+def _format_sport_info(entries: dict[str, Any]) -> list[str]:
+    """Format sport-specific info section."""
     sport_info_list = []
     if entries.get("sportInfo"):
         for sport in entries.get("sportInfo", []):
-            if isinstance(sport, dict):
-                if sport.get("eftp") is not None:
-                    sport_info_list.append(
-                        f"- {sport.get('type')}: eFTP = {sport['eftp']}"
-                    )
-    if sport_info_list:
-        lines.append("Sport-Specific Info:")
-        lines.extend(sport_info_list)
-        lines.append("")
+            if isinstance(sport, dict) and sport.get("eftp") is not None:
+                sport_info_list.append(f"- {sport.get('type')}: eFTP = {sport['eftp']}")
+    return sport_info_list
 
-    # Vital Signs
+
+def _format_vital_signs(entries: dict[str, Any]) -> list[str]:
+    """Format vital signs section."""
     vital_signs = []
     for k, label, unit in [
         ("weight", "Weight", "kg"),
@@ -165,15 +157,16 @@ def format_wellness_entry(entries: dict[str, Any]) -> str:
         if entries.get(k) is not None:
             value = entries[k]
             if k == "systolic" and entries.get("diastolic") is not None:
-                vital_signs.append(f"-Blood Pressure: {entries['systolic']}/{entries['diastolic']} mmHg")
+                vital_signs.append(
+                    f"- Blood Pressure: {entries['systolic']}/{entries['diastolic']} mmHg"
+                )
             elif k not in ("systolic", "diastolic"):
                 vital_signs.append(f"- {label}: {value}{(' ' + unit) if unit else ''}")
-    if vital_signs:
-        lines.append("Vital Signs:")
-        lines.extend(vital_signs)
-        lines.append("")
+    return vital_signs
 
-    # Sleep & Recovery
+
+def _format_sleep_recovery(entries: dict[str, Any]) -> list[str]:
+    """Format sleep and recovery section."""
     sleep_lines = []
     sleep_hours = None
     if entries.get("sleepSecs") is not None:
@@ -183,38 +176,35 @@ def format_wellness_entry(entries: dict[str, Any]) -> str:
     if sleep_hours is not None:
         sleep_lines.append(f"  Sleep: {sleep_hours} hours")
 
-    # Handle sleep quality (intervals.icu 1-4 scale: 1=Great, 2=Good, 3=Average, 4=Poor)
     if entries.get("sleepQuality") is not None:
         quality_value = entries["sleepQuality"]
         quality_labels = {1: "Great", 2: "Good", 3: "Average", 4: "Poor"}
         quality_text = quality_labels.get(quality_value, str(quality_value))
         sleep_lines.append(f"  Sleep Quality: {quality_value} ({quality_text})")
 
-    # Handle device sleep score (typically 0-100 scale like Garmin)
     if entries.get("sleepScore") is not None:
         sleep_lines.append(f"  Device Sleep Score: {entries['sleepScore']}/100")
 
-    # Handle readiness score
     if entries.get("readiness") is not None:
         sleep_lines.append(f"  Readiness: {entries['readiness']}/10")
 
-    if sleep_lines:
-        lines.append("Sleep & Recovery:")
-        lines.extend(sleep_lines)
-        lines.append("")
+    return sleep_lines
 
-    # Menstrual Tracking
+
+def _format_menstrual_tracking(entries: dict[str, Any]) -> list[str]:
+    """Format menstrual tracking section."""
     menstrual_lines = []
     if entries.get("menstrualPhase") is not None:
         menstrual_lines.append(f"  Menstrual Phase: {str(entries['menstrualPhase']).capitalize()}")
     if entries.get("menstrualPhasePredicted") is not None:
-        menstrual_lines.append(f"  Predicted Phase: {str(entries['menstrualPhasePredicted']).capitalize()}")
-    if menstrual_lines:
-        lines.append("Menstrual Tracking:")
-        lines.extend(menstrual_lines)
-        lines.append("")
+        menstrual_lines.append(
+            f"  Predicted Phase: {str(entries['menstrualPhasePredicted']).capitalize()}"
+        )
+    return menstrual_lines
 
-    # Subjective Feelings
+
+def _format_subjective_feelings(entries: dict[str, Any]) -> list[str]:
+    """Format subjective feelings section."""
     subjective_lines = []
     for k, label in [
         ("soreness", "Soreness"),
@@ -226,12 +216,11 @@ def format_wellness_entry(entries: dict[str, Any]) -> str:
     ]:
         if entries.get(k) is not None:
             subjective_lines.append(f"  {label}: {entries[k]}/10")
-    if subjective_lines:
-        lines.append("Subjective Feelings:")
-        lines.extend(subjective_lines)
-        lines.append("")
+    return subjective_lines
 
-    # Nutrition & Hydration
+
+def _format_nutrition_hydration(entries: dict[str, Any]) -> list[str]:
+    """Format nutrition and hydration section."""
     nutrition_lines = []
     for k, label in [
         ("kcalConsumed", "Calories Consumed"),
@@ -243,18 +232,82 @@ def format_wellness_entry(entries: dict[str, Any]) -> str:
     if entries.get("hydration") is not None:
         nutrition_lines.append(f"  Hydration Score: {entries['hydration']}/10")
 
+    return nutrition_lines
+
+
+def format_wellness_entry(entries: dict[str, Any]) -> str:
+    """Format wellness entry data into a readable string.
+
+    Formats various wellness metrics including training metrics, vital signs,
+    sleep data, menstrual tracking, subjective feelings, nutrition, and activity.
+
+    Args:
+        entries: Dictionary containing wellness data fields such as:
+            - Training metrics: ctl, atl, rampRate, ctlLoad, atlLoad
+            - Vital signs: weight, restingHR, hrv, hrvSDNN, avgSleepingHR, spO2,
+              systolic, diastolic, respiration, bloodGlucose, lactate, vo2max,
+              bodyFat, abdomen, baevskySI
+            - Sleep: sleepSecs, sleepHours, sleepQuality, sleepScore, readiness
+            - Menstrual: menstrualPhase, menstrualPhasePredicted
+            - Subjective: soreness, fatigue, stress, mood, motivation, injury
+            - Nutrition: kcalConsumed, hydrationVolume, hydration
+            - Activity: steps
+            - Other: comments, locked, date
+
+    Returns:
+        A formatted string representation of the wellness entry.
+    """
+    lines = ["Wellness Data:"]
+    lines.append(f"Date: {entries.get('id', 'N/A')}")
+    lines.append("")
+
+    training_metrics = _format_training_metrics(entries)
+    if training_metrics:
+        lines.append("Training Metrics:")
+        lines.extend(training_metrics)
+        lines.append("")
+
+    sport_info_list = _format_sport_info(entries)
+    if sport_info_list:
+        lines.append("Sport-Specific Info:")
+        lines.extend(sport_info_list)
+        lines.append("")
+
+    vital_signs = _format_vital_signs(entries)
+    if vital_signs:
+        lines.append("Vital Signs:")
+        lines.extend(vital_signs)
+        lines.append("")
+
+    sleep_lines = _format_sleep_recovery(entries)
+    if sleep_lines:
+        lines.append("Sleep & Recovery:")
+        lines.extend(sleep_lines)
+        lines.append("")
+
+    menstrual_lines = _format_menstrual_tracking(entries)
+    if menstrual_lines:
+        lines.append("Menstrual Tracking:")
+        lines.extend(menstrual_lines)
+        lines.append("")
+
+    subjective_lines = _format_subjective_feelings(entries)
+    if subjective_lines:
+        lines.append("Subjective Feelings:")
+        lines.extend(subjective_lines)
+        lines.append("")
+
+    nutrition_lines = _format_nutrition_hydration(entries)
     if nutrition_lines:
         lines.append("Nutrition & Hydration:")
         lines.extend(nutrition_lines)
         lines.append("")
 
-    # Activity
     if entries.get("steps") is not None:
         lines.append("Activity:")
         lines.append(f"- Steps: {entries['steps']}")
         lines.append("")
 
-    # Comments, Status, Updated
     if entries.get("comments"):
         lines.append(f"Comments: {entries['comments']}")
     if "locked" in entries:

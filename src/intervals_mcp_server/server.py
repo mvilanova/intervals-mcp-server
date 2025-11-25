@@ -108,11 +108,22 @@ if not re.fullmatch(r"i?\d+", ATHLETE_ID):
 
 
 def validate_date(date_str: str) -> str:
+    """Validate that a date string is in YYYY-MM-DD format.
+
+    Args:
+        date_str: The date string to validate.
+
+    Returns:
+        The validated date string if valid.
+
+    Raises:
+        ValueError: If the date string is not in YYYY-MM-DD format.
+    """
     try:
         datetime.strptime(date_str, "%Y-%m-%d")
         return date_str
-    except ValueError:
-        raise ValueError("Invalid date format. Please use YYYY-MM-DD.")
+    except ValueError as exc:
+        raise ValueError("Invalid date format. Please use YYYY-MM-DD.") from exc
 
 
 def _get_error_message(error_code: int, error_text: str) -> str:
@@ -615,6 +626,47 @@ def _resolve_workout_type(name: str | None, workout_type: str | None) -> str:
     return "Ride"  # Default
 
 
+def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    name: str,
+    workout_type: str,
+    start_date: str,
+    workout_doc: WorkoutDoc | None,
+    moving_time: int | None,
+    distance: int | None,
+) -> dict[str, Any]:
+    """Prepare event data dictionary for API request.
+
+    Many arguments are required to match the Intervals.icu API event structure.
+    """
+    resolved_workout_type = _resolve_workout_type(name, workout_type)
+    return {
+        "start_date_local": start_date + "T00:00:00",
+        "category": "WORKOUT",
+        "name": name,
+        "description": str(workout_doc) if workout_doc else None,
+        "type": resolved_workout_type,
+        "moving_time": moving_time,
+        "distance": distance,
+    }
+
+
+def _handle_event_response(
+    result: dict[str, Any] | list[dict[str, Any]] | None,
+    action: str,
+    athlete_id: str,
+    start_date: str,
+) -> str:
+    """Handle API response and format appropriate message."""
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error {action} event: {error_message}"
+    if not result:
+        return f"No events {action} for athlete {athlete_id}."
+    if isinstance(result, dict):
+        return f"Successfully {action} event: {json.dumps(result, indent=2)}"
+    return f"Event {action} successfully at {start_date}"
+
+
 @mcp.tool()
 async def delete_event(
     event_id: str,
@@ -668,15 +720,17 @@ async def delete_events_by_date_range(
     failed_events = []
     for event in events:
         result = await make_intervals_request(
-            url=f"/athlete/{athlete_id_to_use}/events/{event.get('id')}", api_key=api_key, method="DELETE"
+            url=f"/athlete/{athlete_id_to_use}/events/{event.get('id')}",
+            api_key=api_key,
+            method="DELETE",
         )
         if isinstance(result, dict) and "error" in result:
-            failed_events.append(event.get('id'))
-    return f"Deleted {len(events) - len(failed_events)} events. Failed to delete {len(failed_events)} events: {failed_events}" 
+            failed_events.append(event.get("id"))
+    return f"Deleted {len(events) - len(failed_events)} events. Failed to delete {len(failed_events)} events: {failed_events}"
 
 
 @mcp.tool()
-async def add_or_update_event(
+async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     workout_type: str,
     name: str,
     athlete_id: str | None = None,
@@ -690,6 +744,8 @@ async def add_or_update_event(
     """Post event for an athlete to Intervals.icu this follows the event api from intervals.icu
     If event_id is provided, the event will be updated instead of created.
 
+    Many arguments are required as this MCP tool function maps directly to the Intervals.icu API parameters.
+
     Args:
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
@@ -700,7 +756,7 @@ async def add_or_update_event(
         workout_type: Workout type (e.g. Ride, Run, Swim, Walk, Row)
         moving_time: Total expected moving time of the workout in seconds (optional)
         distance: Total expected distance of the workout in meters (optional)
-    
+
     Example:
         "workout_doc": {
             "description": "High-intensity workout for increasing VO2 max",
@@ -714,7 +770,7 @@ async def add_or_update_event(
                 {"text": ""}, # Add comments or blank lines for readability
             ]
         }
-    
+
     Step properties:
         distance: Distance of step in meters
             {"distance": "5000"}
@@ -750,43 +806,30 @@ async def add_or_update_event(
         - Use "reps" with nested steps to define repeat intervals (as in example above)
         - Define one of "power", "hr" or "pace" to define step intensity
     """
-    message = None
     athlete_id_to_use = athlete_id if athlete_id is not None else ATHLETE_ID
     if not athlete_id_to_use:
-        message = "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
-    else:
-        if not start_date:
-            start_date = datetime.now().strftime("%Y-%m-%d")
-        try:
-            resolved_workout_type = _resolve_workout_type(name, workout_type)
-            data = {
-                "start_date_local": start_date + "T00:00:00",
-                "category": "WORKOUT",
-                "name": name,
-                "description": str(workout_doc) if workout_doc else None,
-                "type": resolved_workout_type,
-                "moving_time": moving_time,
-                "distance": distance,
-            }
-            result = await make_intervals_request(
-                url=f"/athlete/{athlete_id_to_use}/events" +("/"+event_id if event_id else ""),
-                api_key=api_key,
-                data=data,
-                method="PUT" if event_id else "POST",
-            )
-            action = "updated" if event_id else "created"
-            if isinstance(result, dict) and "error" in result:
-                error_message = result.get("message", "Unknown error")
-                message = f"Error {action} event: {error_message}, data used: {data}"
-            elif not result:
-                message = f"No events {action} for athlete {athlete_id_to_use}."
-            elif isinstance(result, dict):
-                message = f"Successfully {action} event: {json.dumps(result, indent=2)}"
-            else:
-                message = f"Event {action} successfully at {start_date}"
-        except ValueError as e:
-            message = f"Error: {e}"
-    return message
+        return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
+
+    if not start_date:
+        start_date = datetime.now().strftime("%Y-%m-%d")
+
+    try:
+        data = _prepare_event_data(
+            name, workout_type, start_date, workout_doc, moving_time, distance
+        )
+        url = f"/athlete/{athlete_id_to_use}/events"
+        if event_id:
+            url += f"/{event_id}"
+        result = await make_intervals_request(
+            url=url,
+            api_key=api_key,
+            data=data,
+            method="PUT" if event_id else "POST",
+        )
+        action = "updated" if event_id else "created"
+        return _handle_event_response(result, action, athlete_id_to_use, start_date)
+    except ValueError as e:
+        return f"Error: {e}"
 
 
 # Run the server
