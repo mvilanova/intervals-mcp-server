@@ -54,11 +54,11 @@ def test_format_wellness_entry():
     """
     Test that format_wellness_entry returns a string containing the date and fitness (CTL).
     """
-    with open("tests/ressources/wellness_entry.json", "r") as f:
+    with open("tests/ressources/wellness_entry.json", "r", encoding="utf-8") as f:
         entry = json.load(f)
     result = format_wellness_entry(entry)
 
-    with open("tests/ressources/wellness_entry_formatted.txt", "r") as f:
+    with open("tests/ressources/wellness_entry_formatted.txt", "r", encoding="utf-8") as f:
         expected_result = f.read()
     assert result == expected_result
 
