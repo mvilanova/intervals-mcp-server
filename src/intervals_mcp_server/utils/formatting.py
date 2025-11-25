@@ -182,13 +182,22 @@ def format_wellness_entry(entries: dict[str, Any]) -> str:
         sleep_hours = f"{entries['sleepHours']}"
     if sleep_hours is not None:
         sleep_lines.append(f"  Sleep: {sleep_hours} hours")
-    for k, label, unit in [
-        ("sleepScore", "Sleep Score", "/100"),
-        ("sleepQuality", "Sleep Quality", "/10"),
-        ("readiness", "Readiness", "/10"),
-    ]:
-        if entries.get(k) is not None:
-            sleep_lines.append(f"  {label}: {entries[k]}{unit}")
+
+    # Handle sleep quality (intervals.icu 1-4 scale: 1=Great, 2=Good, 3=Average, 4=Poor)
+    if entries.get("sleepQuality") is not None:
+        quality_value = entries["sleepQuality"]
+        quality_labels = {1: "Great", 2: "Good", 3: "Average", 4: "Poor"}
+        quality_text = quality_labels.get(quality_value, str(quality_value))
+        sleep_lines.append(f"  Sleep Quality: {quality_value} ({quality_text})")
+
+    # Handle device sleep score (typically 0-100 scale like Garmin)
+    if entries.get("sleepScore") is not None:
+        sleep_lines.append(f"  Device Sleep Score: {entries['sleepScore']}/100")
+
+    # Handle readiness score
+    if entries.get("readiness") is not None:
+        sleep_lines.append(f"  Readiness: {entries['readiness']}/10")
+
     if sleep_lines:
         lines.append("Sleep & Recovery:")
         lines.extend(sleep_lines)
