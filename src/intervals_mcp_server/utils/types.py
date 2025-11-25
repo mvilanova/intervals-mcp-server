@@ -444,11 +444,13 @@ class SportSettings:
 
 
 @dataclass
-class WorkoutDoc:
+class WorkoutDoc:  # pylint: disable=too-many-instance-attributes
     """Represents a complete workout document with description, steps, and settings.
 
     This is the main structure used to define workouts for the Intervals.icu API,
     containing workout metadata, step definitions, and sport-specific settings.
+
+    Many instance attributes are required to match the Intervals.icu API schema exactly.
     """
 
     description: Optional[str] = None

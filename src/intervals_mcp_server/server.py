@@ -626,7 +626,7 @@ def _resolve_workout_type(name: str | None, workout_type: str | None) -> str:
     return "Ride"  # Default
 
 
-def _prepare_event_data(
+def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     name: str,
     workout_type: str,
     start_date: str,
@@ -634,7 +634,10 @@ def _prepare_event_data(
     moving_time: int | None,
     distance: int | None,
 ) -> dict[str, Any]:
-    """Prepare event data dictionary for API request."""
+    """Prepare event data dictionary for API request.
+
+    Many arguments are required to match the Intervals.icu API event structure.
+    """
     resolved_workout_type = _resolve_workout_type(name, workout_type)
     return {
         "start_date_local": start_date + "T00:00:00",
@@ -727,7 +730,7 @@ async def delete_events_by_date_range(
 
 
 @mcp.tool()
-async def add_or_update_event(
+async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     workout_type: str,
     name: str,
     athlete_id: str | None = None,
@@ -740,6 +743,8 @@ async def add_or_update_event(
 ) -> str:
     """Post event for an athlete to Intervals.icu this follows the event api from intervals.icu
     If event_id is provided, the event will be updated instead of created.
+
+    Many arguments are required as this MCP tool function maps directly to the Intervals.icu API parameters.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
