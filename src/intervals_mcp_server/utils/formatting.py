@@ -158,7 +158,7 @@ def _format_vital_signs(entries: dict[str, Any]) -> list[str]:
             value = entries[k]
             if k == "systolic" and entries.get("diastolic") is not None:
                 vital_signs.append(
-                    f"-Blood Pressure: {entries['systolic']}/{entries['diastolic']} mmHg"
+                    f"- Blood Pressure: {entries['systolic']}/{entries['diastolic']} mmHg"
                 )
             elif k not in ("systolic", "diastolic"):
                 vital_signs.append(f"- {label}: {value}{(' ' + unit) if unit else ''}")
