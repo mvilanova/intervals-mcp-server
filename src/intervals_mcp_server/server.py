@@ -32,6 +32,7 @@ Usage:
     See the README for more details on configuration and usage.
 """
 
+from enum import StrEnum
 from json import JSONDecodeError
 import logging
 import os
@@ -862,28 +863,30 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
 
 
 # Run the server
+class TransportAliases(StrEnum):
+    STDIO = "stdio"
+    SSE = "sse"
+    HTTP = "http"
+    STREAMABLE_HTTP = "streamable-http"
+
 if __name__ == "__main__":
-    transport_env = os.getenv("MCP_TRANSPORT", "stdio").lower()
-    transport_aliases = {
-        "stdio": "stdio",
-        "sse": "sse",
-        "http": "streamable-http",
-        "streamable-http": "streamable-http",
-    }
+    transport_env = os.getenv("MCP_TRANSPORT", TransportAliases.STDIO).lower()
+    try:
+        transport_alias = TransportAliases(transport_env)
+    except ValueError as exc:
+        allowed = ", ".join(item.value for item in TransportAliases)
+        raise ValueError(f"Unsupported MCP_TRANSPORT value. Use one of: {allowed}.") from exc
 
-    if transport_env not in transport_aliases:
-        raise ValueError(
-            "Unsupported MCP_TRANSPORT value. Use one of: stdio, sse, streamable-http, http."
-        )
-
-    selected_transport = transport_aliases[transport_env]
+    selected_transport = (
+        TransportAliases.STREAMABLE_HTTP if transport_alias == TransportAliases.HTTP else transport_alias
+    )
     host = mcp.settings.host
     port = mcp.settings.port
 
-    if selected_transport == "stdio":
+    if selected_transport == TransportAliases.STDIO:
         logger.info("Starting MCP server with stdio transport.")
         mcp.run()
-    elif selected_transport == "sse":
+    elif selected_transport == TransportAliases.SSE:
         mount_path = os.getenv("MCP_SSE_MOUNT_PATH")
         logger.info(
             "Starting MCP server with SSE transport at http://%s:%s%s (messages: %s).",
@@ -893,7 +896,7 @@ if __name__ == "__main__":
             mcp.settings.message_path,
         )
         mcp.run(transport="sse", mount_path=mount_path)
-    else:
+    else:  # STREAMABLE_HTTP
         logger.info(
             "Starting MCP server with Streamable HTTP transport at http://%s:%s%s.",
             host,
