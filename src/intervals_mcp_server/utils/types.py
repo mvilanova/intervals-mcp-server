@@ -3,11 +3,12 @@ Type definitions for Intervals.icu MCP Server.
 
 This module contains dataclasses and enums for representing workout data structures
 used in the Intervals.icu API, including workout steps, values, and documentation.
+Also includes enums for server configuration.
 """
 
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Any, Union
-from enum import Enum
+from enum import Enum, StrEnum
 import json
 
 
@@ -18,6 +19,7 @@ __all__ = [
     "Intensity",
     "PaceUnits",
     "ValueUnits",
+    "TransportAliases",
     "Value",
     "Step",
     "SportSettings",
@@ -87,6 +89,15 @@ class ValueUnits(Enum):
     WATTS = "w"
     PERCENT_FTP = "%ftp"
     CADENCE = "cadence"
+
+
+class TransportAliases(StrEnum):
+    """Enumeration of supported MCP transport types."""
+
+    STDIO = "stdio"
+    SSE = "sse"
+    HTTP = "http"
+    STREAMABLE_HTTP = "streamable-http"
 
 
 def float_to_str(value: float) -> str:
