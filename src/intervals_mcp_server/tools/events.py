@@ -96,7 +96,7 @@ async def get_events(
         end_date: End date in YYYY-MM-DD format (optional, defaults to 30 days from today)
     """
     # Resolve athlete ID
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id)
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
 
@@ -151,7 +151,7 @@ async def get_event_by_id(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
     # Resolve athlete ID
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id)
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
 
@@ -186,7 +186,7 @@ async def delete_event(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         event_id: The Intervals.icu event ID
     """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id)
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
     if not event_id:
@@ -214,7 +214,7 @@ async def delete_events_by_date_range(
         start_date: Start date in YYYY-MM-DD format
         end_date: End date in YYYY-MM-DD format
     """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id)
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
     params = {"oldest": validate_date(start_date), "newest": validate_date(end_date)}
@@ -313,7 +313,7 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
         - Use "reps" with nested steps to define repeat intervals (as in example above)
         - Define one of "power", "hr" or "pace" to define step intensity
     """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id)
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
 

@@ -7,7 +7,6 @@ This module contains validation functions for input parameters.
 import re
 from datetime import datetime
 
-from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.dates import get_default_end_date, get_default_start_date
 
 
@@ -48,19 +47,21 @@ def validate_date(date_str: str) -> str:
         raise ValueError("Invalid date format. Please use YYYY-MM-DD.") from exc
 
 
-def resolve_athlete_id(athlete_id: str | None) -> tuple[str, str | None]:
-    """Resolve athlete ID from parameter or config, with error message if missing.
+def resolve_athlete_id(
+    athlete_id: str | None, default_athlete_id: str = ""
+) -> tuple[str, str | None]:
+    """Resolve athlete ID from parameter or default, with error message if missing.
 
     Args:
         athlete_id: Optional athlete ID parameter.
+        default_athlete_id: Default athlete ID to use if athlete_id is None.
 
     Returns:
         Tuple of (athlete_id_to_use, error_message).
         athlete_id_to_use will be empty string if not found.
         error_message will be None if athlete_id is resolved successfully.
     """
-    config = get_config()
-    athlete_id_to_use = athlete_id if athlete_id is not None else config.athlete_id
+    athlete_id_to_use = athlete_id if athlete_id is not None else default_athlete_id
     if not athlete_id_to_use:
         return (
             "",

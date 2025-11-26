@@ -31,7 +31,7 @@ async def get_wellness_data(
         end_date: End date in YYYY-MM-DD format (optional, defaults to today)
     """
     # Resolve athlete ID and date parameters
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id)
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
 
