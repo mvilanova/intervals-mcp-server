@@ -63,14 +63,14 @@ def _format_custom_fields(custom_fields: dict[str, Any]) -> list[str]:
         # e.g., "customFieldName" -> "Custom Field Name"
         formatted_key = re.sub(r"([a-z])([A-Z])", r"\1 \2", key)
         # Capitalize first letter, ensuring we have at least one character before indexing
-        if formatted_key and len(formatted_key) > 0:
+        if formatted_key:
             formatted_key = formatted_key[0].upper() + formatted_key[1:]
-        elif key and len(key) > 0:
+        elif key:
             # Fallback to original key if formatted_key is empty
             formatted_key = key[0].upper() + key[1:]
         else:
             # Both are empty (shouldn't happen due to _is_camelcase check, but be defensive)
-            formatted_key = key if key else "Unknown"
+            formatted_key = "Unknown"
 
         # Format the value based on type
         if value is None:
