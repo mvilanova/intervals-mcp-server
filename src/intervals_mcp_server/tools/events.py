@@ -363,16 +363,11 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
         start_date = datetime.now().strftime("%Y-%m-%d")
 
     try:
+        event_data = _prepare_event_data(
+            name, workout_type, start_date, workout_doc, moving_time, distance
+        )
         return await _create_or_update_event_request(
-            athlete_id_to_use,
-            api_key,
-            name,
-            workout_type,
-            start_date,
-            workout_doc,
-            moving_time,
-            distance,
-            event_id,
+            athlete_id_to_use, api_key, event_data, start_date, event_id
         )
     except ValueError as e:
         return f"Error: {e}"
@@ -381,12 +376,8 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
 async def _create_or_update_event_request(
     athlete_id: str,
     api_key: str | None,
-    name: str,
-    workout_type: str,
+    event_data: dict[str, Any],
     start_date: str,
-    workout_doc: WorkoutDoc | None,
-    moving_time: int | None,
-    distance: int | None,
     event_id: str | None,
 ) -> str:
     """Create or update an event via API request.
@@ -394,25 +385,20 @@ async def _create_or_update_event_request(
     Args:
         athlete_id: The athlete ID.
         api_key: Optional API key.
-        name: Event name.
-        workout_type: Workout type.
-        start_date: Start date string.
-        workout_doc: Optional workout document.
-        moving_time: Optional moving time.
-        distance: Optional distance.
+        event_data: Prepared event data dictionary.
+        start_date: Start date string for response formatting.
         event_id: Optional event ID for updates.
 
     Returns:
         Formatted response string.
     """
-    data = _prepare_event_data(name, workout_type, start_date, workout_doc, moving_time, distance)
     url = f"/athlete/{athlete_id}/events"
     if event_id:
         url += f"/{event_id}"
     result = await make_intervals_request(
         url=url,
         api_key=api_key,
-        data=data,
+        data=event_data,
         method="PUT" if event_id else "POST",
     )
     action = "updated" if event_id else "created"
