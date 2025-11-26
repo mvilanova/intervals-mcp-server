@@ -9,11 +9,11 @@ from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.dates import get_default_end_date, get_default_start_date
 from intervals_mcp_server.utils.formatting import format_activity_summary, format_intervals
+from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
 
-# Import mcp instance from server module for tool registration
-from intervals_mcp_server.server import mcp  # noqa: F401
+# Import mcp instance from shared module for tool registration
+from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
 config = get_config()
 
@@ -119,16 +119,12 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
         limit: Maximum number of activities to return (optional, defaults to 10)
         include_unnamed: Whether to include unnamed activities (optional, defaults to False)
     """
-    # Use provided athlete_id or fall back to global ATHLETE_ID
-    athlete_id_to_use = athlete_id if athlete_id is not None else config.athlete_id
-    if not athlete_id_to_use:
-        return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
+    # Resolve athlete ID and date parameters
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id)
+    if error_msg:
+        return error_msg
 
-    # Parse date parameters
-    if not start_date:
-        start_date = get_default_start_date()
-    if not end_date:
-        end_date = get_default_end_date()
+    start_date, end_date = resolve_date_params(start_date, end_date)
 
     # Fetch more activities if we need to filter out unnamed ones
     api_limit = limit * 3 if not include_unnamed else limit

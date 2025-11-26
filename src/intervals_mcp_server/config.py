@@ -66,7 +66,7 @@ def get_config() -> Config:
     Returns:
         Config: The configuration instance.
     """
-    global _config_instance  # noqa: PLW0603 - singleton pattern
+    global _config_instance  # pylint: disable=global-statement  # noqa: PLW0603 - singleton pattern
     if _config_instance is None:
         _config_instance = load_config()
     return _config_instance

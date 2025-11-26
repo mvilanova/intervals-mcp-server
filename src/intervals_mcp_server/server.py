@@ -63,28 +63,27 @@ config = get_config()
 # Initialize FastMCP server with custom lifespan
 mcp = FastMCP("intervals-icu", lifespan=setup_api_client)
 
-# Import tool modules to register them (tools register themselves via @mcp.tool() decorators)
-from intervals_mcp_server.tools import (  # noqa: E402, F401
-    activities,
-    events,
-    wellness,
-)
+# Set the shared mcp instance for tool modules to use (breaks cyclic imports)
+from intervals_mcp_server import mcp_instance  # pylint: disable=wrong-import-position  # noqa: E402
 
-# Re-export tools for backward compatibility
-from intervals_mcp_server.tools.activities import (  # noqa: E402
+mcp_instance.mcp = mcp
+
+# Import tool modules to register them (tools register themselves via @mcp.tool() decorators)
+# Import tool functions for re-export (imported after mcp instance creation)
+from intervals_mcp_server.tools.activities import (  # pylint: disable=wrong-import-position  # noqa: E402
     get_activities,
     get_activity_details,
     get_activity_intervals,
     get_activity_streams,
 )
-from intervals_mcp_server.tools.events import (  # noqa: E402
+from intervals_mcp_server.tools.events import (  # pylint: disable=wrong-import-position  # noqa: E402
     add_or_update_event,
     delete_event,
     delete_events_by_date_range,
     get_event_by_id,
     get_events,
 )
-from intervals_mcp_server.tools.wellness import get_wellness_data  # noqa: E402
+from intervals_mcp_server.tools.wellness import get_wellness_data  # pylint: disable=wrong-import-position  # noqa: E402
 
 # Re-export make_intervals_request and httpx_client for backward compatibility
 __all__ = [

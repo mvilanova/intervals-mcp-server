@@ -7,6 +7,9 @@ This module contains validation functions for input parameters.
 import re
 from datetime import datetime
 
+from intervals_mcp_server.config import get_config
+from intervals_mcp_server.utils.dates import get_default_end_date, get_default_start_date
+
 
 def validate_athlete_id(athlete_id: str) -> None:
     """Validate that an athlete ID is in the correct format.
@@ -43,3 +46,46 @@ def validate_date(date_str: str) -> str:
         return date_str
     except ValueError as exc:
         raise ValueError("Invalid date format. Please use YYYY-MM-DD.") from exc
+
+
+def resolve_athlete_id(athlete_id: str | None) -> tuple[str, str | None]:
+    """Resolve athlete ID from parameter or config, with error message if missing.
+
+    Args:
+        athlete_id: Optional athlete ID parameter.
+
+    Returns:
+        Tuple of (athlete_id_to_use, error_message).
+        athlete_id_to_use will be empty string if not found.
+        error_message will be None if athlete_id is resolved successfully.
+    """
+    config = get_config()
+    athlete_id_to_use = athlete_id if athlete_id is not None else config.athlete_id
+    if not athlete_id_to_use:
+        return (
+            "",
+            "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables.",
+        )
+    return athlete_id_to_use, None
+
+
+def resolve_date_params(
+    start_date: str | None,
+    end_date: str | None,
+    default_start_days_ago: int = 30,
+) -> tuple[str, str]:
+    """Resolve start and end date parameters with defaults.
+
+    Args:
+        start_date: Optional start date in YYYY-MM-DD format.
+        end_date: Optional end date in YYYY-MM-DD format.
+        default_start_days_ago: Number of days ago for default start date. Defaults to 30.
+
+    Returns:
+        Tuple of (start_date, end_date) as strings in YYYY-MM-DD format.
+    """
+    if not start_date:
+        start_date = get_default_start_date(default_start_days_ago)
+    if not end_date:
+        end_date = get_default_end_date()
+    return start_date, end_date

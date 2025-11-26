@@ -10,16 +10,13 @@ from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.dates import (
-    get_default_end_date,
-    get_default_future_end_date,
-)
+from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
 from intervals_mcp_server.utils.formatting import format_event_details, format_event_summary
 from intervals_mcp_server.utils.types import WorkoutDoc
-from intervals_mcp_server.utils.validation import validate_date
+from intervals_mcp_server.utils.validation import resolve_athlete_id, validate_date
 
-# Import mcp instance from server module for tool registration
-from intervals_mcp_server.server import mcp  # noqa: F401
+# Import mcp instance from shared module for tool registration
+from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
 config = get_config()
 
@@ -98,12 +95,12 @@ async def get_events(
         start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
         end_date: End date in YYYY-MM-DD format (optional, defaults to 30 days from today)
     """
-    # Use provided athlete_id or fall back to global ATHLETE_ID
-    athlete_id_to_use = athlete_id if athlete_id is not None else config.athlete_id
-    if not athlete_id_to_use:
-        return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
+    # Resolve athlete ID
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id)
+    if error_msg:
+        return error_msg
 
-    # Parse date parameters
+    # Parse date parameters (events use different defaults)
     if not start_date:
         start_date = get_default_end_date()
     if not end_date:
@@ -153,10 +150,10 @@ async def get_event_by_id(
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
-    # Use provided athlete_id or fall back to global ATHLETE_ID
-    athlete_id_to_use = athlete_id if athlete_id is not None else config.athlete_id
-    if not athlete_id_to_use:
-        return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
+    # Resolve athlete ID
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id)
+    if error_msg:
+        return error_msg
 
     # Call the Intervals.icu API
     result = await make_intervals_request(
@@ -189,9 +186,9 @@ async def delete_event(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         event_id: The Intervals.icu event ID
     """
-    athlete_id_to_use = athlete_id if athlete_id is not None else config.athlete_id
-    if not athlete_id_to_use:
-        return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id)
+    if error_msg:
+        return error_msg
     if not event_id:
         return "Error: No event ID provided."
     result = await make_intervals_request(
@@ -217,9 +214,9 @@ async def delete_events_by_date_range(
         start_date: Start date in YYYY-MM-DD format
         end_date: End date in YYYY-MM-DD format
     """
-    athlete_id_to_use = athlete_id if athlete_id is not None else config.athlete_id
-    if not athlete_id_to_use:
-        return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id)
+    if error_msg:
+        return error_msg
     params = {"oldest": validate_date(start_date), "newest": validate_date(end_date)}
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/events", api_key=api_key, params=params
@@ -316,9 +313,9 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
         - Use "reps" with nested steps to define repeat intervals (as in example above)
         - Define one of "power", "hr" or "pace" to define step intensity
     """
-    athlete_id_to_use = athlete_id if athlete_id is not None else config.athlete_id
-    if not athlete_id_to_use:
-        return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id)
+    if error_msg:
+        return error_msg
 
     if not start_date:
         start_date = datetime.now().strftime("%Y-%m-%d")

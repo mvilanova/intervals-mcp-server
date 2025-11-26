@@ -27,7 +27,7 @@ def setup_transport() -> TransportAliases:
     Raises:
         ValueError: If the transport type is not supported.
     """
-    transport_env = os.getenv("MCP_TRANSPORT", TransportAliases.STDIO).lower()
+    transport_env = os.getenv("MCP_TRANSPORT", TransportAliases.STDIO.value).lower()
     try:
         transport_alias = TransportAliases(transport_env)
     except ValueError as exc:

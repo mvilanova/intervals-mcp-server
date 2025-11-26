@@ -8,6 +8,7 @@ including request management, error handling, and client lifecycle.
 from json import JSONDecodeError
 import json
 import logging
+import sys
 from contextlib import asynccontextmanager
 from http import HTTPStatus
 from typing import Any
@@ -34,13 +35,11 @@ async def _get_httpx_client() -> httpx.AsyncClient:
     This function checks server.httpx_client first (if available) to support
     test monkeypatching via server.httpx_client.
     """
-    global httpx_client  # noqa: PLW0603 - we intentionally manage the shared client here
+    global httpx_client  # pylint: disable=global-statement  # noqa: PLW0603 - we intentionally manage the shared client here
 
     # Check for monkeypatched client in server module first (for test compatibility)
     # This allows tests to monkeypatch server.httpx_client and have it work
     try:
-        import sys
-
         server_module = sys.modules.get("intervals_mcp_server.server")
         if server_module and hasattr(server_module, "httpx_client"):
             server_client = server_module.httpx_client
@@ -73,8 +72,6 @@ async def setup_api_client(_app: FastMCP):
         # Also close server.httpx_client if it exists (for test compatibility)
         # This ensures monkeypatched clients in tests are properly closed
         try:
-            import sys
-
             server_module = sys.modules.get("intervals_mcp_server.server")
             if server_module and hasattr(server_module, "httpx_client"):
                 server_client = getattr(server_module, "httpx_client", None)
@@ -102,6 +99,54 @@ def _get_error_message(error_code: int, error_text: str) -> str:
         return error_text
 
 
+def _prepare_request_config(
+    url: str, api_key: str | None, method: str, data: dict[str, Any] | None
+) -> tuple[str, httpx.BasicAuth, dict[str, str], str | None]:
+    """Prepare request configuration including headers, auth, and URL.
+
+    Returns:
+        Tuple of (full_url, auth, headers, error_message).
+        error_message is None if configuration is valid.
+    """
+    config = get_config()
+    headers = {"User-Agent": config.user_agent, "Accept": "application/json"}
+
+    if method in ["POST", "PUT"]:
+        headers["Content-Type"] = "application/json"
+
+    # Use provided api_key or fall back to global API_KEY
+    key_to_use = api_key if api_key is not None else config.api_key
+    if not key_to_use:
+        logger.error("No API key provided for request to: %s", url)
+        return (
+            "",
+            httpx.BasicAuth("", ""),
+            {},
+            "API key is required. Set API_KEY env var or pass api_key",
+        )
+
+    auth = httpx.BasicAuth("API_KEY", key_to_use)
+    full_url = f"{config.intervals_api_base_url}{url}"
+    return full_url, auth, headers, None
+
+
+def _parse_response(
+    response: httpx.Response, full_url: str
+) -> dict[str, Any] | list[dict[str, Any]]:
+    """Parse HTTP response and return JSON data or error dict.
+
+    Returns:
+        Parsed JSON response or error dict.
+    """
+    try:
+        response_data = response.json() if response.content else {}
+    except JSONDecodeError:
+        logger.error("Invalid JSON in response from: %s", full_url)
+        return {"error": True, "message": "Invalid JSON in response"}
+    response.raise_for_status()
+    return response_data
+
+
 async def make_intervals_request(
     url: str,
     api_key: str | None = None,
@@ -122,23 +167,10 @@ async def make_intervals_request(
     Returns:
         dict[str, Any] | list[dict[str, Any]]: The parsed JSON response from the API, or an error dict.
     """
-    config = get_config()
-    headers = {"User-Agent": config.user_agent, "Accept": "application/json"}
-
-    if method in ["POST", "PUT"]:
-        headers["Content-Type"] = "application/json"
-
-    # Use provided api_key or fall back to global API_KEY
-    key_to_use = api_key if api_key is not None else config.api_key
-    if not key_to_use:
-        logger.error("No API key provided for request to: %s", url)
-        return {
-            "error": True,
-            "message": "API key is required. Set API_KEY env var or pass api_key",
-        }
-
-    auth = httpx.BasicAuth("API_KEY", key_to_use)
-    full_url = f"{config.intervals_api_base_url}{url}"
+    # Prepare request configuration
+    full_url, auth, headers, error_msg = _prepare_request_config(url, api_key, method, data)
+    if error_msg:
+        return {"error": True, "message": error_msg}
 
     async def _send_request(client: httpx.AsyncClient) -> httpx.Response:
         if method in {"POST", "PUT"} and data is not None:
@@ -171,18 +203,12 @@ async def make_intervals_request(
             if "client has been closed" not in str(runtime_error).lower():
                 raise
             logger.warning("HTTPX client was closed; creating a new instance for retries.")
-            global httpx_client  # noqa: PLW0603 - we intentionally manage the shared client here
+            global httpx_client  # pylint: disable=global-statement  # noqa: PLW0603 - we intentionally manage the shared client here
             httpx_client = None
             client = await _get_httpx_client()
             response = await _send_request(client)
 
-        try:
-            response_data = response.json() if response.content else {}
-        except JSONDecodeError:
-            logger.error("Invalid JSON in response from: %s", full_url)
-            return {"error": True, "message": "Invalid JSON in response"}
-        _ = response.raise_for_status()
-        return response_data
+        return _parse_response(response, full_url)
     except httpx.HTTPStatusError as e:
         error_code = e.response.status_code
         error_text = e.response.text
