@@ -8,6 +8,7 @@ These tests use monkeypatching to mock API responses and verify the formatting a
 - get_event_by_id
 - get_wellness_data
 - get_activity_intervals
+- get_activity_streams
 
 The tests ensure that the server's public API returns expected strings and handles data correctly.
 """
@@ -28,6 +29,7 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_event_by_id,
     get_wellness_data,
     get_activity_intervals,
+    get_activity_streams,
     add_or_update_event,
 )
 from tests.sample_data import INTERVALS_DATA  # pylint: disable=wrong-import-position
@@ -151,6 +153,55 @@ def test_get_activity_intervals(monkeypatch):
     result = asyncio.run(get_activity_intervals("123"))
     assert "Intervals Analysis:" in result
     assert "Rep 1" in result
+
+
+def test_get_activity_streams(monkeypatch):
+    """
+    Test get_activity_streams returns a formatted string with stream data for a given activity.
+    """
+    sample_streams = [
+        {
+            "type": "time",
+            "name": "time",
+            "data": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            "data2": [],
+            "valueType": "time_units",
+            "valueTypeIsArray": False,
+            "anomalies": None,
+            "custom": False,
+        },
+        {
+            "type": "watts",
+            "name": "watts",
+            "data": [150, 155, 160, 165, 170, 175, 180, 185, 190, 195, 200],
+            "data2": [],
+            "valueType": "power_units",
+            "valueTypeIsArray": False,
+            "anomalies": None,
+            "custom": False,
+        },
+        {
+            "type": "heartrate",
+            "name": "heartrate",
+            "data": [120, 125, 130, 135, 140, 145, 150, 155, 160, 165, 170],
+            "data2": [],
+            "valueType": "hr_units",
+            "valueTypeIsArray": False,
+            "anomalies": None,
+            "custom": False,
+        },
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return sample_streams
+
+    monkeypatch.setattr("intervals_mcp_server.server.make_intervals_request", fake_request)
+    result = asyncio.run(get_activity_streams("i107537962"))
+    assert "Activity Streams" in result
+    assert "time" in result
+    assert "watts" in result
+    assert "heartrate" in result
+    assert "Data Points: 11" in result
 
 
 def test_add_or_update_event(monkeypatch):

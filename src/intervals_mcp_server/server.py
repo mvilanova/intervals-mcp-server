@@ -27,6 +27,7 @@ Usage:
         - get_event_by_id
         - get_wellness_data
         - get_activity_intervals
+        - get_activity_streams
         - add_events
 
     See the README for more details on configuration and usage.
@@ -484,6 +485,84 @@ async def get_activity_intervals(activity_id: str, api_key: str | None = None) -
 
     # Format the intervals data
     return format_intervals(result)
+
+
+@mcp.tool()
+async def get_activity_streams(
+    activity_id: str,
+    api_key: str | None = None,
+    stream_types: str | None = None,
+) -> str:
+    """Get stream data for a specific activity from Intervals.icu
+
+    This endpoint returns time-series data for an activity, including metrics like power, heart rate,
+    cadence, altitude, distance, temperature, and velocity data.
+
+    Args:
+        activity_id: The Intervals.icu activity ID
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        stream_types: Comma-separated list of stream types to retrieve (optional, defaults to all available types)
+                     Available types: time, watts, heartrate, cadence, altitude, distance,
+                     core_temperature, skin_temperature, velocity_smooth
+    """
+    # Build query parameters
+    params = {}
+    if stream_types:
+        params["types"] = stream_types
+    else:
+        # Default to common stream types if none specified
+        params["types"] = "time,watts,heartrate,cadence,altitude,distance,velocity_smooth"
+
+    # Call the Intervals.icu API
+    result = await make_intervals_request(
+        url=f"/activity/{activity_id}/streams",
+        api_key=api_key,
+        params=params,
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error fetching activity streams: {error_message}"
+
+    # Format the response
+    if not result:
+        return f"No stream data found for activity {activity_id}."
+
+    # Ensure result is a list
+    streams = result if isinstance(result, list) else []
+
+    if not streams:
+        return f"No stream data found for activity {activity_id}."
+
+    # Format the streams data
+    streams_summary = f"Activity Streams for {activity_id}:\n\n"
+
+    for stream in streams:
+        if not isinstance(stream, dict):
+            continue
+
+        stream_type = stream.get("type", "unknown")
+        stream_name = stream.get("name", stream_type)
+        data = stream.get("data", [])
+        value_type = stream.get("valueType", "")
+
+        streams_summary += f"Stream: {stream_name} ({stream_type})\n"
+        streams_summary += f"  Value Type: {value_type}\n"
+        streams_summary += f"  Data Points: {len(data)}\n"
+
+        # Show first few and last few data points for preview
+        if data:
+            if len(data) <= 10:
+                streams_summary += f"  Values: {data}\n"
+            else:
+                preview_start = data[:5]
+                preview_end = data[-5:]
+                streams_summary += f"  First 5 values: {preview_start}\n"
+                streams_summary += f"  Last 5 values: {preview_end}\n"
+
+        streams_summary += "\n"
+
+    return streams_summary
 
 
 @mcp.tool()
