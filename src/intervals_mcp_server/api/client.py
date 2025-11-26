@@ -103,7 +103,6 @@ def _prepare_request_config(
     url: str,
     api_key: str | None,
     method: str,
-    _data: dict[str, Any] | None,  # pylint: disable=unused-argument
 ) -> tuple[str, httpx.BasicAuth, dict[str, str], str | None]:
     """Prepare request configuration including headers, auth, and URL.
 
