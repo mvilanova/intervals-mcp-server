@@ -155,6 +155,54 @@ _KNOWN_ACTIVITY_FIELDS = {
 }
 
 
+# Known wellness fields that are already displayed in format_wellness_entry
+_KNOWN_WELLNESS_FIELDS = {
+    "id",
+    "date",
+    "ctl",
+    "atl",
+    "rampRate",
+    "ctlLoad",
+    "atlLoad",
+    "sportInfo",
+    "updated",
+    "weight",
+    "restingHR",
+    "hrv",
+    "hrvSDNN",
+    "avgSleepingHR",
+    "spO2",
+    "systolic",
+    "diastolic",
+    "respiration",
+    "bloodGlucose",
+    "lactate",
+    "vo2max",
+    "bodyFat",
+    "abdomen",
+    "baevskySI",
+    "sleepSecs",
+    "sleepHours",
+    "sleepQuality",
+    "sleepScore",
+    "readiness",
+    "menstrualPhase",
+    "menstrualPhasePredicted",
+    "soreness",
+    "fatigue",
+    "stress",
+    "mood",
+    "motivation",
+    "injury",
+    "kcalConsumed",
+    "hydrationVolume",
+    "hydration",
+    "steps",
+    "comments",
+    "locked",
+}
+
+
 def _format_activity_start_time(activity: dict[str, Any]) -> str:
     """Format activity start time from activity data."""
     start_time = activity.get("startTime", activity.get("start_date", "Unknown"))
@@ -406,6 +454,20 @@ def _format_nutrition_hydration(entries: dict[str, Any]) -> list[str]:
     return nutrition_lines
 
 
+def _add_wellness_section(lines: list[str], section_lines: list[str], section_title: str) -> None:
+    """Add a wellness section to the lines list if it has content.
+
+    Args:
+        lines: The list of lines being built
+        section_lines: The formatted lines for this section
+        section_title: The title of the section
+    """
+    if section_lines:
+        lines.append(section_title)
+        lines.extend(section_lines)
+        lines.append("")
+
+
 def format_wellness_entry(entries: dict[str, Any]) -> str:
     """Format wellness entry data into a readable string.
 
@@ -428,117 +490,31 @@ def format_wellness_entry(entries: dict[str, Any]) -> str:
     Returns:
         A formatted string representation of the wellness entry.
     """
-    lines = ["Wellness Data:"]
-    lines.append(f"Date: {entries.get('id', 'N/A')}")
-    lines.append("")
+    lines = ["Wellness Data:", f"Date: {entries.get('id', 'N/A')}", ""]
 
-    training_metrics = _format_training_metrics(entries)
-    if training_metrics:
-        lines.append("Training Metrics:")
-        lines.extend(training_metrics)
-        lines.append("")
-
-    sport_info_list = _format_sport_info(entries)
-    if sport_info_list:
-        lines.append("Sport-Specific Info:")
-        lines.extend(sport_info_list)
-        lines.append("")
-
-    vital_signs = _format_vital_signs(entries)
-    if vital_signs:
-        lines.append("Vital Signs:")
-        lines.extend(vital_signs)
-        lines.append("")
-
-    sleep_lines = _format_sleep_recovery(entries)
-    if sleep_lines:
-        lines.append("Sleep & Recovery:")
-        lines.extend(sleep_lines)
-        lines.append("")
-
-    menstrual_lines = _format_menstrual_tracking(entries)
-    if menstrual_lines:
-        lines.append("Menstrual Tracking:")
-        lines.extend(menstrual_lines)
-        lines.append("")
-
-    subjective_lines = _format_subjective_feelings(entries)
-    if subjective_lines:
-        lines.append("Subjective Feelings:")
-        lines.extend(subjective_lines)
-        lines.append("")
-
-    nutrition_lines = _format_nutrition_hydration(entries)
-    if nutrition_lines:
-        lines.append("Nutrition & Hydration:")
-        lines.extend(nutrition_lines)
-        lines.append("")
+    _add_wellness_section(lines, _format_training_metrics(entries), "Training Metrics:")
+    _add_wellness_section(lines, _format_sport_info(entries), "Sport-Specific Info:")
+    _add_wellness_section(lines, _format_vital_signs(entries), "Vital Signs:")
+    _add_wellness_section(lines, _format_sleep_recovery(entries), "Sleep & Recovery:")
+    _add_wellness_section(lines, _format_menstrual_tracking(entries), "Menstrual Tracking:")
+    _add_wellness_section(lines, _format_subjective_feelings(entries), "Subjective Feelings:")
+    _add_wellness_section(lines, _format_nutrition_hydration(entries), "Nutrition & Hydration:")
 
     if entries.get("steps") is not None:
-        lines.append("Activity:")
-        lines.append(f"- Steps: {entries['steps']}")
-        lines.append("")
+        lines.extend(["Activity:", f"- Steps: {entries['steps']}", ""])
 
     if entries.get("comments"):
         lines.append(f"Comments: {entries['comments']}")
     if "locked" in entries:
         lines.append(f"Status: {'Locked' if entries.get('locked') else 'Unlocked'}")
 
-    # Known wellness fields that are already displayed
-    known_wellness_fields = {
-        "id",
-        "date",
-        "ctl",
-        "atl",
-        "rampRate",
-        "ctlLoad",
-        "atlLoad",
-        "sportInfo",
-        "updated",
-        "weight",
-        "restingHR",
-        "hrv",
-        "hrvSDNN",
-        "avgSleepingHR",
-        "spO2",
-        "systolic",
-        "diastolic",
-        "respiration",
-        "bloodGlucose",
-        "lactate",
-        "vo2max",
-        "bodyFat",
-        "abdomen",
-        "baevskySI",
-        "sleepSecs",
-        "sleepHours",
-        "sleepQuality",
-        "sleepScore",
-        "readiness",
-        "menstrualPhase",
-        "menstrualPhasePredicted",
-        "soreness",
-        "fatigue",
-        "stress",
-        "mood",
-        "motivation",
-        "injury",
-        "kcalConsumed",
-        "hydrationVolume",
-        "hydration",
-        "steps",
-        "comments",
-        "locked",
-    }
-
     # Detect and format custom fields
-    custom_fields = _detect_custom_fields(entries, known_wellness_fields)
+    custom_fields = _detect_custom_fields(entries, _KNOWN_WELLNESS_FIELDS)
     custom_fields_lines = _format_custom_fields(custom_fields)
 
     # Append custom fields section if any custom fields were found
     if custom_fields_lines:
-        lines.append("")
-        lines.append("Custom Fields:")
+        lines.extend(["", "Custom Fields:"])
         lines.extend(custom_fields_lines)
 
     return "\n".join(lines)
