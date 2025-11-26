@@ -363,19 +363,57 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
         start_date = datetime.now().strftime("%Y-%m-%d")
 
     try:
-        data = _prepare_event_data(
-            name, workout_type, start_date, workout_doc, moving_time, distance
+        return await _create_or_update_event_request(
+            athlete_id_to_use,
+            api_key,
+            name,
+            workout_type,
+            start_date,
+            workout_doc,
+            moving_time,
+            distance,
+            event_id,
         )
-        url = f"/athlete/{athlete_id_to_use}/events"
-        if event_id:
-            url += f"/{event_id}"
-        result = await make_intervals_request(
-            url=url,
-            api_key=api_key,
-            data=data,
-            method="PUT" if event_id else "POST",
-        )
-        action = "updated" if event_id else "created"
-        return _handle_event_response(result, action, athlete_id_to_use, start_date)
     except ValueError as e:
         return f"Error: {e}"
+
+
+async def _create_or_update_event_request(
+    athlete_id: str,
+    api_key: str | None,
+    name: str,
+    workout_type: str,
+    start_date: str,
+    workout_doc: WorkoutDoc | None,
+    moving_time: int | None,
+    distance: int | None,
+    event_id: str | None,
+) -> str:
+    """Create or update an event via API request.
+
+    Args:
+        athlete_id: The athlete ID.
+        api_key: Optional API key.
+        name: Event name.
+        workout_type: Workout type.
+        start_date: Start date string.
+        workout_doc: Optional workout document.
+        moving_time: Optional moving time.
+        distance: Optional distance.
+        event_id: Optional event ID for updates.
+
+    Returns:
+        Formatted response string.
+    """
+    data = _prepare_event_data(name, workout_type, start_date, workout_doc, moving_time, distance)
+    url = f"/athlete/{athlete_id}/events"
+    if event_id:
+        url += f"/{event_id}"
+    result = await make_intervals_request(
+        url=url,
+        api_key=api_key,
+        data=data,
+        method="PUT" if event_id else "POST",
+    )
+    action = "updated" if event_id else "created"
+    return _handle_event_response(result, action, athlete_id, start_date)
