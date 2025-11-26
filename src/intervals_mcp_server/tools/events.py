@@ -224,6 +224,30 @@ async def delete_event(
     return json.dumps(result, indent=2)
 
 
+async def _fetch_events_for_deletion(
+    athlete_id: str, api_key: str | None, start_date: str, end_date: str
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Fetch events for deletion and return them with any error message.
+
+    Args:
+        athlete_id: The athlete ID.
+        api_key: Optional API key.
+        start_date: Start date in YYYY-MM-DD format.
+        end_date: End date in YYYY-MM-DD format.
+
+    Returns:
+        Tuple of (events_list, error_message). error_message is None if successful.
+    """
+    params = {"oldest": validate_date(start_date), "newest": validate_date(end_date)}
+    result = await make_intervals_request(
+        url=f"/athlete/{athlete_id}/events", api_key=api_key, params=params
+    )
+    if isinstance(result, dict) and "error" in result:
+        return [], f"Error deleting events: {result.get('message')}"
+    events = result if isinstance(result, list) else []
+    return events, None
+
+
 @mcp.tool()
 async def delete_events_by_date_range(
     start_date: str,
@@ -242,15 +266,16 @@ async def delete_events_by_date_range(
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
-    params = {"oldest": validate_date(start_date), "newest": validate_date(end_date)}
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/events", api_key=api_key, params=params
+
+    events, error_msg = await _fetch_events_for_deletion(
+        athlete_id_to_use, api_key, start_date, end_date
     )
-    if isinstance(result, dict) and "error" in result:
-        return f"Error deleting events: {result.get('message')}"
-    events = result if isinstance(result, list) else []
+    if error_msg:
+        return error_msg
+
     failed_events = await _delete_events_list(athlete_id_to_use, api_key, events)
-    return f"Deleted {len(events) - len(failed_events)} events. Failed to delete {len(failed_events)} events: {failed_events}"
+    deleted_count = len(events) - len(failed_events)
+    return f"Deleted {deleted_count} events. Failed to delete {len(failed_events)} events: {failed_events}"
 
 
 @mcp.tool()
