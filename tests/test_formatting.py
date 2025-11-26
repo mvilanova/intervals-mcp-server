@@ -196,6 +196,7 @@ def test_format_custom_fields():
     assert any("Float Field" in line and "45.67" in line for line in formatted)
     assert any("Bool Field" in line and "True" in line for line in formatted)
     assert any("Null Field" in line and "N/A" in line for line in formatted)
+    assert any("List Field" in line and "[1, 2, 3]" in line for line in formatted)
 
     # Test with empty dictionary
     formatted_empty = _format_custom_fields({})
@@ -211,6 +212,20 @@ def test_format_custom_fields():
     assert formatted2[0].startswith("- Alpha Field")
     assert formatted2[1].startswith("- Beta Field")
     assert formatted2[2].startswith("- Zebra Field")
+
+    # Test edge case: single character field (should not cause IndexError)
+    custom_fields3 = {"a": "value"}
+    formatted3 = _format_custom_fields(custom_fields3)
+    assert len(formatted3) == 1
+    assert "A" in formatted3[0] or "a" in formatted3[0]
+
+    # Test edge case: empty key (defensive test - shouldn't happen in practice but guards against IndexError)
+    # This tests the defensive code path when both formatted_key and key could be empty
+    custom_fields4 = {"": "value"}
+    formatted4 = _format_custom_fields(custom_fields4)
+    # Should handle gracefully without IndexError
+    assert len(formatted4) == 1
+    assert "Unknown" in formatted4[0] or "value" in formatted4[0]
 
 
 def test_format_activity_summary_with_custom_fields():
