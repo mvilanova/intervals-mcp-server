@@ -7,7 +7,7 @@ This module contains validation functions for input parameters.
 import re
 from datetime import datetime
 
-from intervals_mcp_server.utils.dates import get_default_end_date, get_default_start_date
+from intervals_mcp_server.utils.dates import parse_date_range
 
 
 def validate_athlete_id(athlete_id: str) -> None:
@@ -85,8 +85,4 @@ def resolve_date_params(
     Returns:
         Tuple of (start_date, end_date) as strings in YYYY-MM-DD format.
     """
-    if not start_date:
-        start_date = get_default_start_date(default_start_days_ago)
-    if not end_date:
-        end_date = get_default_end_date()
-    return start_date, end_date
+    return parse_date_range(start_date, end_date, default_start_days_ago)

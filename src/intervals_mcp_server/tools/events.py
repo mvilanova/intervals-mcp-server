@@ -80,6 +80,31 @@ def _handle_event_response(
     return f"Event {action} successfully at {start_date}"
 
 
+async def _delete_events_list(
+    athlete_id: str, api_key: str | None, events: list[dict[str, Any]]
+) -> list[str]:
+    """Delete a list of events and return IDs of failed deletions.
+
+    Args:
+        athlete_id: The athlete ID.
+        api_key: Optional API key.
+        events: List of event dictionaries to delete.
+
+    Returns:
+        List of event IDs that failed to delete.
+    """
+    failed_events = []
+    for event in events:
+        result = await make_intervals_request(
+            url=f"/athlete/{athlete_id}/events/{event.get('id')}",
+            api_key=api_key,
+            method="DELETE",
+        )
+        if isinstance(result, dict) and "error" in result:
+            failed_events.append(event.get("id"))
+    return failed_events
+
+
 @mcp.tool()
 async def get_events(
     athlete_id: str | None = None,
@@ -224,15 +249,7 @@ async def delete_events_by_date_range(
     if isinstance(result, dict) and "error" in result:
         return f"Error deleting events: {result.get('message')}"
     events = result if isinstance(result, list) else []
-    failed_events = []
-    for event in events:
-        result = await make_intervals_request(
-            url=f"/athlete/{athlete_id_to_use}/events/{event.get('id')}",
-            api_key=api_key,
-            method="DELETE",
-        )
-        if isinstance(result, dict) and "error" in result:
-            failed_events.append(event.get("id"))
+    failed_events = await _delete_events_list(athlete_id_to_use, api_key, events)
     return f"Deleted {len(events) - len(failed_events)} events. Failed to delete {len(failed_events)} events: {failed_events}"
 
 

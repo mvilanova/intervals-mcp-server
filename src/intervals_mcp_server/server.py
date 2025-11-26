@@ -86,6 +86,7 @@ from intervals_mcp_server.tools.events import (  # pylint: disable=wrong-import-
 from intervals_mcp_server.tools.wellness import get_wellness_data  # pylint: disable=wrong-import-position  # noqa: E402
 
 # Re-export make_intervals_request and httpx_client for backward compatibility
+# pylint: disable=duplicate-code  # This __all__ list is intentionally similar to tools/__init__.py
 __all__ = [
     "make_intervals_request",
     "httpx_client",  # Re-exported for test compatibility
