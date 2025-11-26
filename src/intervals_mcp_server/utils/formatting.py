@@ -91,93 +91,108 @@ def _format_custom_fields(custom_fields: dict[str, Any]) -> list[str]:
     return formatted_lines
 
 
-def format_activity_summary(activity: dict[str, Any]) -> str:
-    """Format an activity into a readable string."""
-    start_time = activity.get("startTime", activity.get("start_date", "Unknown"))
+# Known activity fields that are already displayed in format_activity_summary
+_KNOWN_ACTIVITY_FIELDS = {
+    "name",
+    "id",
+    "type",
+    "startTime",
+    "start_date",
+    "description",
+    "distance",
+    "duration",
+    "elapsed_time",
+    "moving_time",
+    "elevationGain",
+    "total_elevation_gain",
+    "total_elevation_loss",
+    "perceived_exertion",
+    "icu_rpe",
+    "feel",
+    "avgPower",
+    "icu_average_watts",
+    "average_watts",
+    "icu_weighted_avg_watts",
+    "trainingLoad",
+    "icu_training_load",
+    "icu_ftp",
+    "icu_joules",
+    "icu_intensity",
+    "icu_power_hr",
+    "icu_variability_index",
+    "avgHr",
+    "average_heartrate",
+    "max_heartrate",
+    "lthr",
+    "icu_resting_hr",
+    "decoupling",
+    "average_cadence",
+    "calories",
+    "average_speed",
+    "max_speed",
+    "average_stride",
+    "avg_lr_balance",
+    "icu_weight",
+    "session_rpe",
+    "trainer",
+    "average_temp",
+    "min_temp",
+    "max_temp",
+    "average_wind_speed",
+    "headwind_percent",
+    "tailwind_percent",
+    "icu_ctl",
+    "icu_atl",
+    "trimp",
+    "polarization_index",
+    "power_load",
+    "hr_load",
+    "pace_load",
+    "icu_efficiency_factor",
+    "device_name",
+    "power_meter",
+    "file_type",
+}
 
+
+def _format_activity_start_time(activity: dict[str, Any]) -> str:
+    """Format activity start time from activity data."""
+    start_time = activity.get("startTime", activity.get("start_date", "Unknown"))
     if isinstance(start_time, str) and len(start_time) > 10:
-        # Format datetime if it's a full ISO string
         try:
             dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
             start_time = dt.strftime("%Y-%m-%d %H:%M:%S")
         except ValueError:
             pass
+    return start_time
 
+
+def _format_activity_rpe(activity: dict[str, Any]) -> str:
+    """Format RPE (Rate of Perceived Exertion) from activity data."""
     rpe = activity.get("perceived_exertion", None)
     if rpe is None:
         rpe = activity.get("icu_rpe", "N/A")
     if isinstance(rpe, (int, float)):
         rpe = f"{rpe}/10"
+    return rpe
 
+
+def _format_activity_feel(activity: dict[str, Any]) -> str:
+    """Format feel value from activity data."""
     feel = activity.get("feel", "N/A")
     if isinstance(feel, int):
         feel = f"{feel}/5"
+    return feel
 
-    # Known activity fields that are already displayed
-    known_activity_fields = {
-        "name",
-        "id",
-        "type",
-        "startTime",
-        "start_date",
-        "description",
-        "distance",
-        "duration",
-        "elapsed_time",
-        "moving_time",
-        "elevationGain",
-        "total_elevation_gain",
-        "total_elevation_loss",
-        "perceived_exertion",
-        "icu_rpe",
-        "feel",
-        "avgPower",
-        "icu_average_watts",
-        "average_watts",
-        "icu_weighted_avg_watts",
-        "trainingLoad",
-        "icu_training_load",
-        "icu_ftp",
-        "icu_joules",
-        "icu_intensity",
-        "icu_power_hr",
-        "icu_variability_index",
-        "avgHr",
-        "average_heartrate",
-        "max_heartrate",
-        "lthr",
-        "icu_resting_hr",
-        "decoupling",
-        "average_cadence",
-        "calories",
-        "average_speed",
-        "max_speed",
-        "average_stride",
-        "avg_lr_balance",
-        "icu_weight",
-        "session_rpe",
-        "trainer",
-        "average_temp",
-        "min_temp",
-        "max_temp",
-        "average_wind_speed",
-        "headwind_percent",
-        "tailwind_percent",
-        "icu_ctl",
-        "icu_atl",
-        "trimp",
-        "polarization_index",
-        "power_load",
-        "hr_load",
-        "pace_load",
-        "icu_efficiency_factor",
-        "device_name",
-        "power_meter",
-        "file_type",
-    }
+
+def format_activity_summary(activity: dict[str, Any]) -> str:
+    """Format an activity into a readable string."""
+    start_time = _format_activity_start_time(activity)
+    rpe = _format_activity_rpe(activity)
+    feel = _format_activity_feel(activity)
 
     # Detect and format custom fields
-    custom_fields = _detect_custom_fields(activity, known_activity_fields)
+    custom_fields = _detect_custom_fields(activity, _KNOWN_ACTIVITY_FIELDS)
     custom_fields_lines = _format_custom_fields(custom_fields)
 
     result = f"""
