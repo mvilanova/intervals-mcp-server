@@ -1,6 +1,6 @@
 # Intervals.icu MCP Server
 
-Model Context Protocol (MCP) server for connecting Claude with the Intervals.icu API. It provides tools for authentication and data retrieval for activities, events, and wellness data.
+Model Context Protocol (MCP) server for connecting Claude and ChatGPT with the Intervals.icu API. It provides tools for authentication and data retrieval for activities, events, and wellness data.
 
 If you find the Model Context Protocol (MCP) server useful, please consider supporting its continued development with a donation.
 
@@ -103,7 +103,7 @@ If Claude Desktop fails due to configuration changes, follow these steps:
 mcp install src/intervals_mcp_server/server.py --name "Intervals.icu" --with-editable . --env-file .env
 ```
 
-## Usage
+## Usage with Claude
 
 ### 1. Configure Claude Desktop
 
@@ -167,6 +167,28 @@ Once the server is running and Claude Desktop is configured, you can use the fol
 - `get_wellness_data`: Fetch wellness data
 - `get_events`: Retrieve upcoming events (workouts, races, etc.)
 - `get_event_by_id`: Get detailed information for a specific event
+
+## Usage with ChatGPT
+
+ChatGPT’s beta MCP connectors can also talk to this server over the SSE transport.
+
+1. Start the server in SSE mode so it exposes the `/sse` and `/messages/` endpoints:
+
+   ```bash
+   export FASTMCP_HOST=127.0.0.1 FASTMCP_PORT=8765 MCP_TRANSPORT=sse FASTMCP_LOG_LEVEL=INFO
+   python src/intervals_mcp_server/server.py
+   ```
+
+   The startup log prints the full URLs (for example `http://127.0.0.1:8765/sse`). ChatGPT needs that public URL, so forward the port with a tool such as `ngrok http 8765` if you are not exposing the server directly.
+
+2. In ChatGPT, open **Settings → Features → Custom MCP Connectors** and click **Add**. Fill in:
+   - **Name**: `Intervals.icu`
+   - **MCP Server URL**: `https://<your-public-host>/sse`
+   - **Authentication**: leave as *No authentication* unless you have protected your tunnel.
+
+   You can reuse the same `ngrok http 8765` tunnel URL here; just ensure it forwards to the host/port you exported above.
+
+3. Save the connector and open a new chat. ChatGPT will keep the SSE connection open and POST follow-up requests to the `/messages/` endpoint announced by the server. If you restart the MCP server or tunnel, rerun the SSE command and update the connector URL if it changes.
 
 ## Development and testing
 

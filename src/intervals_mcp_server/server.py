@@ -32,6 +32,7 @@ Usage:
     See the README for more details on configuration and usage.
 """
 
+from enum import StrEnum
 from json import JSONDecodeError
 import logging
 import os
@@ -73,8 +74,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger("intervals_icu_mcp_server")
 
-# Create a single AsyncClient instance for all requests
-httpx_client = httpx.AsyncClient()
+# Create a single AsyncClient instance for all requests (lazily initialized)
+httpx_client: httpx.AsyncClient | None = None
+
+
+async def _get_httpx_client() -> httpx.AsyncClient:
+    """
+    Lazily create or reuse the shared httpx AsyncClient.
+
+    The client may be closed by downstream transports between tool invocations,
+    so we recreate it when necessary.
+    """
+    global httpx_client  # noqa: PLW0603 - we intentionally manage the shared client here
+    if httpx_client is None or httpx_client.is_closed:
+        httpx_client = httpx.AsyncClient()
+    return httpx_client
 
 
 @asynccontextmanager
@@ -88,7 +102,8 @@ async def lifespan(_app: FastMCP):
     try:
         yield
     finally:
-        await httpx_client.aclose()
+        if httpx_client and not httpx_client.is_closed:
+            await httpx_client.aclose()
 
 
 # Initialize FastMCP server with custom lifespan
@@ -181,9 +196,9 @@ async def make_intervals_request(
     auth = httpx.BasicAuth("API_KEY", key_to_use)
     full_url = f"{INTERVALS_API_BASE_URL}{url}"
 
-    try:
-        if method == "POST" and data is not None:
-            response = await httpx_client.request(
+    async def _send_request(client: httpx.AsyncClient) -> httpx.Response:
+        if method in {"POST", "PUT"} and data is not None:
+            return await client.request(
                 method=method,
                 url=full_url,
                 headers=headers,
@@ -192,15 +207,31 @@ async def make_intervals_request(
                 timeout=30.0,
                 content=json.dumps(data),
             )
-        else:
-            response = await httpx_client.request(
-                method=method,
-                url=full_url,
-                headers=headers,
-                params=params,
-                auth=auth,
-                timeout=30.0,
-            )
+        return await client.request(
+            method=method,
+            url=full_url,
+            headers=headers,
+            params=params,
+            auth=auth,
+            timeout=30.0,
+        )
+
+    try:
+        client = await _get_httpx_client()
+
+        try:
+            response = await _send_request(client)
+        except RuntimeError as runtime_error:
+            # httpx closes the client when the underlying connection is severed;
+            # recreate the shared client lazily and retry once.
+            if "client has been closed" not in str(runtime_error).lower():
+                raise
+            logger.warning("HTTPX client was closed; creating a new instance for retries.")
+            global httpx_client  # noqa: PLW0603 - we intentionally manage the shared client here
+            httpx_client = None
+            client = await _get_httpx_client()
+            response = await _send_request(client)
+
         try:
             response_data = response.json() if response.content else {}
         except JSONDecodeError:
@@ -833,5 +864,44 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
 
 
 # Run the server
+class TransportAliases(StrEnum):
+    STDIO = "stdio"
+    SSE = "sse"
+    HTTP = "http"
+    STREAMABLE_HTTP = "streamable-http"
+
 if __name__ == "__main__":
-    mcp.run()
+    transport_env = os.getenv("MCP_TRANSPORT", TransportAliases.STDIO).lower()
+    try:
+        transport_alias = TransportAliases(transport_env)
+    except ValueError as exc:
+        allowed = ", ".join(item.value for item in TransportAliases)
+        raise ValueError(f"Unsupported MCP_TRANSPORT value. Use one of: {allowed}.") from exc
+
+    selected_transport = (
+        TransportAliases.STREAMABLE_HTTP if transport_alias == TransportAliases.HTTP else transport_alias
+    )
+    host = mcp.settings.host
+    port = mcp.settings.port
+
+    if selected_transport == TransportAliases.STDIO:
+        logger.info("Starting MCP server with stdio transport.")
+        mcp.run()
+    elif selected_transport == TransportAliases.SSE:
+        mount_path = os.getenv("MCP_SSE_MOUNT_PATH")
+        logger.info(
+            "Starting MCP server with SSE transport at http://%s:%s%s (messages: %s).",
+            host,
+            port,
+            mcp.settings.sse_path,
+            mcp.settings.message_path,
+        )
+        mcp.run(transport="sse", mount_path=mount_path)
+    else:  # STREAMABLE_HTTP
+        logger.info(
+            "Starting MCP server with Streamable HTTP transport at http://%s:%s%s.",
+            host,
+            port,
+            mcp.settings.streamable_http_path,
+        )
+        mcp.run(transport="streamable-http")
