@@ -4,8 +4,83 @@ Formatting utilities for Intervals.icu MCP Server
 This module contains formatting functions for handling data from the Intervals.icu API.
 """
 
+import re
 from datetime import datetime
 from typing import Any
+
+
+def _is_camelcase(field_name: str) -> bool:
+    """Check if a field name is camelCase (starts with lowercase, contains uppercase).
+
+    Args:
+        field_name: The field name to check
+
+    Returns:
+        True if the field is camelCase, False otherwise
+    """
+    if not field_name:
+        return False
+    # Must start with lowercase letter and contain at least one uppercase letter
+    return field_name[0].islower() and any(c.isupper() for c in field_name)
+
+
+def _detect_custom_fields(data: dict[str, Any], known_fields: set[str]) -> dict[str, Any]:
+    """Detect custom camelCase fields in API response that are not already handled.
+
+    Args:
+        data: Dictionary containing API response data
+        known_fields: Set of field names that are already handled by formatting functions
+
+    Returns:
+        Dictionary containing only custom field key-value pairs
+    """
+    custom_fields: dict[str, Any] = {}
+    for key, value in data.items():
+        # Skip if field is already known/displayed
+        if key in known_fields:
+            continue
+        # Only include camelCase fields (custom fields convention)
+        if _is_camelcase(key):
+            custom_fields[key] = value
+    return custom_fields
+
+
+def _format_custom_fields(custom_fields: dict[str, Any]) -> list[str]:
+    """Format custom fields into a readable list of strings.
+
+    Args:
+        custom_fields: Dictionary of custom field key-value pairs
+
+    Returns:
+        List of formatted strings, or empty list if no custom fields
+    """
+    if not custom_fields:
+        return []
+
+    formatted_lines: list[str] = []
+    for key, value in sorted(custom_fields.items()):
+        # Format the field name (convert camelCase to more readable format)
+        # e.g., "customFieldName" -> "Custom Field Name"
+        formatted_key = re.sub(r"([a-z])([A-Z])", r"\1 \2", key)
+        formatted_key = formatted_key[0].upper() + formatted_key[1:] if formatted_key else key
+
+        # Format the value based on type
+        if value is None:
+            formatted_value = "N/A"
+        elif isinstance(value, bool):
+            formatted_value = str(value)
+        elif isinstance(value, (int, float)):
+            formatted_value = str(value)
+        elif isinstance(value, str):
+            formatted_value = value
+        elif isinstance(value, (list, dict)):
+            formatted_value = str(value)
+        else:
+            formatted_value = str(value)
+
+        formatted_lines.append(f"- {formatted_key}: {formatted_value}")
+
+    return formatted_lines
 
 
 def format_activity_summary(activity: dict[str, Any]) -> str:
@@ -30,7 +105,74 @@ def format_activity_summary(activity: dict[str, Any]) -> str:
     if isinstance(feel, int):
         feel = f"{feel}/5"
 
-    return f"""
+    # Known activity fields that are already displayed
+    known_activity_fields = {
+        "name",
+        "id",
+        "type",
+        "startTime",
+        "start_date",
+        "description",
+        "distance",
+        "duration",
+        "elapsed_time",
+        "moving_time",
+        "elevationGain",
+        "total_elevation_gain",
+        "total_elevation_loss",
+        "perceived_exertion",
+        "icu_rpe",
+        "feel",
+        "avgPower",
+        "icu_average_watts",
+        "average_watts",
+        "icu_weighted_avg_watts",
+        "trainingLoad",
+        "icu_training_load",
+        "icu_ftp",
+        "icu_joules",
+        "icu_intensity",
+        "icu_power_hr",
+        "icu_variability_index",
+        "avgHr",
+        "average_heartrate",
+        "max_heartrate",
+        "lthr",
+        "icu_resting_hr",
+        "decoupling",
+        "average_cadence",
+        "calories",
+        "average_speed",
+        "max_speed",
+        "average_stride",
+        "avg_lr_balance",
+        "icu_weight",
+        "session_rpe",
+        "trainer",
+        "average_temp",
+        "min_temp",
+        "max_temp",
+        "average_wind_speed",
+        "headwind_percent",
+        "tailwind_percent",
+        "icu_ctl",
+        "icu_atl",
+        "trimp",
+        "polarization_index",
+        "power_load",
+        "hr_load",
+        "pace_load",
+        "icu_efficiency_factor",
+        "device_name",
+        "power_meter",
+        "file_type",
+    }
+
+    # Detect and format custom fields
+    custom_fields = _detect_custom_fields(activity, known_activity_fields)
+    custom_fields_lines = _format_custom_fields(custom_fields)
+
+    result = f"""
 Activity: {activity.get("name", "Unnamed")}
 ID: {activity.get("id", "N/A")}
 Type: {activity.get("type", "Unknown")}
@@ -93,8 +235,14 @@ Efficiency Factor: {activity.get("icu_efficiency_factor", "N/A")}
 Device Info:
 Device: {activity.get("device_name", "N/A")}
 Power Meter: {activity.get("power_meter", "N/A")}
-File Type: {activity.get("file_type", "N/A")}
-"""
+File Type: {activity.get("file_type", "N/A")}"""
+
+    # Append custom fields section if any custom fields were found
+    if custom_fields_lines:
+        result += "\n\nCustom Fields:"
+        result += "\n" + "\n".join(custom_fields_lines)
+
+    return result
 
 
 def format_workout(workout: dict[str, Any]) -> str:
@@ -312,6 +460,63 @@ def format_wellness_entry(entries: dict[str, Any]) -> str:
         lines.append(f"Comments: {entries['comments']}")
     if "locked" in entries:
         lines.append(f"Status: {'Locked' if entries.get('locked') else 'Unlocked'}")
+
+    # Known wellness fields that are already displayed
+    known_wellness_fields = {
+        "id",
+        "date",
+        "ctl",
+        "atl",
+        "rampRate",
+        "ctlLoad",
+        "atlLoad",
+        "sportInfo",
+        "updated",
+        "weight",
+        "restingHR",
+        "hrv",
+        "hrvSDNN",
+        "avgSleepingHR",
+        "spO2",
+        "systolic",
+        "diastolic",
+        "respiration",
+        "bloodGlucose",
+        "lactate",
+        "vo2max",
+        "bodyFat",
+        "abdomen",
+        "baevskySI",
+        "sleepSecs",
+        "sleepHours",
+        "sleepQuality",
+        "sleepScore",
+        "readiness",
+        "menstrualPhase",
+        "menstrualPhasePredicted",
+        "soreness",
+        "fatigue",
+        "stress",
+        "mood",
+        "motivation",
+        "injury",
+        "kcalConsumed",
+        "hydrationVolume",
+        "hydration",
+        "steps",
+        "comments",
+        "locked",
+    }
+
+    # Detect and format custom fields
+    custom_fields = _detect_custom_fields(entries, known_wellness_fields)
+    custom_fields_lines = _format_custom_fields(custom_fields)
+
+    # Append custom fields section if any custom fields were found
+    if custom_fields_lines:
+        lines.append("")
+        lines.append("Custom Fields:")
+        lines.extend(custom_fields_lines)
 
     return "\n".join(lines)
 
