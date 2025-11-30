@@ -4,8 +4,8 @@ Server setup and initialization for Intervals.icu MCP Server.
 This module handles transport configuration and server startup logic.
 """
 
-import os
 import logging
+import os
 
 from mcp.server.fastmcp import FastMCP  # pylint: disable=import-error
 
@@ -52,6 +52,14 @@ def start_server(mcp_instance: FastMCP, transport: TransportAliases) -> None:
         mcp_instance (FastMCP): The FastMCP server instance to start.
         transport (TransportAliases): The transport type to use.
     """
+    host_env = os.getenv("FASTMCP_HOST")
+    port_env = os.getenv("FASTMCP_PORT")
+
+    if host_env:
+        mcp_instance.settings.host = host_env
+    if port_env:
+        mcp_instance.settings.port = int(port_env)
+
     host = mcp_instance.settings.host
     port = mcp_instance.settings.port
 
