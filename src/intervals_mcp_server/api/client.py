@@ -5,12 +5,12 @@ This module handles all HTTP communication with the Intervals.icu API,
 including request management, error handling, and client lifecycle.
 """
 
-from json import JSONDecodeError
 import json
 import logging
 import sys
 from contextlib import asynccontextmanager
 from http import HTTPStatus
+from json import JSONDecodeError
 from typing import Any
 
 import httpx  # pylint: disable=import-error
@@ -170,7 +170,7 @@ async def make_intervals_request(
         dict[str, Any] | list[dict[str, Any]]: The parsed JSON response from the API, or an error dict.
     """
     # Prepare request configuration
-    full_url, auth, headers, error_msg = _prepare_request_config(url, api_key, method, data)
+    full_url, auth, headers, error_msg = _prepare_request_config(url, api_key, method)
     if error_msg:
         return {"error": True, "message": error_msg}
 
