@@ -4,33 +4,246 @@ Formatting utilities for Intervals.icu MCP Server
 This module contains formatting functions for handling data from the Intervals.icu API.
 """
 
+import re
 from datetime import datetime
 from typing import Any
 
 
-def format_activity_summary(activity: dict[str, Any]) -> str:
-    """Format an activity into a readable string."""
-    start_time = activity.get("startTime", activity.get("start_date", "Unknown"))
+def _is_camelcase(field_name: str) -> bool:
+    """Check if a field name is camelCase (starts with lowercase, contains uppercase).
 
+    Args:
+        field_name: The field name to check
+
+    Returns:
+        True if the field is camelCase, False otherwise
+    """
+    if not field_name:
+        return False
+    # Must start with lowercase letter and contain at least one uppercase letter
+    return field_name[0].islower() and any(c.isupper() for c in field_name)
+
+
+def _detect_custom_fields(data: dict[str, Any], known_fields: set[str]) -> dict[str, Any]:
+    """Detect custom camelCase fields in API response that are not already handled.
+
+    Args:
+        data: Dictionary containing API response data
+        known_fields: Set of field names that are already handled by formatting functions
+
+    Returns:
+        Dictionary containing only custom field key-value pairs
+    """
+    custom_fields: dict[str, Any] = {}
+    for key, value in data.items():
+        # Skip if field is already known/displayed
+        if key in known_fields:
+            continue
+        # Only include camelCase fields (custom fields convention)
+        if _is_camelcase(key):
+            custom_fields[key] = value
+    return custom_fields
+
+
+def _format_custom_fields(custom_fields: dict[str, Any]) -> list[str]:
+    """Format custom fields into a readable list of strings.
+
+    Args:
+        custom_fields: Dictionary of custom field key-value pairs
+
+    Returns:
+        List of formatted strings, or empty list if no custom fields
+    """
+    if not custom_fields:
+        return []
+
+    formatted_lines: list[str] = []
+    for key, value in sorted(custom_fields.items()):
+        # Format the field name (convert camelCase to more readable format)
+        # e.g., "customFieldName" -> "Custom Field Name"
+        formatted_key = re.sub(r"([a-z])([A-Z])", r"\1 \2", key)
+        # Capitalize first letter, ensuring we have at least one character before indexing
+        if formatted_key:
+            formatted_key = formatted_key[0].upper() + formatted_key[1:]
+        elif key:
+            # Fallback to original key if formatted_key is empty
+            formatted_key = key[0].upper() + key[1:]
+        else:
+            # Both are empty (shouldn't happen due to _is_camelcase check, but be defensive)
+            formatted_key = "Unknown"
+
+        # Format the value based on type
+        if value is None:
+            formatted_value = "N/A"
+        elif isinstance(value, bool):
+            formatted_value = str(value)
+        elif isinstance(value, (int, float)):
+            formatted_value = str(value)
+        elif isinstance(value, str):
+            formatted_value = value
+        elif isinstance(value, (list, dict)):
+            formatted_value = str(value)
+        else:
+            formatted_value = str(value)
+
+        formatted_lines.append(f"- {formatted_key}: {formatted_value}")
+
+    return formatted_lines
+
+
+# Known activity fields that are already displayed in format_activity_summary
+_KNOWN_ACTIVITY_FIELDS = {
+    "name",
+    "id",
+    "type",
+    "startTime",
+    "start_date",
+    "description",
+    "distance",
+    "duration",
+    "elapsed_time",
+    "moving_time",
+    "elevationGain",
+    "total_elevation_gain",
+    "total_elevation_loss",
+    "perceived_exertion",
+    "icu_rpe",
+    "feel",
+    "avgPower",
+    "icu_average_watts",
+    "average_watts",
+    "icu_weighted_avg_watts",
+    "trainingLoad",
+    "icu_training_load",
+    "icu_ftp",
+    "icu_joules",
+    "icu_intensity",
+    "icu_power_hr",
+    "icu_variability_index",
+    "avgHr",
+    "average_heartrate",
+    "max_heartrate",
+    "lthr",
+    "icu_resting_hr",
+    "decoupling",
+    "average_cadence",
+    "calories",
+    "average_speed",
+    "max_speed",
+    "average_stride",
+    "avg_lr_balance",
+    "icu_weight",
+    "session_rpe",
+    "trainer",
+    "average_temp",
+    "min_temp",
+    "max_temp",
+    "average_wind_speed",
+    "headwind_percent",
+    "tailwind_percent",
+    "icu_ctl",
+    "icu_atl",
+    "trimp",
+    "polarization_index",
+    "power_load",
+    "hr_load",
+    "pace_load",
+    "icu_efficiency_factor",
+    "device_name",
+    "power_meter",
+    "file_type",
+}
+
+
+# Known wellness fields that are already displayed in format_wellness_entry
+_KNOWN_WELLNESS_FIELDS = {
+    "id",
+    "date",
+    "ctl",
+    "atl",
+    "rampRate",
+    "ctlLoad",
+    "atlLoad",
+    "sportInfo",
+    "updated",
+    "weight",
+    "restingHR",
+    "hrv",
+    "hrvSDNN",
+    "avgSleepingHR",
+    "spO2",
+    "systolic",
+    "diastolic",
+    "respiration",
+    "bloodGlucose",
+    "lactate",
+    "vo2max",
+    "bodyFat",
+    "abdomen",
+    "baevskySI",
+    "sleepSecs",
+    "sleepHours",
+    "sleepQuality",
+    "sleepScore",
+    "readiness",
+    "menstrualPhase",
+    "menstrualPhasePredicted",
+    "soreness",
+    "fatigue",
+    "stress",
+    "mood",
+    "motivation",
+    "injury",
+    "kcalConsumed",
+    "hydrationVolume",
+    "hydration",
+    "steps",
+    "comments",
+    "locked",
+}
+
+
+def _format_activity_start_time(activity: dict[str, Any]) -> str:
+    """Format activity start time from activity data."""
+    start_time = activity.get("startTime", activity.get("start_date", "Unknown"))
     if isinstance(start_time, str) and len(start_time) > 10:
-        # Format datetime if it's a full ISO string
         try:
             dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
             start_time = dt.strftime("%Y-%m-%d %H:%M:%S")
         except ValueError:
             pass
+    return start_time
 
+
+def _format_activity_rpe(activity: dict[str, Any]) -> str:
+    """Format RPE (Rate of Perceived Exertion) from activity data."""
     rpe = activity.get("perceived_exertion", None)
     if rpe is None:
         rpe = activity.get("icu_rpe", "N/A")
     if isinstance(rpe, (int, float)):
         rpe = f"{rpe}/10"
+    return rpe
 
+
+def _format_activity_feel(activity: dict[str, Any]) -> str:
+    """Format feel value from activity data."""
     feel = activity.get("feel", "N/A")
     if isinstance(feel, int):
         feel = f"{feel}/5"
+    return feel
 
-    return f"""
+
+def format_activity_summary(activity: dict[str, Any]) -> str:
+    """Format an activity into a readable string."""
+    start_time = _format_activity_start_time(activity)
+    rpe = _format_activity_rpe(activity)
+    feel = _format_activity_feel(activity)
+
+    # Detect and format custom fields
+    custom_fields = _detect_custom_fields(activity, _KNOWN_ACTIVITY_FIELDS)
+    custom_fields_lines = _format_custom_fields(custom_fields)
+
+    result = f"""
 Activity: {activity.get("name", "Unnamed")}
 ID: {activity.get("id", "N/A")}
 Type: {activity.get("type", "Unknown")}
@@ -93,8 +306,14 @@ Efficiency Factor: {activity.get("icu_efficiency_factor", "N/A")}
 Device Info:
 Device: {activity.get("device_name", "N/A")}
 Power Meter: {activity.get("power_meter", "N/A")}
-File Type: {activity.get("file_type", "N/A")}
-"""
+File Type: {activity.get("file_type", "N/A")}"""
+
+    # Append custom fields section if any custom fields were found
+    if custom_fields_lines:
+        result += "\n\nCustom Fields:"
+        result += "\n" + "\n".join(custom_fields_lines)
+
+    return result
 
 
 def format_workout(workout: dict[str, Any]) -> str:
@@ -235,6 +454,20 @@ def _format_nutrition_hydration(entries: dict[str, Any]) -> list[str]:
     return nutrition_lines
 
 
+def _add_wellness_section(lines: list[str], section_lines: list[str], section_title: str) -> None:
+    """Add a wellness section to the lines list if it has content.
+
+    Args:
+        lines: The list of lines being built
+        section_lines: The formatted lines for this section
+        section_title: The title of the section
+    """
+    if section_lines:
+        lines.append(section_title)
+        lines.extend(section_lines)
+        lines.append("")
+
+
 def format_wellness_entry(entries: dict[str, Any]) -> str:
     """Format wellness entry data into a readable string.
 
@@ -257,61 +490,32 @@ def format_wellness_entry(entries: dict[str, Any]) -> str:
     Returns:
         A formatted string representation of the wellness entry.
     """
-    lines = ["Wellness Data:"]
-    lines.append(f"Date: {entries.get('id', 'N/A')}")
-    lines.append("")
+    lines = ["Wellness Data:", f"Date: {entries.get('id', 'N/A')}", ""]
 
-    training_metrics = _format_training_metrics(entries)
-    if training_metrics:
-        lines.append("Training Metrics:")
-        lines.extend(training_metrics)
-        lines.append("")
-
-    sport_info_list = _format_sport_info(entries)
-    if sport_info_list:
-        lines.append("Sport-Specific Info:")
-        lines.extend(sport_info_list)
-        lines.append("")
-
-    vital_signs = _format_vital_signs(entries)
-    if vital_signs:
-        lines.append("Vital Signs:")
-        lines.extend(vital_signs)
-        lines.append("")
-
-    sleep_lines = _format_sleep_recovery(entries)
-    if sleep_lines:
-        lines.append("Sleep & Recovery:")
-        lines.extend(sleep_lines)
-        lines.append("")
-
-    menstrual_lines = _format_menstrual_tracking(entries)
-    if menstrual_lines:
-        lines.append("Menstrual Tracking:")
-        lines.extend(menstrual_lines)
-        lines.append("")
-
-    subjective_lines = _format_subjective_feelings(entries)
-    if subjective_lines:
-        lines.append("Subjective Feelings:")
-        lines.extend(subjective_lines)
-        lines.append("")
-
-    nutrition_lines = _format_nutrition_hydration(entries)
-    if nutrition_lines:
-        lines.append("Nutrition & Hydration:")
-        lines.extend(nutrition_lines)
-        lines.append("")
+    _add_wellness_section(lines, _format_training_metrics(entries), "Training Metrics:")
+    _add_wellness_section(lines, _format_sport_info(entries), "Sport-Specific Info:")
+    _add_wellness_section(lines, _format_vital_signs(entries), "Vital Signs:")
+    _add_wellness_section(lines, _format_sleep_recovery(entries), "Sleep & Recovery:")
+    _add_wellness_section(lines, _format_menstrual_tracking(entries), "Menstrual Tracking:")
+    _add_wellness_section(lines, _format_subjective_feelings(entries), "Subjective Feelings:")
+    _add_wellness_section(lines, _format_nutrition_hydration(entries), "Nutrition & Hydration:")
 
     if entries.get("steps") is not None:
-        lines.append("Activity:")
-        lines.append(f"- Steps: {entries['steps']}")
-        lines.append("")
+        lines.extend(["Activity:", f"- Steps: {entries['steps']}", ""])
 
     if entries.get("comments"):
         lines.append(f"Comments: {entries['comments']}")
     if "locked" in entries:
         lines.append(f"Status: {'Locked' if entries.get('locked') else 'Unlocked'}")
+
+    # Detect and format custom fields
+    custom_fields = _detect_custom_fields(entries, _KNOWN_WELLNESS_FIELDS)
+    custom_fields_lines = _format_custom_fields(custom_fields)
+
+    # Append custom fields section if any custom fields were found
+    if custom_fields_lines:
+        lines.extend(["", "Custom Fields:"])
+        lines.extend(custom_fields_lines)
 
     return "\n".join(lines)
 
