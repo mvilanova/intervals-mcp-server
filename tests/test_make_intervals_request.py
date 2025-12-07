@@ -13,8 +13,13 @@ import sys
 from json import JSONDecodeError
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
-os.environ.setdefault("API_KEY", "test")
-os.environ.setdefault("ATHLETE_ID", "i1")
+os.environ["API_KEY"] = "test"  # Force deterministic test value even if env already set
+os.environ["ATHLETE_ID"] = "i1"
+
+# Reset cached config so get_config picks up the test env values
+from intervals_mcp_server import config as config_module  # pylint: disable=wrong-import-position
+
+config_module._config_instance = None  # type: ignore[attr-defined]
 
 from intervals_mcp_server import server  # pylint: disable=wrong-import-position
 
