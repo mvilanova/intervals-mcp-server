@@ -254,3 +254,70 @@ def test_add_or_update_event(monkeypatch):
     assert "Successfully created event:" in result
     assert '"id": "e123"' in result
     assert '"name": "Test Workout"' in result
+
+
+def test_add_or_update_event_with_tags(monkeypatch):
+    """
+    Test add_or_update_event includes tags in the API request when provided.
+    """
+    captured_data = {}
+
+    async def fake_post_request(*_args, **kwargs):
+        captured_data.update(kwargs.get("data", {}))
+        return {
+            "id": "e456",
+            "start_date_local": "2024-01-20T00:00:00",
+            "category": "WORKOUT",
+            "name": "Tagged Workout",
+            "type": "Ride",
+            "tags": ["sweet-spot", "indoor"],
+        }
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_post_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.events.make_intervals_request", fake_post_request
+    )
+    result = asyncio.run(
+        add_or_update_event(
+            athlete_id="i1",
+            start_date="2024-01-20",
+            name="Tagged Workout",
+            workout_type="Ride",
+            tags=["sweet-spot", "indoor"],
+        )
+    )
+    assert "Successfully created event:" in result
+    assert '"name": "Tagged Workout"' in result
+    assert captured_data.get("tags") == ["sweet-spot", "indoor"]
+
+
+def test_add_or_update_event_without_tags(monkeypatch):
+    """
+    Test add_or_update_event does not include tags in payload when not provided.
+    """
+    captured_data = {}
+
+    async def fake_post_request(*_args, **kwargs):
+        captured_data.update(kwargs.get("data", {}))
+        return {
+            "id": "e789",
+            "start_date_local": "2024-01-25T00:00:00",
+            "category": "WORKOUT",
+            "name": "No Tags Workout",
+            "type": "Run",
+        }
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_post_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.events.make_intervals_request", fake_post_request
+    )
+    result = asyncio.run(
+        add_or_update_event(
+            athlete_id="i1",
+            start_date="2024-01-25",
+            name="No Tags Workout",
+            workout_type="Run",
+        )
+    )
+    assert "Successfully created event:" in result
+    assert "tags" not in captured_data
