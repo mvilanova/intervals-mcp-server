@@ -17,16 +17,46 @@ This is a Model Context Protocol (MCP) server for connecting Claude with the Int
 
 ## Core Components
 
-### MCP Tools (in server.py)
-- `get_activities` - Retrieve athlete activities with filtering options
-- `get_activity_details` - Get detailed information for specific activities
-- `get_activity_intervals` - Get detailed interval data for activities
-- `get_events` - Retrieve upcoming events (workouts, races, etc.)
-- `get_event_by_id` - Get detailed information for specific events
-- `get_wellness_data` - Fetch wellness metrics and data
+### MCP Tools (modular structure in src/intervals_mcp_server/tools/)
+- **Activities** ([tools/activities.py](mdc:src/intervals_mcp_server/tools/activities.py)):
+  - `get_activities` - Retrieve athlete activities with filtering options
+  - `get_activity_details` - Get detailed information for specific activities
+  - `get_activity_intervals` - Get detailed interval data for activities
+  - `get_activity_streams` - Get time-series data (power, HR, cadence, etc.)
+
+- **Events** ([tools/events.py](mdc:src/intervals_mcp_server/tools/events.py)):
+  - `get_events` - Retrieve upcoming events (workouts, races, etc.)
+  - `get_event_by_id` - Get detailed information for specific events
+  - `add_or_update_event` - Create or update calendar events
+  - `delete_event` - Delete a specific event
+  - `delete_events_by_date_range` - Delete multiple events in a date range
+
+- **Wellness** ([tools/wellness.py](mdc:src/intervals_mcp_server/tools/wellness.py)):
+  - `get_wellness_data` - Fetch wellness metrics (sleep, HRV, weight, CTL/ATL, etc.)
+
+- **Training Plans** ([tools/plans.py](mdc:src/intervals_mcp_server/tools/plans.py)):
+  - `create_training_plan` - Create a new training plan folder
+  - `add_workout_to_plan` - Add a single workout template to a plan
+  - `add_workouts_bulk` - Add multiple workout templates efficiently
+  - `get_training_plans` - List all training plans
+  - `delete_training_plan` - Delete a training plan and its workouts
+
+- **Performance Data** ([tools/performance.py](mdc:src/intervals_mcp_server/tools/performance.py)):
+  - `get_power_curves` - Get athlete power data (best power outputs across durations)
+  - `get_hr_curves` - Get athlete heart rate data (peak HR efforts across durations)
+  - `get_pace_curves` - Get athlete pace data (best pace performances across distances)
+
+### API Communication
+- **Client** ([api/client.py](mdc:src/intervals_mcp_server/api/client.py)) - HTTP client for Intervals.icu API
+  - `make_intervals_request()` - Central function for all API calls
+  - Shared `httpx.AsyncClient` instance with connection pooling
+  - Comprehensive error handling and user-friendly messages
 
 ### Utilities
-- **Formatting**: [src/intervals_mcp_server/utils/formatting.py](mdc:src/intervals_mcp_server/utils/formatting.py) - Data formatting utilities for MCP responses
+- **Formatting** ([utils/formatting.py](mdc:src/intervals_mcp_server/utils/formatting.py)) - Data formatting utilities for MCP responses
+- **Validation** ([utils/validation.py](mdc:src/intervals_mcp_server/utils/validation.py)) - Input validation helpers
+- **Dates** ([utils/dates.py](mdc:src/intervals_mcp_server/utils/dates.py)) - Date handling utilities
+- **Types** ([utils/types.py](mdc:src/intervals_mcp_server/utils/types.py)) - Type definitions for training plans
 
 ### Testing
 - **Tests Directory**: [tests/](mdc:tests) - Unit tests for server functionality and utilities

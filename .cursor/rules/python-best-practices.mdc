@@ -76,16 +76,33 @@ alwaysApply: true
 
 ## Project-Specific Patterns
 
-- All API communication through `make_intervals_request()` function
+- All API communication through `make_intervals_request()` function in [api/client.py](mdc:src/intervals_mcp_server/api/client.py)
 - Consistent error response format: `{"error": True, "status_code": int, "message": str}`
 - Use formatting utilities from [utils/formatting.py](mdc:src/intervals_mcp_server/utils/formatting.py)
+- Use validation utilities from [utils/validation.py](mdc:src/intervals_mcp_server/utils/validation.py)
 - Follow MCP tool naming conventions: `get_*` for retrieval operations
-- Support both numeric and i-prefixed athlete IDs
+- Support both numeric and i-prefixed athlete IDs (validated with `resolve_athlete_id()`)
 
 ## Code Organization
 
-- Keep all MCP tools in [server.py](mdc:src/intervals_mcp_server/server.py)
-- Place formatting utilities in [utils/formatting.py](mdc:src/intervals_mcp_server/utils/formatting.py)
-- Organize tests by functionality in [tests/](mdc:tests) directory
-- Use `__init__.py` files to mark Python packages
-- Include `py.typed` for type checking support
+- **Modular Structure**: Organize MCP tools by domain in [tools/](mdc:src/intervals_mcp_server/tools/) directory:
+  - `activities.py` - Activity-related tools
+  - `events.py` - Event management tools
+  - `wellness.py` - Wellness data tools
+  - `plans.py` - Training plan tools
+  - `performance.py` - Athlete performance data tools
+- **Registration**: Import all tools in [tools/__init__.py](mdc:src/intervals_mcp_server/tools/__init__.py) and add to `__all__`
+- **API Layer**: HTTP client and request handling in [api/client.py](mdc:src/intervals_mcp_server/api/client.py)
+- **Utilities**: Place formatting, validation, and helper functions in [utils/](mdc:src/intervals_mcp_server/utils/)
+- **Testing**: Organize tests by functionality in [tests/](mdc:tests) directory
+- **Package Markers**: Use `__init__.py` files to mark Python packages
+- **Type Support**: Include `py.typed` for type checking support
+
+## MCP Tool Development Pattern
+
+When creating new tools:
+1. Choose or create appropriate module in `tools/`
+2. Import shared `mcp` instance: `from intervals_mcp_server.mcp_instance import mcp`
+3. Use `@mcp.tool()` decorator for tool registration
+4. Import utilities as needed (`make_intervals_request`, `resolve_athlete_id`, etc.)
+5. Register in `tools/__init__.py` for re-export

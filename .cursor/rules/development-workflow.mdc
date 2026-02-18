@@ -33,18 +33,60 @@ Before committing, ensure all three checks pass:
 
 ## Code Organization
 
-- **Main Logic**: All MCP tools are implemented in [src/intervals_mcp_server/server.py](mdc:src/intervals_mcp_server/server.py)
-- **Utilities**: Helper functions in [src/intervals_mcp_server/utils/](mdc:src/intervals_mcp_server/utils)
-- **API Communication**: `make_intervals_request()` function handles all Intervals.icu API calls
+The project follows a modular architecture:
+
+- **Server Entry Point**: [src/intervals_mcp_server/server.py](mdc:src/intervals_mcp_server/server.py) - FastMCP server setup and initialization
+- **MCP Tools**: Organized by domain in [src/intervals_mcp_server/tools/](mdc:src/intervals_mcp_server/tools/):
+  - `activities.py` - Activity retrieval and analysis tools
+  - `events.py` - Calendar event management tools
+  - `wellness.py` - Wellness data retrieval tools
+  - `plans.py` - Training plan management tools
+  - `performance.py` - Athlete performance data tools
+- **API Client**: [src/intervals_mcp_server/api/client.py](mdc:src/intervals_mcp_server/api/client.py) - HTTP client with `make_intervals_request()`
+- **Utilities**: Helper functions in [src/intervals_mcp_server/utils/](mdc:src/intervals_mcp_server/utils/)
+  - `formatting.py` - Data formatting for MCP responses
+  - `validation.py` - Input validation helpers
+  - `dates.py` - Date handling utilities
+  - `types.py` - Type definitions
 - **Error Handling**: Comprehensive HTTP error handling with user-friendly messages
 
 ## Adding New MCP Tools
 
-1. Create async function decorated with `@mcp.tool()`
-2. Add proper type hints and docstrings
-3. Use `make_intervals_request()` for API calls
-4. Add formatting utilities to [src/intervals_mcp_server/utils/formatting.py](mdc:src/intervals_mcp_server/utils/formatting.py) if needed
-5. Write unit tests in [tests/](mdc:tests)
+1. **Choose appropriate module** in `tools/` or create new one for new domain
+2. **Import mcp instance**: `from intervals_mcp_server.mcp_instance import mcp`
+3. **Create async function** decorated with `@mcp.tool()`
+4. **Add type hints and docstrings** (required by FastMCP)
+5. **Use `make_intervals_request()`** for all API calls (from `api/client.py`)
+6. **Register in `tools/__init__.py`**: Import function and add to `__all__`
+7. **Add formatting utilities** to [utils/formatting.py](mdc:src/intervals_mcp_server/utils/formatting.py) if needed
+8. **Write unit tests** in [tests/](mdc:tests)
+
+Example structure:
+```python
+from intervals_mcp_server.api.client import make_intervals_request
+from intervals_mcp_server.config import get_config
+from intervals_mcp_server.utils.validation import resolve_athlete_id
+from intervals_mcp_server.mcp_instance import mcp
+
+config = get_config()
+
+@mcp.tool()
+async def my_new_tool(athlete_id: str | None = None, api_key: str | None = None) -> str:
+    """Tool description for Claude."""
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    if error_msg:
+        return error_msg
+
+    result = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/endpoint",
+        api_key=api_key
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        return f"Error: {result.get('message')}"
+
+    return format_result(result)
+```
 
 ## Commit Guidelines
 

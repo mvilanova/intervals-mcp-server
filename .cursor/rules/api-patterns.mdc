@@ -7,11 +7,11 @@ alwaysApply: true
 
 ## Intervals.icu API Integration
 
-This project communicates with the Intervals.icu API using consistent patterns defined in [src/intervals_mcp_server/server.py](mdc:src/intervals_mcp_server/server.py).
+This project communicates with the Intervals.icu API using consistent patterns defined in [src/intervals_mcp_server/api/client.py](mdc:src/intervals_mcp_server/api/client.py).
 
 ## Core API Function
 
-All API communication goes through `make_intervals_request()`:
+All API communication goes through `make_intervals_request()` in [api/client.py](mdc:src/intervals_mcp_server/api/client.py):
 
 ```python
 async def make_intervals_request(
