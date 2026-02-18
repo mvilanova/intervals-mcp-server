@@ -230,6 +230,11 @@ Once the server is running and Claude Desktop is configured, you can use the fol
 **Wellness:**
 - `get_wellness_data`: Fetch wellness data (sleep, HRV, weight, etc.)
 
+**Athlete Performance:**
+- `get_power_curves`: Get athlete power data showing best outputs across different durations
+- `get_hr_curves`: Get athlete heart rate data showing peak efforts across different durations
+- `get_pace_curves`: Get athlete pace data showing best performances across different distances
+
 ## Usage with ChatGPT
 
 ChatGPT’s beta MCP connectors can also talk to this server over the SSE transport.
