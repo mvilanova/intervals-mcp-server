@@ -33,6 +33,9 @@ from intervals_mcp_server.tools.performance import (  # noqa: F401
 from intervals_mcp_server.tools.snapshot import (  # noqa: F401
     get_latest_snapshot,
 )
+from intervals_mcp_server.tools.weather import (  # noqa: F401
+    get_weather_forecast,
+)
 
 
 def register_tools(mcp_instance: FastMCP) -> None:
@@ -68,4 +71,5 @@ __all__ = [
     "get_hr_curves",
     "get_pace_curves",
     "get_latest_snapshot",
+    "get_weather_forecast",
 ]

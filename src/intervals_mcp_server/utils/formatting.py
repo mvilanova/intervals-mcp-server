@@ -8,6 +8,29 @@ from datetime import datetime
 from typing import Any
 
 
+def format_date_with_day_of_week(date_value: str) -> str:
+    """Format a date string to include day of week for better readability.
+
+    Args:
+        date_value: Date string in ISO-8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)
+
+    Returns:
+        Formatted date string with day of week prefix (e.g., "Saturday, 2026-02-21")
+        or original value if parsing fails
+    """
+    if not date_value or date_value in ("Unknown", "N/A"):
+        return date_value
+
+    try:
+        # Handle both date-only and datetime formats
+        date_str = date_value.split("T")[0]  # Extract YYYY-MM-DD part
+        date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+        day_of_week = date_obj.strftime("%A")
+        return f"{day_of_week}, {date_value}"
+    except (ValueError, AttributeError):
+        return date_value
+
+
 def _add_field(lines: list[str], label: str, value: Any, unit: str = "") -> None:
     """Add a field to lines only if value is not None/empty."""
     if value is not None and value != "" and value != "N/A":
@@ -299,7 +322,9 @@ def format_wellness_entry(entries: dict[str, Any]) -> str:
         A formatted string representation of the wellness entry.
     """
     lines = ["Wellness Data:"]
-    lines.append(f"Date: {entries.get('id', 'N/A')}")
+    date_value = entries.get('id', 'N/A')
+    formatted_date = format_date_with_day_of_week(date_value)
+    lines.append(f"Date: {formatted_date}")
     lines.append("")
 
     training_metrics = _format_training_metrics(entries)
@@ -362,12 +387,14 @@ def format_event_summary(event: dict[str, Any]) -> str:
 
     # Update to check for "date" if "start_date_local" is not provided
     event_date = event.get("start_date_local", event.get("date", "Unknown"))
+    formatted_date = format_date_with_day_of_week(event_date)
+
     event_type = "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
     event_name = event.get("name", "Unnamed")
     event_id = event.get("id", "N/A")
     event_desc = event.get("description", "No description")
 
-    return f"""Date: {event_date}
+    return f"""Date: {formatted_date}
 ID: {event_id}
 Type: {event_type}
 Name: {event_name}
@@ -377,10 +404,13 @@ Description: {event_desc}"""
 def format_event_details(event: dict[str, Any]) -> str:
     """Format detailed event information into a readable string."""
 
+    event_date = event.get("date", "Unknown")
+    formatted_date = format_date_with_day_of_week(event_date)
+
     event_details = f"""Event Details:
 
 ID: {event.get("id", "N/A")}
-Date: {event.get("date", "Unknown")}
+Date: {formatted_date}
 Name: {event.get("name", "Unnamed")}
 Description: {event.get("description", "No description")}"""
 
