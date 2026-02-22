@@ -21,46 +21,64 @@ from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 config = get_config()
 
 
-def _resolve_workout_type(name: str | None, workout_type: str | None) -> str:
-    """Determine the workout type based on the name and provided value."""
-    if workout_type:
-        return workout_type
-    name_lower = name.lower() if name else ""
-    mapping = [
-        ("Ride", ["bike", "cycle", "cycling", "ride"]),
-        ("Run", ["run", "running", "jog", "jogging"]),
-        ("Swim", ["swim", "swimming", "pool"]),
-        ("Walk", ["walk", "walking", "hike", "hiking"]),
-        ("Row", ["row", "rowing"]),
-    ]
-    for workout, keywords in mapping:
-        if any(keyword in name_lower for keyword in keywords):
-            return workout
-    return "Ride"  # Default
-
-
 def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     name: str,
-    workout_type: str,
     start_date: str,
-    workout_doc: WorkoutDoc | None,
-    moving_time: int | None,
-    distance: int | None,
+    category: str = "WORKOUT",
+    workout_type: str | None = None,
+    workout_doc: WorkoutDoc | None = None,
+    description: str | None = None,
+    moving_time: int | None = None,
+    distance: int | None = None,
+    end_date: str | None = None,
+    color: str | None = None,
+    indoor: bool | None = None,
+    sub_type: str | None = None,
+    icu_ftp: int | None = None,
+    start_time: str | None = None,
+    entered: bool | None = None,
 ) -> dict[str, Any]:
-    """Prepare event data dictionary for API request.
+    """Prepare event data dictionary for API request."""
+    # Handle start_date_local with optional time component
+    if "T" in start_date:
+        start_date_local = start_date
+    elif start_time:
+        start_date_local = f"{start_date}T{start_time}"
+    else:
+        start_date_local = f"{start_date}T00:00:00"
 
-    Many arguments are required to match the Intervals.icu API event structure.
-    """
-    resolved_workout_type = _resolve_workout_type(name, workout_type)
-    return {
-        "start_date_local": start_date + "T00:00:00",
-        "category": "WORKOUT",
+    event_data: dict[str, Any] = {
+        "start_date_local": start_date_local,
+        "category": category,
         "name": name,
-        "description": str(workout_doc) if workout_doc else None,
-        "type": resolved_workout_type,
-        "moving_time": moving_time,
-        "distance": distance,
     }
+
+    # Add optional fields only if provided
+    if workout_type:
+        event_data["type"] = workout_type
+    if workout_doc:
+        event_data["workout_doc"] = workout_doc
+    if description:
+        event_data["description"] = description
+    if moving_time is not None:
+        event_data["moving_time"] = moving_time
+    if distance is not None:
+        event_data["distance"] = distance
+    if end_date:
+        end_date_local = end_date if "T" in end_date else f"{end_date}T00:00:00"
+        event_data["end_date_local"] = end_date_local
+    if color:
+        event_data["color"] = color
+    if indoor is not None:
+        event_data["indoor"] = indoor
+    if sub_type:
+        event_data["sub_type"] = sub_type
+    if icu_ftp is not None:
+        event_data["icu_ftp"] = icu_ftp
+    if entered is not None:
+        event_data["entered"] = entered
+
+    return event_data
 
 
 def _handle_event_response(
@@ -207,20 +225,34 @@ async def delete_event(
     event_id: str,
     athlete_id: str | None = None,
     api_key: str | None = None,
+    others: bool | None = None,
+    not_before: str | None = None,
 ) -> str:
     """Delete event for an athlete from Intervals.icu
     Args:
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         event_id: The Intervals.icu event ID
+        others: If true, also delete other events added at the same time (optional)
+        not_before: Do not delete other events before this date in YYYY-MM-DD format (optional)
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
     if not event_id:
         return "Error: No event ID provided."
+
+    params = {}
+    if others is not None:
+        params["others"] = others
+    if not_before:
+        params["notBefore"] = not_before
+
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key, method="DELETE"
+        url=f"/athlete/{athlete_id_to_use}/events/{event_id}",
+        api_key=api_key,
+        method="DELETE",
+        params=params if params else None,
     )
     if isinstance(result, dict) and "error" in result:
         return f"Error deleting event: {result.get('message')}"
@@ -283,31 +315,52 @@ async def delete_events_by_date_range(
 
 @mcp.tool()
 async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-positional-arguments
-    workout_type: str,
     name: str,
     athlete_id: str | None = None,
     api_key: str | None = None,
     event_id: str | None = None,
     start_date: str | None = None,
+    category: str = "WORKOUT",
+    workout_type: str | None = None,
     workout_doc: WorkoutDoc | None = None,
+    description: str | None = None,
     moving_time: int | None = None,
     distance: int | None = None,
+    end_date: str | None = None,
+    color: str | None = None,
+    indoor: bool | None = None,
+    sub_type: str | None = None,
+    icu_ftp: int | None = None,
+    start_time: str | None = None,
+    entered: bool | None = None,
 ) -> str:
-    """Post event for an athlete to Intervals.icu this follows the event api from intervals.icu
+    """Create or update a calendar event on Intervals.icu.
     If event_id is provided, the event will be updated instead of created.
 
-    Many arguments are required as this MCP tool function maps directly to the Intervals.icu API parameters.
-
     Args:
+        name: Name of the event (required)
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-        event_id: The Intervals.icu event ID (optional, will use event_id from .env if not provided)
-        start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
-        name: Name of the activity
-        workout_doc: steps as a list of Step objects (optional, but necessary to define workout steps)
-        workout_type: Workout type (e.g. Ride, Run, Swim, Walk, Row)
-        moving_time: Total expected moving time of the workout in seconds (optional)
-        distance: Total expected distance of the workout in meters (optional)
+        event_id: The Intervals.icu event ID (optional, for updates)
+        start_date: Start date in YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS format (optional, defaults to today)
+        start_time: Time in HH:MM:SS format if start_date is just YYYY-MM-DD (optional, defaults to 00:00:00)
+        category: Event category (default: "WORKOUT")
+            - WORKOUT: Structured workout
+            - RACE_A, RACE_B, RACE_C: Race events by priority
+            - NOTE: Calendar note
+            - HOLIDAY, SICK, INJURED: Status markers
+            - PLAN, SEASON_START, TARGET, SET_EFTP, FITNESS_DAYS, SET_FITNESS: Special markers
+        workout_type: Workout type (e.g. Ride, Run, Swim, Walk, Row, WeightTraining)
+        workout_doc: Structured workout definition with steps (optional)
+        description: Text description (optional)
+        moving_time: Total expected moving time in seconds (optional)
+        distance: Total expected distance in meters (optional)
+        end_date: End date in YYYY-MM-DD format (optional, for multi-day events)
+        color: Custom event color (optional)
+        indoor: Whether the event is indoors (optional)
+        sub_type: Event sub-type: NONE, COMMUTE, WARMUP, COOLDOWN, RACE (optional)
+        icu_ftp: FTP value for SET_EFTP category (optional)
+        entered: Whether you have already entered/registered for the race (optional, for RACE categories)
 
     Example:
         "workout_doc": {
@@ -367,7 +420,21 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
 
     try:
         event_data = _prepare_event_data(
-            name, workout_type, start_date, workout_doc, moving_time, distance
+            name=name,
+            start_date=start_date,
+            category=category,
+            workout_type=workout_type,
+            workout_doc=workout_doc,
+            description=description,
+            moving_time=moving_time,
+            distance=distance,
+            end_date=end_date,
+            color=color,
+            indoor=indoor,
+            sub_type=sub_type,
+            icu_ftp=icu_ftp,
+            start_time=start_time,
+            entered=entered,
         )
         return await _create_or_update_event_request(
             athlete_id_to_use, api_key, event_data, start_date, event_id
