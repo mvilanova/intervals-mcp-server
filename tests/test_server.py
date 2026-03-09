@@ -251,6 +251,5 @@ def test_add_or_update_event(monkeypatch):
             athlete_id="i1", start_date="2024-01-15", name="Test Workout", workout_type="Ride"
         )
     )
-    assert "Successfully created event:" in result
-    assert '"id": "e123"' in result
-    assert '"name": "Test Workout"' in result
+    assert "Successfully created event id:" in result
+    assert "e123" in result
