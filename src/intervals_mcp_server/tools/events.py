@@ -93,7 +93,7 @@ async def _delete_events_list(
     Returns:
         List of event IDs that failed to delete.
     """
-    failed_events = []
+    failed_events: list[str] = []
     for event in events:
         result = await make_intervals_request(
             url=f"/athlete/{athlete_id}/events/{event.get('id')}",
@@ -101,7 +101,7 @@ async def _delete_events_list(
             method="DELETE",
         )
         if isinstance(result, dict) and "error" in result:
-            failed_events.append(event.get("id"))
+            failed_events.append(event.get("id", "unknown"))
     return failed_events
 
 

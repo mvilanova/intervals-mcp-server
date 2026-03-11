@@ -121,7 +121,7 @@ class Value:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert Value instance to dictionary for JSON serialization."""
-        data = {}
+        data: Dict[str, Any] = {}
         if self.value is not None:
             data["value"] = self.value
         if self.start is not None:
@@ -189,6 +189,8 @@ class Value:
             ValueUnits.POWER_ZONE: "W",
             ValueUnits.CADENCE: "Cadence",
         }
+        if self.units is None:
+            return ""
         return units_map.get(self.units, "")
 
     def __str__(self) -> str:
@@ -242,7 +244,7 @@ class Step:  # pylint: disable=too-many-instance-attributes
 
         Many branches are required to handle all optional fields of the Step dataclass.
         """
-        data = {}
+        data: Dict[str, Any] = {}
         if self.text is not None:
             data["text"] = self.text
         if self.text_locale is not None:
@@ -375,7 +377,7 @@ class Step:  # pylint: disable=too-many-instance-attributes
             return f"{float_to_str(self.distance)}mtr"
         return f"{float_to_str(self.distance / 1000)}km"
 
-    def __str__(self, nested: bool = False) -> str:  # pylint: disable=too-many-branches
+    def _to_str(self, nested: bool = False) -> str:  # pylint: disable=too-many-branches
         """Convert Step to string representation.
 
         Many branches are required to format all optional fields and handle different step types.
@@ -420,11 +422,14 @@ class Step:  # pylint: disable=too-many-instance-attributes
             val += f"{self.text} "
         if self.reps is not None and self.steps is not None:
             for step in self.steps:
-                val += "\n" + step.__str__(nested=True)
+                val += "\n" + step._to_str(nested=True)
             val += "\n"
         elif not nested and (self.warmup or self.cooldown):
             val += "\n"
         return val
+
+    def __str__(self) -> str:
+        return self._to_str()
 
 
 @dataclass
@@ -487,7 +492,7 @@ class WorkoutDoc:  # pylint: disable=too-many-instance-attributes
 
         Many branches are required to handle all optional fields of the WorkoutDoc dataclass.
         """
-        data = {}
+        data: Dict[str, Any] = {}
         if self.description is not None:
             data["description"] = self.description
         if self.description_locale is not None:
@@ -574,5 +579,5 @@ class WorkoutDoc:  # pylint: disable=too-many-instance-attributes
             val += f"{self.description}\n"
         if self.steps is not None:
             for step in self.steps:
-                val += step.__str__() + "\n"
+                val += str(step) + "\n"
         return val
