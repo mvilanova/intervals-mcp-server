@@ -315,8 +315,8 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
                     {"power": {"value": 110, "units": "%ftp"}, "distance": 500, "text": "High-intensity"},
                     {"power": {"value": 80, "units": "%ftp"}, "duration": 90, "text": "Recovery"}
                 ]},
-                {"power": {"value": 80, "units": "%ftp"}, "duration": 600, "cooldown": true}
-                {"text": ""}, # Add comments or blank lines for readability
+                {"power": {"value": 80, "units": "%ftp"}, "duration": 600, "cooldown": true},
+                {"text": ""}
             ]
         }
 
@@ -330,7 +330,7 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
             Absolute power: {"power": {"value": 200, "units": "w"}}
             Heart rate: {"hr": {"value": 75, "units": "%hr"}}
             Heart rate (LTHR): {"hr": {"value": 85, "units": "%lthr"}}
-            Cadence: {"cadence": {"value": 90, "units": "rpm"}}
+            Cadence: {"cadence": {"value": 90, "units": "cadence"}}
             Pace by ftp: {"pace": {"value": 80, "units": "%pace"}}
             Pace by zone: {"pace": {"value": 2, "units": "pace_zone"}}
             Zone by power: {"power": {"value": 2, "units": "power_zone"}}
@@ -338,15 +338,15 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
         Ranges: Specify ranges for power, heart rate, or cadence:
             {"power": {"start": 80, "end": 90, "units": "%ftp"}}
         Ramps: Instead of a range, indicate a gradual change in intensity (useful for ERG workouts):
-            {"ramp": True, "power": {"start": 80, "end": 90, "units": "%ftp"}}
+            {"ramp": true, "power": {"start": 80, "end": 90, "units": "%ftp"}}
         Repeats: include the reps property and add nested steps
             {"reps": 3,
             "steps": [
                 {"power": {"value": 110, "units": "%ftp"}, "distance": 500, "text": "High-intensity"},
                 {"power": {"value": 80, "units": "%ftp"}, "duration": 90, "text": "Recovery"}
             ]}
-        Free Ride: Include free to indicate a segment without ERG control, optionally with a suggested power range:
-            {"free": true, "power": {"value": 80, "units": "%ftp"}}
+        Free Ride: Include freeride to indicate a segment without ERG control, optionally with a suggested power range:
+            {"freeride": true, "power": {"value": 80, "units": "%ftp"}}
         Comments and Labels: Add descriptive text to label steps:
             {"text": "Warmup"}
 
