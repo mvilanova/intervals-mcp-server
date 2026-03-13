@@ -523,7 +523,7 @@ def format_power_curves(
             aid = point.get("activity_id", "")
             parts = [f"  {dur_label}: {watts}W"]
             if include_normalised and "watts_per_kg" in point:
-                parts.append(f"{point['watts_per_kg']}W/kg")
+                parts.append(f"{point['watts_per_kg']:.2f}W/kg")
                 wkg_aid = point.get("wkg_activity_id", "")
                 if wkg_aid and wkg_aid != aid:
                     parts.append(f"[{aid}|wkg:{wkg_aid}]")

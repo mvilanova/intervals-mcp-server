@@ -137,7 +137,7 @@ def test_format_power_curves():
     assert "Power Curves (Ride):" in result
     assert "This season" in result
     assert "5s: 780W" in result
-    assert "10.4W/kg" in result
+    assert "10.40W/kg" in result
     assert "1m: 380W" in result
     assert "1h: 210W" in result
     assert "i100" in result
