@@ -119,7 +119,7 @@ def _extract_curve_data(
 @mcp.tool()
 async def get_athlete_power_curves(
     activity_type: str,
-    durations: list[int] | None = None,
+    durations: list[int] = DEFAULT_DURATIONS,
     filter_indoors: bool = False,
     start_date: str | None = None,
     end_date: str | None = None,
@@ -136,7 +136,7 @@ async def get_athlete_power_curves(
 
     Args:
         activity_type: Activity type (e.g. "Ride", "Run", "VirtualRide")
-        durations: Durations in seconds to include. Defaults to [5, 15, 30, 60, 120, 300, 600, 1200, 3600]
+        durations: Durations in seconds to include. Default is [5, 15, 30, 60, 120, 300, 600, 1200, 3600]
         filter_indoors: If True, exclude indoor activities from the curve
         start_date: Start date (YYYY-MM-DD) for custom date range curve. Must be used with end_date.
         end_date: End date (YYYY-MM-DD) for custom date range curve. Must be used with start_date.
@@ -153,9 +153,6 @@ async def get_athlete_power_curves(
     date_error = _validate_dates(start_date, end_date)
     if date_error:
         return date_error
-
-    if durations is None:
-        durations = DEFAULT_DURATIONS
 
     curves = _build_curves_param(this_season, last_season, start_date, end_date)
     if not curves:
