@@ -72,6 +72,10 @@ def test_make_intervals_request_bad_json(monkeypatch, caplog):
     Test that make_intervals_request returns an error dict when the response contains invalid JSON.
     Ensures proper logging and error message content.
     """
+    monkeypatch.setenv("API_KEY", "test")
+    monkeypatch.setenv("ATHLETE_ID", "i1")
+    # Reset the singleton so config picks up the monkeypatched env vars
+    monkeypatch.setattr("intervals_mcp_server.config._config_instance", None)
     monkeypatch.setattr(server, "httpx_client", MockAsyncClient())
 
     # Ensure the config singleton has an API key, regardless of test execution order
