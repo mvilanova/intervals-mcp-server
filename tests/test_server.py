@@ -31,6 +31,11 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_activity_intervals,
     get_activity_streams,
     add_or_update_event,
+    get_custom_items,
+    get_custom_item_by_id,
+    create_custom_item,
+    update_custom_item,
+    delete_custom_item,
 )
 from tests.sample_data import INTERVALS_DATA  # pylint: disable=wrong-import-position
 
@@ -254,3 +259,181 @@ def test_add_or_update_event(monkeypatch):
     assert "Successfully created event:" in result
     assert '"id": "e123"' in result
     assert '"name": "Test Workout"' in result
+
+
+def test_get_custom_items(monkeypatch):
+    """
+    Test get_custom_items returns a formatted string containing custom item details.
+    """
+    custom_items = [
+        {"id": 1, "name": "HR Zones", "type": "ZONES", "description": "Heart rate zones"},
+        {"id": 2, "name": "Power Chart", "type": "FITNESS_CHART", "description": None},
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return custom_items
+
+    # Patch in both api.client and tools modules to ensure it works
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.custom_items.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_custom_items(athlete_id="1"))
+    assert "Custom Items:" in result
+    assert "HR Zones" in result
+    assert "ZONES" in result
+    assert "Power Chart" in result
+
+
+def test_get_custom_item_by_id(monkeypatch):
+    """
+    Test get_custom_item_by_id returns formatted details of a single custom item.
+    """
+    custom_item = {
+        "id": 1,
+        "name": "HR Zones",
+        "type": "ZONES",
+        "description": "Heart rate zones",
+        "visibility": "PRIVATE",
+        "index": 0,
+    }
+
+    async def fake_request(*_args, **_kwargs):
+        return custom_item
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.custom_items.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_custom_item_by_id(item_id=1, athlete_id="1"))
+    assert "Custom Item Details:" in result
+    assert "HR Zones" in result
+    assert "ZONES" in result
+    assert "Heart rate zones" in result
+    assert "PRIVATE" in result
+
+
+def test_create_custom_item(monkeypatch):
+    """
+    Test create_custom_item returns a success message with formatted item details.
+    """
+    created_item = {
+        "id": 10,
+        "name": "New Chart",
+        "type": "FITNESS_CHART",
+        "description": "A new fitness chart",
+        "visibility": "PRIVATE",
+    }
+
+    async def fake_request(*_args, **_kwargs):
+        return created_item
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.custom_items.make_intervals_request", fake_request
+    )
+    result = asyncio.run(
+        create_custom_item(name="New Chart", item_type="FITNESS_CHART", athlete_id="1")
+    )
+    assert "Successfully created custom item:" in result
+    assert "New Chart" in result
+    assert "FITNESS_CHART" in result
+
+
+def test_create_custom_item_with_string_content(monkeypatch):
+    """
+    Test create_custom_item correctly parses content when passed as a JSON string.
+    """
+    captured: dict = {}
+
+    async def fake_request(*_args, **kwargs):
+        captured["data"] = kwargs.get("data")
+        return {
+            "id": 11,
+            "name": "Activity Field",
+            "type": "ACTIVITY_FIELD",
+            "content": {"expression": "icu_training_load"},
+        }
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.custom_items.make_intervals_request", fake_request
+    )
+    result = asyncio.run(
+        create_custom_item(
+            name="Activity Field",
+            item_type="ACTIVITY_FIELD",
+            athlete_id="1",
+            content='{"expression": "icu_training_load"}',  # type: ignore[arg-type]
+        )
+    )
+    assert "Successfully created custom item:" in result
+    # Verify the content was parsed from string to dict before being sent
+    assert isinstance(captured["data"]["content"], dict)
+    assert captured["data"]["content"]["expression"] == "icu_training_load"
+
+
+def test_update_custom_item(monkeypatch):
+    """
+    Test update_custom_item returns a success message with formatted item details.
+    """
+    updated_item = {
+        "id": 1,
+        "name": "Updated Chart",
+        "type": "FITNESS_CHART",
+        "description": "Updated description",
+        "visibility": "PUBLIC",
+    }
+
+    async def fake_request(*_args, **_kwargs):
+        return updated_item
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.custom_items.make_intervals_request", fake_request
+    )
+    result = asyncio.run(
+        update_custom_item(item_id=1, name="Updated Chart", athlete_id="1")
+    )
+    assert "Successfully updated custom item:" in result
+    assert "Updated Chart" in result
+    assert "PUBLIC" in result
+
+
+def test_delete_custom_item(monkeypatch):
+    """
+    Test delete_custom_item returns the API response.
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        return {}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.custom_items.make_intervals_request", fake_request
+    )
+    result = asyncio.run(delete_custom_item(item_id=1, athlete_id="1"))
+    assert "Successfully deleted" in result
+
+
+def test_create_custom_item_with_invalid_json_content(monkeypatch):
+    """
+    Test create_custom_item returns an error message when content is an invalid JSON string.
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        return {}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.custom_items.make_intervals_request", fake_request
+    )
+    result = asyncio.run(
+        create_custom_item(
+            name="Bad Item",
+            item_type="FITNESS_CHART",
+            athlete_id="1",
+            content="not valid json",  # type: ignore[arg-type]
+        )
+    )
+    assert "Error: content must be valid JSON when passed as a string." in result

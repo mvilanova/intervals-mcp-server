@@ -74,6 +74,10 @@ def test_make_intervals_request_bad_json(monkeypatch, caplog):
     """
     monkeypatch.setattr(server, "httpx_client", MockAsyncClient())
 
+    # Ensure the config singleton has an API key, regardless of test execution order
+    from intervals_mcp_server.config import get_config
+    monkeypatch.setattr(get_config(), "api_key", "test")
+
     with caplog.at_level(logging.ERROR):
         result = asyncio.run(server.make_intervals_request("/bad"))
 
