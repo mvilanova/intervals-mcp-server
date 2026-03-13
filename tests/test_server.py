@@ -31,8 +31,9 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_activity_intervals,
     get_activity_streams,
     add_or_update_event,
+    get_athlete_power_curves,
 )
-from tests.sample_data import INTERVALS_DATA  # pylint: disable=wrong-import-position
+from tests.sample_data import INTERVALS_DATA, POWER_CURVES_DATA  # pylint: disable=wrong-import-position
 
 
 def test_get_activities(monkeypatch):
@@ -254,3 +255,126 @@ def test_add_or_update_event(monkeypatch):
     assert "Successfully created event:" in result
     assert '"id": "e123"' in result
     assert '"name": "Test Workout"' in result
+
+
+def test_get_athlete_power_curves(monkeypatch):
+    """
+    Test get_athlete_power_curves returns formatted power curve data with both seasons.
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        return POWER_CURVES_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.power_curves.make_intervals_request", fake_request
+    )
+    result = asyncio.run(
+        get_athlete_power_curves(
+            activity_type="Ride",
+            athlete_id="i1",
+        )
+    )
+    assert "Power Curves (Ride):" in result
+    assert "This season" in result
+    assert "Last season" in result
+    assert "5s:" in result
+    assert "W/kg" in result
+    assert "i100" in result
+
+
+def test_get_athlete_power_curves_custom_durations(monkeypatch):
+    """
+    Test get_athlete_power_curves with custom durations returns only those durations.
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        return POWER_CURVES_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.power_curves.make_intervals_request", fake_request
+    )
+    result = asyncio.run(
+        get_athlete_power_curves(
+            activity_type="Ride",
+            durations=[5, 60],
+            athlete_id="i1",
+        )
+    )
+    assert "5s:" in result
+    assert "1m:" in result
+    # Should not contain durations we didn't request
+    assert "15s:" not in result
+    assert "10m:" not in result
+
+
+def test_get_athlete_power_curves_without_normalised(monkeypatch):
+    """
+    Test get_athlete_power_curves without normalised data excludes W/kg values.
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        return POWER_CURVES_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.power_curves.make_intervals_request", fake_request
+    )
+    result = asyncio.run(
+        get_athlete_power_curves(
+            activity_type="Ride",
+            include_normalised=False,
+            athlete_id="i1",
+        )
+    )
+    assert "W/kg" not in result
+    assert "780W" in result
+
+
+def test_get_athlete_power_curves_date_validation(monkeypatch):
+    """
+    Test get_athlete_power_curves validates date parameters.
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        return POWER_CURVES_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.power_curves.make_intervals_request", fake_request
+    )
+    # Only start_date without end_date should fail
+    result = asyncio.run(
+        get_athlete_power_curves(
+            activity_type="Ride",
+            start_date="2026-01-01",
+            athlete_id="i1",
+        )
+    )
+    assert "Error" in result
+    assert "start_date and end_date must be provided together" in result
+
+
+def test_get_athlete_power_curves_no_curves_selected(monkeypatch):
+    """
+    Test get_athlete_power_curves returns error when no curves selected.
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        return POWER_CURVES_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.power_curves.make_intervals_request", fake_request
+    )
+    result = asyncio.run(
+        get_athlete_power_curves(
+            activity_type="Ride",
+            this_season=False,
+            last_season=False,
+            athlete_id="i1",
+        )
+    )
+    assert "Error" in result
+    assert "At least one curve must be selected" in result

@@ -462,3 +462,76 @@ Cadence: Avg {group.get("average_cadence", 0)}, Max {group.get("max_cadence", 0)
 """
 
     return result
+
+
+def _format_duration_label(secs: int) -> str:
+    """Format seconds into a concise human-readable label (e.g. 5s, 2m, 1h)."""
+    if secs < 60:
+        return f"{secs}s"
+    if secs < 3600:
+        mins = secs // 60
+        remainder = secs % 60
+        if remainder:
+            return f"{mins}m{remainder}s"
+        return f"{mins}m"
+    hours = secs // 3600
+    remainder = (secs % 3600) // 60
+    if remainder:
+        return f"{hours}h{remainder}m"
+    return f"{hours}h"
+
+
+def format_power_curves(
+    curves: list[dict[str, Any]],
+    activity_type: str,
+    include_normalised: bool,
+) -> str:
+    """Format extracted power curve data into a concise readable string.
+
+    Args:
+        curves: List of extracted curve data dicts with id, label, data_points.
+        activity_type: The activity type used for the query.
+        include_normalised: Whether W/kg data is included.
+
+    Returns:
+        A formatted string representation of the power curves.
+    """
+    lines: list[str] = [f"Power Curves ({activity_type}):", ""]
+
+    for curve in curves:
+        label = curve.get("label", curve.get("id", "Unknown"))
+        start = curve.get("start", "")
+        end = curve.get("end", "")
+        date_range = ""
+        if start and end:
+            # Trim time portion if present
+            start_short = start[:10] if len(start) > 10 else start
+            end_short = end[:10] if len(end) > 10 else end
+            date_range = f" ({start_short} to {end_short})"
+
+        lines.append(f"{label}{date_range}:")
+
+        data_points = curve.get("data_points", [])
+        if not data_points:
+            lines.append("  No data available for requested durations.")
+            lines.append("")
+            continue
+
+        for point in data_points:
+            dur_label = _format_duration_label(point["secs"])
+            watts = point.get("watts")
+            aid = point.get("activity_id", "")
+            parts = [f"  {dur_label}: {watts}W"]
+            if include_normalised and "watts_per_kg" in point:
+                parts.append(f"{point['watts_per_kg']}W/kg")
+                wkg_aid = point.get("wkg_activity_id", "")
+                if wkg_aid and wkg_aid != aid:
+                    parts.append(f"[{aid}|wkg:{wkg_aid}]")
+                else:
+                    parts.append(f"[{aid}]")
+            else:
+                parts.append(f"[{aid}]")
+            lines.append(" ".join(parts))
+        lines.append("")
+
+    return "\n".join(lines)
