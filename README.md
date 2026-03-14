@@ -69,6 +69,7 @@ ATHLETE_ID=your_athlete_id_here
 #### Finding your Athlete ID
 
 Your athlete ID is typically visible in the URL when you're logged into Intervals.icu. It looks like:
+
 - `https://intervals.icu/athlete/i12345/...` where `i12345` is your athlete ID
 
 ## Updating
@@ -182,9 +183,10 @@ ChatGPT’s beta MCP connectors can also talk to this server over the SSE transp
    The startup log prints the full URLs (for example `http://127.0.0.1:8765/sse`). ChatGPT needs that public URL, so forward the port with a tool such as `ngrok http 8765` if you are not exposing the server directly.
 
 2. In ChatGPT, open **Settings → Features → Custom MCP Connectors** and click **Add**. Fill in:
+
    - **Name**: `Intervals.icu`
    - **MCP Server URL**: `https://<your-public-host>/sse`
-   - **Authentication**: leave as *No authentication* unless you have protected your tunnel.
+   - **Authentication**: leave as _No authentication_ unless you have protected your tunnel.
 
    You can reuse the same `ngrok http 8765` tunnel URL here; just ensure it forwards to the host/port you exported above.
 
@@ -205,6 +207,36 @@ To start the server manually (useful when developing or testing), run:
 
 ```bash
 mcp run src/intervals_mcp_server/server.py
+```
+
+#### Enabling debug logging
+
+To capture server logs for debugging, wrap the command in a bash shell and redirect stderr to a file. Modify your `claude_desktop_config.json` like this:
+
+```json
+{
+  "mcpServers": {
+    "Intervals.icu": {
+      "command": "/bin/bash",
+      "args": [
+        "-c",
+        "/Users/<USERNAME>/.local/bin/uv run --with 'mcp[cli]' --with-editable /path/to/intervals-mcp-server mcp run /path/to/intervals-mcp-server/src/intervals_mcp_server/server.py 2>> /path/to/intervals-mcp-server/mcp-server.log"
+      ],
+      "env": {
+        "INTERVALS_API_BASE_URL": "https://intervals.icu/api/v1",
+        "ATHLETE_ID": "<YOUR_ATHLETE_ID>",
+        "API_KEY": "<YOUR_API_KEY>",
+        "LOG_LEVEL": "INFO"
+      }
+    }
+  }
+}
+```
+
+Then tail the log file to see output in real-time:
+
+```bash
+tail -f /path/to/intervals-mcp-server/mcp-server.log
 ```
 
 ## License

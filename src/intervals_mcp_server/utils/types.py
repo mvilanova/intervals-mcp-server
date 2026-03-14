@@ -377,6 +377,10 @@ class Step:  # pylint: disable=too-many-instance-attributes
             return f"{float_to_str(self.distance)}mtr"
         return f"{float_to_str(self.distance / 1000)}km"
 
+    def __str__(self) -> str:
+        """Convert Step to string representation."""
+        return self._to_str()
+
     def _to_str(self, nested: bool = False) -> str:  # pylint: disable=too-many-branches
         """Convert Step to string representation.
 
@@ -422,14 +426,13 @@ class Step:  # pylint: disable=too-many-instance-attributes
             val += f"{self.text} "
         if self.reps is not None and self.steps is not None:
             for step in self.steps:
+                # Using _to_str instead of __str__ because we need the nested=True arg;
+                # __str__ can't accept extra parameters.
                 val += "\n" + step._to_str(nested=True)
             val += "\n"
         elif not nested and (self.warmup or self.cooldown):
             val += "\n"
         return val
-
-    def __str__(self) -> str:
-        return self._to_str()
 
 
 @dataclass

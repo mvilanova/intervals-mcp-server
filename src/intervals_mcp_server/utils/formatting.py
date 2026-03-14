@@ -4,6 +4,7 @@ Formatting utilities for Intervals.icu MCP Server
 This module contains formatting functions for handling data from the Intervals.icu API.
 """
 
+import json
 from datetime import datetime
 from typing import Any
 
@@ -392,6 +393,26 @@ Date: {created}
 Type: {message.get("type", "TEXT")}
 Content: {message.get("content", "")}"""
 
+
+def format_custom_item_details(item: dict[str, Any]) -> str:
+    """Format detailed custom item information into a readable string."""
+    lines = ["Custom Item Details:", ""]
+    lines.append(f"ID: {item.get('id', 'N/A')}")
+    lines.append(f"Name: {item.get('name', 'N/A')}")
+    lines.append(f"Type: {item.get('type', 'N/A')}")
+
+    if item.get("description"):
+        lines.append(f"Description: {item['description']}")
+    if item.get("visibility"):
+        lines.append(f"Visibility: {item['visibility']}")
+    if item.get("index") is not None:
+        lines.append(f"Index: {item['index']}")
+    if item.get("hide_script") is not None:
+        lines.append(f"Hide Script: {item['hide_script']}")
+    if item.get("content"):
+        lines.append(f"Content: {json.dumps(item['content'], indent=2)}")
+
+    return "\n".join(lines)
 
 
 def format_intervals(intervals_data: dict[str, Any]) -> str:
