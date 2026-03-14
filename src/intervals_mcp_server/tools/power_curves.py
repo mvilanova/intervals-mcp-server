@@ -4,6 +4,7 @@ Power curve MCP tools for Intervals.icu.
 This module contains tools for retrieving athlete power curve data.
 """
 
+import json
 from datetime import datetime
 from typing import Any
 
@@ -163,7 +164,9 @@ async def get_athlete_power_curves(
         "includeRanks": False,
     }
     if filter_indoors:
-        params["sub"] = "Outdoor"
+        params["filters"] = json.dumps(
+            [{"field_id": "indoor", "value": "indoor", "id": 1}]
+        )
 
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/power-curves",
