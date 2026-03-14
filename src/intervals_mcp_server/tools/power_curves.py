@@ -17,6 +17,7 @@ from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
 config = get_config()
 
+# 5s, 15s, 30s, 1min, 2min, 5min, 10min, 20min, 60min
 DEFAULT_DURATIONS = [5, 15, 30, 60, 120, 300, 600, 1200, 3600]
 
 
