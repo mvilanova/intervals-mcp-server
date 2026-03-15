@@ -70,6 +70,36 @@ def resolve_athlete_id(
     return athlete_id_to_use, None
 
 
+def resolve_activity_type(name: str | None, activity_type: str | None) -> str:
+    """Determine the activity type based on the name and provided value.
+
+    If an explicit *activity_type* is given it is returned as-is.  Otherwise the
+    *name* is searched for common keywords to infer the type, defaulting to
+    ``"Ride"`` when no match is found.
+
+    Args:
+        name: An optional activity/event name to infer the type from.
+        activity_type: An explicitly provided activity type.
+
+    Returns:
+        The resolved activity type string.
+    """
+    if activity_type:
+        return activity_type
+    name_lower = name.lower() if name else ""
+    mapping = [
+        ("Ride", ["bike", "cycle", "cycling", "ride"]),
+        ("Run", ["run", "running", "jog", "jogging"]),
+        ("Swim", ["swim", "swimming", "pool"]),
+        ("Walk", ["walk", "walking", "hike", "hiking"]),
+        ("Row", ["row", "rowing"]),
+    ]
+    for workout, keywords in mapping:
+        if any(keyword in name_lower for keyword in keywords):
+            return workout
+    return "Ride"  # Default
+
+
 def resolve_date_params(
     start_date: str | None,
     end_date: str | None,

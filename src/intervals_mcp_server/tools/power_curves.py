@@ -11,7 +11,7 @@ from typing import Any
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import format_power_curves
-from intervals_mcp_server.utils.validation import resolve_athlete_id
+from intervals_mcp_server.utils.validation import resolve_activity_type, resolve_athlete_id
 
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
@@ -149,6 +149,8 @@ async def get_athlete_power_curves(
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
+
+    activity_type = resolve_activity_type(None, activity_type)
 
     date_error = _validate_dates(start_date, end_date)
     if date_error:
