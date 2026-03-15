@@ -150,7 +150,7 @@ async def get_athlete_power_curves(
     if error_msg:
         return error_msg
 
-    activity_type = resolve_activity_type(None, activity_type)
+    activity_type = resolve_activity_type(activity_type)
 
     if indoor_outdoor and indoor_outdoor not in ("indoor", "outdoor"):
         return "Error: indoor_outdoor must be 'indoor', 'outdoor', or omitted."

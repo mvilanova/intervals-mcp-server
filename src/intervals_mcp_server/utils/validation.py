@@ -70,7 +70,7 @@ def resolve_athlete_id(
     return athlete_id_to_use, None
 
 
-def resolve_activity_type(name: str | None, activity_type: str | None) -> str:
+def resolve_activity_type(name: str | None, activity_type: str | None = None) -> str:
     """Determine the activity type based on the name and provided value.
 
     If an explicit *activity_type* is given it is returned as-is.  Otherwise the
