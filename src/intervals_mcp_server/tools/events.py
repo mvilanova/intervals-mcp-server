@@ -82,7 +82,7 @@ def _handle_event_response(
 
 async def _delete_events_list(
     athlete_id: str, api_key: str | None, events: list[dict[str, Any]]
-) -> list[str]:
+) -> list[int | str | None]:
     """Delete a list of events and return IDs of failed deletions.
 
     Args:
