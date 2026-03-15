@@ -122,7 +122,7 @@ def _extract_curve_data(
 async def get_athlete_power_curves(
     activity_type: str,
     durations: list[int] = DEFAULT_DURATIONS,
-    filter_indoors: bool = False,
+    indoor_outdoor: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
     this_season: bool = True,
@@ -138,7 +138,7 @@ async def get_athlete_power_curves(
     Args:
         activity_type: Activity type (e.g. "Ride", "Run", "VirtualRide")
         durations: Durations in seconds to include. Default is [5, 15, 30, 60, 120, 300, 600, 1200, 3600]
-        filter_indoors: If True, exclude indoor activities from the curve
+        indoor_outdoor: Filter by location — "indoor" or "outdoor". Omit for no filtering.
         start_date: Start date (YYYY-MM-DD) for custom date range curve. Must be used with end_date.
         end_date: End date (YYYY-MM-DD) for custom date range curve. Must be used with start_date.
         this_season: Include this season's curve (default True)
@@ -151,6 +151,9 @@ async def get_athlete_power_curves(
         return error_msg
 
     activity_type = resolve_activity_type(None, activity_type)
+
+    if indoor_outdoor and indoor_outdoor not in ("indoor", "outdoor"):
+        return "Error: indoor_outdoor must be 'indoor', 'outdoor', or omitted."
 
     date_error = _validate_dates(start_date, end_date)
     if date_error:
@@ -165,9 +168,9 @@ async def get_athlete_power_curves(
         "type": activity_type,
         "includeRanks": False,
     }
-    if filter_indoors:
+    if indoor_outdoor:
         params["filters"] = json.dumps(
-            [{"field_id": "indoor", "value": "indoor", "id": 1}]
+            [{"field_id": "indoor", "value": indoor_outdoor, "id": 1}]
         )
 
     result = await make_intervals_request(
