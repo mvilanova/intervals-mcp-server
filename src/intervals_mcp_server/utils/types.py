@@ -428,7 +428,7 @@ class Step:  # pylint: disable=too-many-instance-attributes
             for step in self.steps:
                 # Using _to_str instead of __str__ because we need the nested=True arg;
                 # __str__ can't accept extra parameters.
-                val += "\n" + step._to_str(nested=True)
+                val += "\n" + step._to_str(nested=True)  # pylint: disable=protected-access
             val += "\n"
         elif not nested and (self.warmup or self.cooldown):
             val += "\n"
