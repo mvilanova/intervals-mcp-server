@@ -18,7 +18,6 @@ config = get_config()
 @mcp.tool()
 async def get_wellness_data(
     athlete_id: str | None = None,
-    api_key: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> str:
@@ -26,7 +25,6 @@ async def get_wellness_data(
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         start_date: Start date in YYYY-MM-DD format (optional, defaults to 30 days ago)
         end_date: End date in YYYY-MM-DD format (optional, defaults to today)
     """
@@ -41,7 +39,7 @@ async def get_wellness_data(
     params = {"oldest": start_date, "newest": end_date}
 
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/wellness", api_key=api_key, params=params
+        url=f"/athlete/{athlete_id_to_use}/wellness", params=params
     )
 
     if isinstance(result, dict) and "error" in result:

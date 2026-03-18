@@ -21,20 +21,18 @@ config = get_config()
 @mcp.tool()
 async def get_custom_items(
     athlete_id: str | None = None,
-    api_key: str | None = None,
 ) -> str:
     """Get custom items (charts, custom fields, zones, etc.) for an athlete from Intervals.icu
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
 
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/custom-item", api_key=api_key
+        url=f"/athlete/{athlete_id_to_use}/custom-item"
     )
 
     if isinstance(result, dict) and "error" in result:
@@ -59,21 +57,19 @@ async def get_custom_items(
 async def get_custom_item_by_id(
     item_id: int,
     athlete_id: str | None = None,
-    api_key: str | None = None,
 ) -> str:
     """Get detailed information for a specific custom item from Intervals.icu
 
     Args:
         item_id: The custom item ID
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
 
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/custom-item/{item_id}", api_key=api_key
+        url=f"/athlete/{athlete_id_to_use}/custom-item/{item_id}"
     )
 
     if isinstance(result, dict) and "error" in result:
@@ -90,7 +86,6 @@ async def create_custom_item(
     name: str,
     item_type: str,
     athlete_id: str | None = None,
-    api_key: str | None = None,
     description: str | None = None,
     content: dict[str, Any] | None = None,
     visibility: str | None = None,
@@ -101,7 +96,6 @@ async def create_custom_item(
         name: Name of the custom item
         item_type: Type of custom item (e.g. FITNESS_CHART, TRACE_CHART, INPUT_FIELD, ACTIVITY_FIELD, INTERVAL_FIELD, ACTIVITY_STREAM, ACTIVITY_CHART, ACTIVITY_HISTOGRAM, ACTIVITY_HEATMAP, ACTIVITY_MAP, ACTIVITY_PANEL, ZONES)
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         description: Description of the custom item (optional)
         content: Configuration content for the custom item as a dict (optional). Important enum values:
             - "type" field for INPUT_FIELD/ACTIVITY_FIELD: must be "numeric", "text", or "select" (NOT "number")
@@ -127,7 +121,6 @@ async def create_custom_item(
 
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/custom-item",
-        api_key=api_key,
         data=data,
         method="POST",
     )
@@ -145,7 +138,6 @@ async def create_custom_item(
 async def update_custom_item(
     item_id: int,
     athlete_id: str | None = None,
-    api_key: str | None = None,
     name: str | None = None,
     item_type: str | None = None,
     description: str | None = None,
@@ -157,7 +149,6 @@ async def update_custom_item(
     Args:
         item_id: The custom item ID to update
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         name: New name for the custom item (optional)
         item_type: New type for the custom item (optional)
         description: New description for the custom item (optional)
@@ -189,7 +180,6 @@ async def update_custom_item(
 
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/custom-item/{item_id}",
-        api_key=api_key,
         data=data,
         method="PUT",
     )
@@ -207,14 +197,12 @@ async def update_custom_item(
 async def delete_custom_item(
     item_id: int,
     athlete_id: str | None = None,
-    api_key: str | None = None,
 ) -> str:
     """Delete a custom item for an athlete from Intervals.icu
 
     Args:
         item_id: The custom item ID to delete
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
@@ -222,7 +210,6 @@ async def delete_custom_item(
 
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/custom-item/{item_id}",
-        api_key=api_key,
         method="DELETE",
     )
 
