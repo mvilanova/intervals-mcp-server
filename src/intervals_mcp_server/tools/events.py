@@ -5,7 +5,7 @@ This module contains tools for retrieving, creating, updating, and deleting athl
 """
 
 import json
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
@@ -78,6 +78,28 @@ def _handle_event_response(
     if isinstance(result, dict):
         return f"Successfully {action} event: {json.dumps(result, indent=2)}"
     return f"Event {action} successfully at {start_date}"
+
+
+def _extract_event_date(event: dict[str, Any]) -> date | None:
+    """Extract the event date from Intervals.icu event payloads."""
+    raw_date = event.get("start_date_local") or event.get("date")
+    if not isinstance(raw_date, str) or len(raw_date) < 10:
+        return None
+
+    try:
+        return date.fromisoformat(raw_date[:10])
+    except ValueError:
+        return None
+
+
+def _ensure_event_is_future(event: dict[str, Any]) -> str | None:
+    """Reject deletion unless the event is scheduled strictly after today."""
+    event_date = _extract_event_date(event)
+    if event_date is None:
+        return "Error deleting event: unable to determine the event date."
+    if event_date <= datetime.now().date():
+        return "Error deleting event: only future events can be deleted."
+    return None
 
 
 async def _delete_events_list(
@@ -216,6 +238,16 @@ async def delete_event(
         return error_msg
     if not event_id:
         return "Error: No event ID provided."
+    event_result = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/event/{event_id}", api_key=api_key
+    )
+    if isinstance(event_result, dict) and "error" in event_result:
+        return f"Error deleting event: {event_result.get('message')}"
+    if not isinstance(event_result, dict):
+        return f"Error deleting event: unable to load event {event_id}."
+    protection_error = _ensure_event_is_future(event_result)
+    if protection_error:
+        return protection_error
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key, method="DELETE"
     )
@@ -273,9 +305,24 @@ async def delete_events_by_date_range(
     if error_msg:
         return error_msg
 
-    failed_events = await _delete_events_list(athlete_id_to_use, api_key, events)
-    deleted_count = len(events) - len(failed_events)
-    return f"Deleted {deleted_count} events. Failed to delete {len(failed_events)} events: {failed_events}"
+    future_events = []
+    skipped_events = []
+    for event in events:
+        if not isinstance(event, dict):
+            skipped_events.append("unknown")
+            continue
+        if _ensure_event_is_future(event) is None:
+            future_events.append(event)
+        else:
+            skipped_events.append(event.get("id"))
+
+    failed_events = await _delete_events_list(athlete_id_to_use, api_key, future_events)
+    deleted_count = len(future_events) - len(failed_events)
+    return (
+        f"Deleted {deleted_count} future events. "
+        f"Skipped {len(skipped_events)} non-future events: {skipped_events}. "
+        f"Failed to delete {len(failed_events)} events: {failed_events}"
+    )
 
 
 @mcp.tool()

@@ -27,6 +27,8 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_activity_details,
     get_events,
     get_event_by_id,
+    delete_event,
+    delete_events_by_date_range,
     get_wellness_data,
     get_activity_intervals,
     get_activity_streams,
@@ -259,6 +261,91 @@ def test_add_or_update_event(monkeypatch):
     assert "Successfully created event:" in result
     assert '"id": "e123"' in result
     assert '"name": "Test Workout"' in result
+
+
+def test_delete_event_rejects_past_event(monkeypatch):
+    """
+    Test delete_event refuses to delete events that are not in the future.
+    """
+    calls: list[tuple[str, str]] = []
+
+    async def fake_request(*_args, **kwargs):
+        calls.append((kwargs.get("method", "GET"), kwargs["url"]))
+        if kwargs["url"].endswith("/event/e1"):
+            return {
+                "id": "e1",
+                "date": "2026-03-18",
+                "name": "Completed Workout",
+            }
+        raise AssertionError("Delete request should not be issued for non-future events")
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+
+    result = asyncio.run(delete_event(event_id="e1", athlete_id="1"))
+
+    assert result == "Error deleting event: only future events can be deleted."
+    assert calls == [("GET", "/athlete/1/event/e1")]
+
+
+def test_delete_event_allows_future_event(monkeypatch):
+    """
+    Test delete_event allows deletion for events scheduled after today.
+    """
+
+    async def fake_request(*_args, **kwargs):
+        if kwargs["url"].endswith("/event/e2"):
+            return {
+                "id": "e2",
+                "date": "2026-03-19",
+                "name": "Planned Workout",
+            }
+        if kwargs["url"].endswith("/events/e2"):
+            return {}
+        raise AssertionError(f"Unexpected request: {kwargs}")
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+
+    result = asyncio.run(delete_event(event_id="e2", athlete_id="1"))
+
+    assert result == "{}"
+
+
+def test_delete_events_by_date_range_skips_non_future_events(monkeypatch):
+    """
+    Test delete_events_by_date_range only deletes future events.
+    """
+    deleted_urls: list[str] = []
+
+    async def fake_request(*_args, **kwargs):
+        url = kwargs["url"]
+        if url.endswith("/events") and kwargs.get("method", "GET") == "GET":
+            return [
+                {"id": "past", "date": "2026-03-17"},
+                {"id": "today", "date": "2026-03-18"},
+                {"id": "future", "date": "2026-03-19"},
+            ]
+        if url.endswith("/events/future") and kwargs.get("method") == "DELETE":
+            deleted_urls.append(url)
+            return {}
+        raise AssertionError(f"Unexpected request: {kwargs}")
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+
+    result = asyncio.run(
+        delete_events_by_date_range(
+            start_date="2026-03-17",
+            end_date="2026-03-19",
+            athlete_id="1",
+        )
+    )
+
+    assert deleted_urls == ["/athlete/1/events/future"]
+    assert "Deleted 1 future events." in result
+    assert "Skipped 2 non-future events: ['past', 'today']." in result
+    assert "Failed to delete 0 events: []" in result
 
 
 def test_get_custom_items(monkeypatch):
