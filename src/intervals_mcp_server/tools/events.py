@@ -103,13 +103,12 @@ def _ensure_event_is_future(event: dict[str, Any]) -> str | None:
 
 
 async def _delete_events_list(
-    athlete_id: str, api_key: str | None, events: list[dict[str, Any]]
+    athlete_id: str, events: list[dict[str, Any]]
 ) -> list[int | str | None]:
     """Delete a list of events and return IDs of failed deletions.
 
     Args:
         athlete_id: The athlete ID.
-        api_key: Optional API key.
         events: List of event dictionaries to delete.
 
     Returns:
@@ -119,7 +118,6 @@ async def _delete_events_list(
     for event in events:
         result = await make_intervals_request(
             url=f"/athlete/{athlete_id}/events/{event.get('id')}",
-            api_key=api_key,
             method="DELETE",
         )
         if isinstance(result, dict) and "error" in result:
@@ -130,7 +128,6 @@ async def _delete_events_list(
 @mcp.tool()
 async def get_events(
     athlete_id: str | None = None,
-    api_key: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> str:
@@ -138,7 +135,6 @@ async def get_events(
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
         end_date: End date in YYYY-MM-DD format (optional, defaults to 30 days from today)
     """
@@ -157,7 +153,7 @@ async def get_events(
     params = {"oldest": start_date, "newest": end_date}
 
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/events", api_key=api_key, params=params
+        url=f"/athlete/{athlete_id_to_use}/events", params=params
     )
 
     if isinstance(result, dict) and "error" in result:
@@ -188,14 +184,12 @@ async def get_events(
 async def get_event_by_id(
     event_id: str,
     athlete_id: str | None = None,
-    api_key: str | None = None,
 ) -> str:
     """Get detailed information for a specific event from Intervals.icu
 
     Args:
         event_id: The Intervals.icu event ID
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
     # Resolve athlete ID
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
@@ -204,7 +198,7 @@ async def get_event_by_id(
 
     # Call the Intervals.icu API
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/event/{event_id}", api_key=api_key
+        url=f"/athlete/{athlete_id_to_use}/event/{event_id}"
     )
 
     if isinstance(result, dict) and "error" in result:
@@ -225,12 +219,10 @@ async def get_event_by_id(
 async def delete_event(
     event_id: str,
     athlete_id: str | None = None,
-    api_key: str | None = None,
 ) -> str:
     """Delete event for an athlete from Intervals.icu
     Args:
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         event_id: The Intervals.icu event ID
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
@@ -238,9 +230,7 @@ async def delete_event(
         return error_msg
     if not event_id:
         return "Error: No event ID provided."
-    event_result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/event/{event_id}", api_key=api_key
-    )
+    event_result = await make_intervals_request(url=f"/athlete/{athlete_id_to_use}/event/{event_id}")
     if isinstance(event_result, dict) and "error" in event_result:
         return f"Error deleting event: {event_result.get('message')}"
     if not isinstance(event_result, dict):
@@ -249,7 +239,7 @@ async def delete_event(
     if protection_error:
         return protection_error
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key, method="DELETE"
+        url=f"/athlete/{athlete_id_to_use}/events/{event_id}", method="DELETE"
     )
     if isinstance(result, dict) and "error" in result:
         return f"Error deleting event: {result.get('message')}"
@@ -257,13 +247,12 @@ async def delete_event(
 
 
 async def _fetch_events_for_deletion(
-    athlete_id: str, api_key: str | None, start_date: str, end_date: str
+    athlete_id: str, start_date: str, end_date: str
 ) -> tuple[list[dict[str, Any]], str | None]:
     """Fetch events for deletion and return them with any error message.
 
     Args:
         athlete_id: The athlete ID.
-        api_key: Optional API key.
         start_date: Start date in YYYY-MM-DD format.
         end_date: End date in YYYY-MM-DD format.
 
@@ -272,7 +261,7 @@ async def _fetch_events_for_deletion(
     """
     params = {"oldest": validate_date(start_date), "newest": validate_date(end_date)}
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id}/events", api_key=api_key, params=params
+        url=f"/athlete/{athlete_id}/events", params=params
     )
     if isinstance(result, dict) and "error" in result:
         return [], f"Error deleting events: {result.get('message')}"
@@ -285,13 +274,11 @@ async def delete_events_by_date_range(
     start_date: str,
     end_date: str,
     athlete_id: str | None = None,
-    api_key: str | None = None,
 ) -> str:
     """Delete events for an athlete from Intervals.icu in the specified date range.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         start_date: Start date in YYYY-MM-DD format
         end_date: End date in YYYY-MM-DD format
     """
@@ -300,7 +287,7 @@ async def delete_events_by_date_range(
         return error_msg
 
     events, error_msg = await _fetch_events_for_deletion(
-        athlete_id_to_use, api_key, start_date, end_date
+        athlete_id_to_use, start_date, end_date
     )
     if error_msg:
         return error_msg
@@ -316,7 +303,7 @@ async def delete_events_by_date_range(
         else:
             skipped_events.append(event.get("id"))
 
-    failed_events = await _delete_events_list(athlete_id_to_use, api_key, future_events)
+    failed_events = await _delete_events_list(athlete_id_to_use, future_events)
     deleted_count = len(future_events) - len(failed_events)
     return (
         f"Deleted {deleted_count} future events. "
@@ -330,7 +317,6 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
     workout_type: str,
     name: str,
     athlete_id: str | None = None,
-    api_key: str | None = None,
     event_id: str | None = None,
     start_date: str | None = None,
     workout_doc: WorkoutDoc | None = None,
@@ -344,7 +330,6 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         event_id: The Intervals.icu event ID (optional, will use event_id from .env if not provided)
         start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
         name: Name of the activity
@@ -414,7 +399,7 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
             name, workout_type, start_date, workout_doc, moving_time, distance
         )
         return await _create_or_update_event_request(
-            athlete_id_to_use, api_key, event_data, start_date, event_id
+            athlete_id_to_use, event_data, start_date, event_id
         )
     except ValueError as e:
         return f"Error: {e}"
@@ -422,7 +407,6 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
 
 async def _create_or_update_event_request(
     athlete_id: str,
-    api_key: str | None,
     event_data: dict[str, Any],
     start_date: str,
     event_id: str | None,
@@ -431,7 +415,6 @@ async def _create_or_update_event_request(
 
     Args:
         athlete_id: The athlete ID.
-        api_key: Optional API key.
         event_data: Prepared event data dictionary.
         start_date: Start date string for response formatting.
         event_id: Optional event ID for updates.
@@ -444,7 +427,6 @@ async def _create_or_update_event_request(
         url += f"/{event_id}"
     result = await make_intervals_request(
         url=url,
-        api_key=api_key,
         data=event_data,
         method="PUT" if event_id else "POST",
     )

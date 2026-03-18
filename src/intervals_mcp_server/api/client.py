@@ -101,7 +101,6 @@ def _get_error_message(error_code: int, error_text: str) -> str:
 
 def _prepare_request_config(
     url: str,
-    api_key: str | None,
     method: str,
 ) -> tuple[str, httpx.BasicAuth, dict[str, str], str | None]:
     """Prepare request configuration including headers, auth, and URL.
@@ -116,8 +115,7 @@ def _prepare_request_config(
     if method in ["POST", "PUT"]:
         headers["Content-Type"] = "application/json"
 
-    # Use provided api_key or fall back to global API_KEY
-    key_to_use = api_key if api_key is not None else config.api_key
+    key_to_use = config.api_key
     if not key_to_use:
         logger.error("No API key provided for request to: %s", url)
         return (
@@ -151,7 +149,6 @@ def _parse_response(
 
 async def make_intervals_request(
     url: str,
-    api_key: str | None = None,
     params: dict[str, Any] | None = None,
     method: str = "GET",
     data: dict[str, Any] | None = None,
@@ -161,7 +158,6 @@ async def make_intervals_request(
 
     Args:
         url (str): The API endpoint path (e.g., '/athlete/{id}/activities').
-        api_key (str | None): Optional API key to use for authentication. Defaults to the global API_KEY.
         params (dict[str, Any] | None): Optional query parameters for the request.
         method (str): HTTP method to use (GET, POST, etc.). Defaults to GET.
         data (dict[str, Any] | None): Optional data to send in the request body.
@@ -170,7 +166,7 @@ async def make_intervals_request(
         dict[str, Any] | list[dict[str, Any]]: The parsed JSON response from the API, or an error dict.
     """
     # Prepare request configuration
-    full_url, auth, headers, error_msg = _prepare_request_config(url, api_key, method)
+    full_url, auth, headers, error_msg = _prepare_request_config(url, method)
     if error_msg:
         return {"error": True, "message": error_msg}
 
