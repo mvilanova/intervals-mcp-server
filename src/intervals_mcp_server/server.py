@@ -26,6 +26,7 @@ Usage:
         - get_events
         - get_event_by_id
         - get_wellness_data
+        - get_full_wellness_data
         - get_activity_intervals
         - add_events
 
@@ -595,6 +596,50 @@ async def get_wellness_data(
                 wellness_summary += format_wellness_entry(entry) + "\n\n"
 
     return wellness_summary
+
+
+@mcp.tool()
+async def get_full_wellness_data(
+    athlete_id: str | None = None,
+    api_key: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> str:
+    """Get full raw wellness data from Intervals.icu without any filtering or formatting.
+
+    Returns the complete JSON response from the API, including all standard fields
+    (weight, HRV, sleep, vitals, subjective scores, etc.) and any custom wellness
+    fields configured by the user. Useful when you need access to fields not
+    included in the formatted get_wellness_data output.
+
+    Args:
+        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
+        end_date: End date in YYYY-MM-DD format (optional, defaults to today)
+    """
+    athlete_id_to_use = athlete_id if athlete_id is not None else ATHLETE_ID
+    if not athlete_id_to_use:
+        return "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables."
+
+    if not start_date:
+        start_date = datetime.now().strftime("%Y-%m-%d")
+    if not end_date:
+        end_date = datetime.now().strftime("%Y-%m-%d")
+
+    params = {"oldest": start_date, "newest": end_date}
+
+    result = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/wellness", api_key=api_key, params=params
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        return f"Error fetching wellness data: {result.get('message')}"
+
+    if not result:
+        return f"No wellness data found for athlete {athlete_id_to_use} in the specified date range."
+
+    return json.dumps(result, indent=2)
 
 
 def _resolve_workout_type(name: str | None, workout_type: str | None) -> str:
