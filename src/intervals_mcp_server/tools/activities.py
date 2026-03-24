@@ -38,12 +38,32 @@ def _parse_activities_from_result(result: Any) -> list[dict[str, Any]]:
 
 
 def _filter_named_activities(activities: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Filter out unnamed activities from the list."""
-    return [
-        activity
-        for activity in activities
-        if activity.get("name") and activity.get("name") != "Unnamed"
-    ]
+    """Filter out unnamed activities from the list.
+
+    Keeps activities that either have a real name, or have a known activity type
+    (e.g. Ride, Run, VirtualRide) even if they were not explicitly named by the user.
+    This prevents real cycling or running activities from being dropped just because
+    the user left the default "Unnamed" label in Garmin/Strava.
+    """
+    UNKNOWN_TYPES = {"", "unknown", None}
+
+    def _is_valid_activity(activity: dict[str, Any]) -> bool:
+        name = activity.get("name", "")
+        activity_type = activity.get("type", "")
+
+        # Accept activities with a meaningful custom name
+        if name and name != "Unnamed":
+            return True
+
+        # Also accept activities that have a known type, even if their name is
+        # "Unnamed" or empty – these are real workouts that were just never
+        # renamed (common for auto-synced Garmin activities).
+        if str(activity_type).lower() not in UNKNOWN_TYPES and activity_type != "Unknown":
+            return True
+
+        return False
+
+    return [activity for activity in activities if _is_valid_activity(activity)]
 
 
 async def _fetch_more_activities(

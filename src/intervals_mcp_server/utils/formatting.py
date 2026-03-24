@@ -31,8 +31,12 @@ def format_activity_summary(activity: dict[str, Any]) -> str:
     if isinstance(feel, int):
         feel = f"{feel}/5"
 
+    raw_name = activity.get("name", "")
+    activity_type = activity.get("type", "")
+    display_name = raw_name if (raw_name and raw_name != "Unnamed") else (activity_type or "Unnamed")
+
     return f"""
-Activity: {activity.get("name", "Unnamed")}
+Activity: {display_name}
 ID: {activity.get("id", "N/A")}
 Type: {activity.get("type", "Unknown")}
 Date: {start_time}
