@@ -34,6 +34,7 @@ Usage:
 """
 
 import logging
+import os
 
 from mcp.server.fastmcp import FastMCP  # pylint: disable=import-error
 
@@ -61,7 +62,7 @@ logger = logging.getLogger("intervals_icu_mcp_server")
 config = get_config()
 
 # Initialize FastMCP server with custom lifespan
-mcp = FastMCP("intervals-icu", lifespan=setup_api_client)
+mcp = FastMCP("intervals-icu", lifespan=setup_api_client, host=os.getenv("FASTMCP_HOST", "127.0.0.1"))
 
 # Set the shared mcp instance for tool modules to use (breaks cyclic imports)
 from intervals_mcp_server import mcp_instance  # pylint: disable=wrong-import-position  # noqa: E402
