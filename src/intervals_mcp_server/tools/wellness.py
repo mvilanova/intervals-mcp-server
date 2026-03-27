@@ -4,8 +4,6 @@ Wellness-related MCP tools for Intervals.icu.
 This module contains tools for retrieving athlete wellness data.
 """
 
-import json
-
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import format_wellness_entry
@@ -79,12 +77,11 @@ async def get_full_wellness_data(
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> str:
-    """Get full raw wellness data from Intervals.icu without any filtering or formatting.
+    """Get full wellness data from Intervals.icu including all fields for the specified date range.
 
-    Returns the complete JSON response from the API, including all standard fields
-    (weight, HRV, sleep, vitals, subjective scores, etc.) and any custom wellness
-    fields configured by the user. Useful when you need access to fields not
-    included in the formatted get_wellness_data output.
+    Returns all standard fields (weight, HRV, sleep, vitals, subjective scores, etc.)
+    and any custom wellness fields configured by the user, without field-level filtering.
+    Useful when you need access to fields not included in the formatted get_wellness_data output.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
@@ -110,4 +107,16 @@ async def get_full_wellness_data(
     if not result:
         return f"No wellness data found for athlete {athlete_id_to_use} in the specified date range."
 
-    return json.dumps(result, indent=2)
+    wellness_summary = "Full Wellness Data:\n\n"
+
+    if isinstance(result, dict):
+        for date_str, data in result.items():
+            if isinstance(data, dict) and "date" not in data:
+                data["date"] = date_str
+            wellness_summary += format_wellness_entry(data, include_all_fields=True) + "\n\n"
+    elif isinstance(result, list):
+        for entry in result:
+            if isinstance(entry, dict):
+                wellness_summary += format_wellness_entry(entry, include_all_fields=True) + "\n\n"
+
+    return wellness_summary
