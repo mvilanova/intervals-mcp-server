@@ -236,7 +236,19 @@ def _format_nutrition_hydration(entries: dict[str, Any]) -> list[str]:
     return nutrition_lines
 
 
-def format_wellness_entry(entries: dict[str, Any]) -> str:
+def _format_other_fields(entries: dict[str, Any], known_keys: set[str]) -> list[str]:
+    """Format any fields not already handled by the standard formatting sections."""
+    other_lines = []
+    for key, value in entries.items():
+        if key not in known_keys and value is not None:
+            if isinstance(value, (dict, list)):
+                other_lines.append(f"- {key}: {json.dumps(value)}")
+            else:
+                other_lines.append(f"- {key}: {value}")
+    return other_lines
+
+
+def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = False) -> str:
     """Format wellness entry data into a readable string.
 
     Formats various wellness metrics including training metrics, vital signs,
@@ -313,6 +325,58 @@ def format_wellness_entry(entries: dict[str, Any]) -> str:
         lines.append(f"Comments: {entries['comments']}")
     if "locked" in entries:
         lines.append(f"Status: {'Locked' if entries.get('locked') else 'Unlocked'}")
+
+    if include_all_fields:
+        known_keys = {
+            "id",
+            "ctl",
+            "atl",
+            "rampRate",
+            "ctlLoad",
+            "atlLoad",
+            "sportInfo",
+            "weight",
+            "restingHR",
+            "hrv",
+            "hrvSDNN",
+            "avgSleepingHR",
+            "spO2",
+            "systolic",
+            "diastolic",
+            "respiration",
+            "bloodGlucose",
+            "lactate",
+            "vo2max",
+            "bodyFat",
+            "abdomen",
+            "baevskySI",
+            "sleepSecs",
+            "sleepHours",
+            "sleepQuality",
+            "sleepScore",
+            "readiness",
+            "menstrualPhase",
+            "menstrualPhasePredicted",
+            "soreness",
+            "fatigue",
+            "stress",
+            "mood",
+            "motivation",
+            "injury",
+            "kcalConsumed",
+            "hydrationVolume",
+            "hydration",
+            "steps",
+            "comments",
+            "locked",
+            "updated",
+            "date",
+        }
+        other_lines = _format_other_fields(entries, known_keys)
+        if other_lines:
+            lines.append("")
+            lines.append("Other Fields:")
+            lines.extend(other_lines)
 
     return "\n".join(lines)
 

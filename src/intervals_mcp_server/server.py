@@ -23,12 +23,20 @@ Usage:
     MCP tools provided:
         - get_activities
         - get_activity_details
-        - get_events
-        - get_event_by_id
-        - get_wellness_data
         - get_activity_intervals
         - get_activity_streams
-        - add_events
+        - get_events
+        - get_event_by_id
+        - add_or_update_event
+        - delete_event
+        - delete_events_by_date_range
+        - get_wellness_data
+        - get_full_wellness_data
+        - get_custom_items
+        - get_custom_item_by_id
+        - create_custom_item
+        - update_custom_item
+        - delete_custom_item
 
     See the README for more details on configuration and usage.
 """
