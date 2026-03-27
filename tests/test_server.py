@@ -4,11 +4,14 @@ Unit tests for the main MCP server tool functions in intervals_mcp_server.server
 These tests use monkeypatching to mock API responses and verify the formatting and output of each tool function:
 - get_activities
 - get_activity_details
-- get_events
-- get_event_by_id
-- get_wellness_data
 - get_activity_intervals
 - get_activity_streams
+- get_activity_messages
+- add_activity_message
+- get_events
+- get_event_by_id
+- add_or_update_event
+- get_wellness_data
 
 The tests ensure that the server's public API returns expected strings and handles data correctly.
 """
@@ -23,14 +26,16 @@ os.environ.setdefault("API_KEY", "test")
 os.environ.setdefault("ATHLETE_ID", "i1")
 
 from intervals_mcp_server.server import (  # pylint: disable=wrong-import-position
+    add_activity_message,
+    add_or_update_event,
     get_activities,
     get_activity_details,
-    get_events,
-    get_event_by_id,
-    get_wellness_data,
     get_activity_intervals,
+    get_activity_messages,
     get_activity_streams,
-    add_or_update_event,
+    get_event_by_id,
+    get_events,
+    get_wellness_data,
     get_custom_items,
     get_custom_item_by_id,
     create_custom_item,
@@ -259,6 +264,128 @@ def test_add_or_update_event(monkeypatch):
     assert "Successfully created event:" in result
     assert '"id": "e123"' in result
     assert '"name": "Test Workout"' in result
+
+
+def test_get_activity_messages(monkeypatch):
+    """Test get_activity_messages returns formatted messages for an activity."""
+    sample_messages = [
+        {
+            "id": 1,
+            "name": "Niko",
+            "created": "2024-06-15T10:30:00Z",
+            "type": "NOTE",
+            "content": "Legs felt heavy today",
+        },
+        {
+            "id": 2,
+            "name": "Coach",
+            "created": "2024-06-15T11:00:00Z",
+            "type": "TEXT",
+            "content": "Good effort despite that!",
+        },
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return sample_messages
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_messages(activity_id="i123"))
+    assert "Legs felt heavy today" in result
+    assert "Good effort despite that!" in result
+    assert "Niko" in result
+    assert "Coach" in result
+
+
+def test_get_activity_messages_error(monkeypatch):
+    """Test get_activity_messages handles API errors gracefully."""
+
+    async def fake_request(*_args, **_kwargs):
+        return {"error": True, "message": "Activity not found"}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_messages(activity_id="i999"))
+    assert "Error fetching activity messages" in result
+    assert "Activity not found" in result
+
+
+def test_get_activity_messages_empty(monkeypatch):
+    """Test get_activity_messages returns appropriate message when no messages exist."""
+
+    async def fake_request(*_args, **_kwargs):
+        return []
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_messages(activity_id="i123"))
+    assert "No messages found" in result
+
+
+def test_add_activity_message(monkeypatch):
+    """Test add_activity_message posts a message and returns confirmation."""
+
+    async def fake_request(*_args, **kwargs):
+        assert kwargs.get("method") == "POST"
+        assert kwargs.get("data") == {"content": "Great run!"}
+        return {"id": 42, "new_chat": None}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(add_activity_message(activity_id="i123", content="Great run!"))
+    assert "Successfully added message" in result
+    assert "42" in result
+
+
+def test_add_activity_message_missing_id(monkeypatch):
+    """Test add_activity_message warns when response has no ID."""
+
+    async def fake_request(*_args, **_kwargs):
+        return {"new_chat": None}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(add_activity_message(activity_id="i123", content="Hello"))
+    assert "appears to have been added" in result
+    assert "verify manually" in result
+
+
+def test_add_activity_message_unexpected_response(monkeypatch):
+    """Test add_activity_message handles unexpected non-dict response."""
+
+    async def fake_request(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(add_activity_message(activity_id="i123", content="Hello"))
+    assert "Unexpected response" in result
+
+
+def test_add_activity_message_error(monkeypatch):
+    """Test add_activity_message handles API errors."""
+
+    async def fake_request(*_args, **_kwargs):
+        return {"error": True, "message": "Not found"}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(add_activity_message(activity_id="i999", content="Hello"))
+    assert "Error adding message" in result
 
 
 def test_get_custom_items(monkeypatch):
