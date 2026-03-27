@@ -76,7 +76,7 @@ def _handle_event_response(
     if not result:
         return f"No events {action} for athlete {athlete_id}."
     if isinstance(result, dict):
-        return f"Successfully {action} event: {json.dumps(result, indent=2)}"
+        return f"Successfully {action} event id: {result.get('id')}"
     return f"Event {action} successfully at {start_date}"
 
 
