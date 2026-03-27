@@ -97,6 +97,10 @@ isort.known-third-party = ["starlette"]
 # Unlike Flake8, default to a complexity level of 10.
 mccabe.max-complexity = 10
 
+[tool.pylint.design]
+max-args = 8
+max-positional-arguments = 8
+
 [tool.typos]
 default.check-filename = true
 default.check-file = true

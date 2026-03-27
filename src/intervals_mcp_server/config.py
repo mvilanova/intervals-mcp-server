@@ -29,7 +29,7 @@ class Config:
     user_agent: str
 
 
-_config_instance: Config | None = None
+_config_instance: Config | None = None  # pylint: disable=invalid-name
 
 
 def load_config() -> Config:

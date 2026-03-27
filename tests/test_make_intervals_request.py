@@ -91,7 +91,7 @@ def test_make_intervals_request_bad_json(monkeypatch, caplog):
     )
 
     # Ensure the config singleton has an API key, regardless of test execution order
-    from intervals_mcp_server.config import get_config
+    from intervals_mcp_server.config import get_config  # pylint: disable=import-outside-toplevel
     monkeypatch.setattr(get_config(), "api_key", "test")
 
     with caplog.at_level(logging.ERROR):

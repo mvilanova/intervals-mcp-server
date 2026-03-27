@@ -22,7 +22,7 @@ logger = logging.getLogger("intervals_icu_mcp_server")
 
 # Create a single AsyncClient instance for all requests (lazily initialized)
 # This can be monkeypatched via server.httpx_client for testing
-httpx_client: httpx.AsyncClient | None = None
+httpx_client: httpx.AsyncClient | None = None  # pylint: disable=invalid-name
 
 
 async def _get_httpx_client() -> httpx.AsyncClient:
