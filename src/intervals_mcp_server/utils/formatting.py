@@ -378,6 +378,22 @@ Calendar: {cal.get("name", "N/A")}"""
     return event_details
 
 
+def format_activity_message(message: dict[str, Any]) -> str:
+    """Format an activity message/note into a readable string."""
+    created = message.get("created", "Unknown")
+    if isinstance(created, str) and len(created) > 10:
+        try:
+            dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+            created = dt.strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            pass
+
+    return f"""Author: {message.get("name", "Unknown")}
+Date: {created}
+Type: {message.get("type", "TEXT")}
+Content: {message.get("content", "")}"""
+
+
 def format_custom_item_details(item: dict[str, Any]) -> str:
     """Format detailed custom item information into a readable string."""
     lines = ["Custom Item Details:", ""]

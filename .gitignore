@@ -181,3 +181,5 @@ TODO
 
 .gitconfig
 .claude/
+.DS_Store
+CLAUDE.md

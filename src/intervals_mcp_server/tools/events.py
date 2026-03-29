@@ -58,7 +58,7 @@ def _handle_event_response(
     if not result:
         return f"No events {action} for athlete {athlete_id}."
     if isinstance(result, dict):
-        return f"Successfully {action} event: {json.dumps(result, indent=2)}"
+        return f"Successfully {action} event id: {result.get('id')}"
     return f"Event {action} successfully at {start_date}"
 
 
@@ -75,7 +75,7 @@ async def _delete_events_list(
     Returns:
         List of event IDs that failed to delete.
     """
-    failed_events = []
+    failed_events: list[int | str | None] = []
     for event in events:
         result = await make_intervals_request(
             url=f"/athlete/{athlete_id}/events/{event.get('id')}",
@@ -292,43 +292,43 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
         "workout_doc": {
             "description": "High-intensity workout for increasing VO2 max",
             "steps": [
-                {"power": {"value": "80", "units": "%ftp"}, "duration": "900", "warmup": true},
+                {"power": {"value": 80, "units": "%ftp"}, "duration": 900, "warmup": true},
                 {"reps": 2, "text": "High-intensity intervals", "steps": [
-                    {"power": {"value": "110", "units": "%ftp"}, "distance": "500", "text": "High-intensity"},
-                    {"power": {"value": "80", "units": "%ftp"}, "duration": "90", "text": "Recovery"}
+                    {"power": {"value": 110, "units": "%ftp"}, "distance": 500, "text": "High-intensity"},
+                    {"power": {"value": 80, "units": "%ftp"}, "duration": 90, "text": "Recovery"}
                 ]},
-                {"power": {"value": "80", "units": "%ftp"}, "duration": "600", "cooldown": true}
-                {"text": ""}, # Add comments or blank lines for readability
+                {"power": {"value": 80, "units": "%ftp"}, "duration": 600, "cooldown": true},
+                {"text": ""}
             ]
         }
 
     Step properties:
         distance: Distance of step in meters
-            {"distance": "5000"}
+            {"distance": 5000}
         duration: Duration of step in seconds
-            {"duration": "1800"}
+            {"duration": 1800}
         power/hr/pace/cadence: Define step intensity
-            Percentage of FTP: {"power": {"value": "80", "units": "%ftp"}}
-            Absolute power: {"power": {"value": "200", "units": "w"}}
-            Heart rate: {"hr": {"value": "75", "units": "%hr"}}
-            Heart rate (LTHR): {"hr": {"value": "85", "units": "%lthr"}}
-            Cadence: {"cadence": {"value": "90", "units": "rpm"}}
-            Pace by ftp: {"pace": {"value": "80", "units": "%pace"}}
-            Pace by zone: {"pace": {"value": "Z2", "units": "pace_zone"}}
-            Zone by power: {"power": {"value": "Z2", "units": "power_zone"}}
-            Zone by heart rate: {"hr": {"value": "Z2", "units": "hr_zone"}}
+            Percentage of FTP: {"power": {"value": 80, "units": "%ftp"}}
+            Absolute power: {"power": {"value": 200, "units": "w"}}
+            Heart rate: {"hr": {"value": 75, "units": "%hr"}}
+            Heart rate (LTHR): {"hr": {"value": 85, "units": "%lthr"}}
+            Cadence: {"cadence": {"value": 90, "units": "cadence"}}
+            Pace by ftp: {"pace": {"value": 80, "units": "%pace"}}
+            Pace by zone: {"pace": {"value": 2, "units": "pace_zone"}}
+            Zone by power: {"power": {"value": 2, "units": "power_zone"}}
+            Zone by heart rate: {"hr": {"value": 2, "units": "hr_zone"}}
         Ranges: Specify ranges for power, heart rate, or cadence:
-            {"power": {"start": "80", "end": "90", "units": "%ftp"}}
+            {"power": {"start": 80, "end": 90, "units": "%ftp"}}
         Ramps: Instead of a range, indicate a gradual change in intensity (useful for ERG workouts):
-            {"ramp": True, "power": {"start": "80", "end": "90", "units": "%ftp"}}
+            {"ramp": true, "power": {"start": 80, "end": 90, "units": "%ftp"}}
         Repeats: include the reps property and add nested steps
             {"reps": 3,
             "steps": [
-                {"power": {"value": "110", "units": "%ftp"}, "distance": "500", "text": "High-intensity"},
-                {"power": {"value": "80", "units": "%ftp"}, "duration": "90", "text": "Recovery"}
+                {"power": {"value": 110, "units": "%ftp"}, "distance": 500, "text": "High-intensity"},
+                {"power": {"value": 80, "units": "%ftp"}, "duration": 90, "text": "Recovery"}
             ]}
-        Free Ride: Include free to indicate a segment without ERG control, optionally with a suggested power range:
-            {"free": true, "power": {"value": "80", "units": "%ftp"}}
+        Free Ride: Include freeride to indicate a segment without ERG control, optionally with a suggested power range:
+            {"freeride": true, "power": {"value": 80, "units": "%ftp"}}
         Comments and Labels: Add descriptive text to label steps:
             {"text": "Warmup"}
 
