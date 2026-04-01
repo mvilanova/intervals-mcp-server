@@ -19,7 +19,7 @@ from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 config = get_config()
 
 # 5s, 15s, 30s, 1min, 2min, 5min, 10min, 20min, 60min
-DEFAULT_DURATIONS = [5, 15, 30, 60, 120, 300, 600, 1200, 3600]
+DEFAULT_DURATIONS: tuple[int, ...] = (5, 15, 30, 60, 120, 300, 600, 1200, 3600)
 
 
 def _build_curves_param(
@@ -100,12 +100,19 @@ def _extract_curve_data(
         point: dict[str, Any] = {
             "secs": dur,
             "watts": values[idx],
-            "activity_id": activity_ids[idx] if idx < len(activity_ids) else None,
+            "activity_id": (
+                activity_ids[idx]
+                if idx < len(activity_ids) and activity_ids[idx] is not None
+                else ""
+            ),
         }
         if include_normalised and idx < len(watts_per_kg):
             point["watts_per_kg"] = round(watts_per_kg[idx], 2)
             point["wkg_activity_id"] = (
-                wkg_activity_ids[idx] if idx < len(wkg_activity_ids) else None
+                wkg_activity_ids[idx]
+                if idx < len(wkg_activity_ids)
+                and wkg_activity_ids[idx] is not None
+                else ""
             )
         data_points.append(point)
 
@@ -121,7 +128,7 @@ def _extract_curve_data(
 @mcp.tool()
 async def get_athlete_power_curves(
     activity_type: str,
-    durations: list[int] = DEFAULT_DURATIONS,
+    durations: list[int] | None = None,
     indoor_outdoor: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
@@ -146,11 +153,14 @@ async def get_athlete_power_curves(
         include_normalised: Include weight-normalised W/kg values (default True)
         athlete_id: Intervals.icu athlete ID (optional, uses ATHLETE_ID from .env if not provided)
     """
+    if durations is None:
+        durations = list(DEFAULT_DURATIONS)
+
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
 
-    activity_type = resolve_activity_type(activity_type)
+    activity_type = resolve_activity_type(name=None, activity_type=activity_type)
 
     if indoor_outdoor and indoor_outdoor not in ("indoor", "outdoor"):
         return "Error: indoor_outdoor must be 'indoor', 'outdoor', or omitted."
