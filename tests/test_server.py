@@ -165,6 +165,32 @@ def test_get_wellness_data(monkeypatch):
     assert "2024-01-01" in result
 
 
+def test_get_wellness_data_include_all_fields(monkeypatch):
+    """
+    Test get_wellness_data with include_all_fields=True returns a formatted string including additional fields.
+    """
+    wellness = [
+        {
+            "id": "2024-01-01",
+            "ctl": 75,
+            "sleepSecs": 28800,
+            "customField": "custom_value",
+        }
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return wellness
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.wellness.make_intervals_request", fake_request)
+    result = asyncio.run(get_wellness_data(athlete_id="1", include_all_fields=True))
+    assert "Wellness Data:" in result
+    assert "2024-01-01" in result
+    assert "Fitness (CTL): 75" in result
+    assert "Other Fields:" in result
+    assert "customField: custom_value" in result
+
+
 def test_get_activity_intervals(monkeypatch):
     """
     Test get_activity_intervals returns a formatted string with interval analysis for a given activity.

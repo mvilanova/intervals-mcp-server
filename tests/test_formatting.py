@@ -63,6 +63,43 @@ def test_format_wellness_entry():
     assert result == expected_result
 
 
+def test_format_wellness_entry_include_all_fields():
+    """
+    Test that format_wellness_entry with include_all_fields=True includes additional unknown fields.
+    """
+    entry = {
+        "id": "2024-06-01",
+        "ctl": 80,
+        "weight": 75,
+        "customField1": "hello",
+        "customField2": 42,
+        "updated": "2024-06-01T10:00:00Z",
+    }
+    result = format_wellness_entry(entry, include_all_fields=True)
+    assert "Date: 2024-06-01" in result
+    assert "Fitness (CTL): 80" in result
+    assert "Weight: 75 kg" in result
+    assert "Other Fields:" in result
+    assert "customField1: hello" in result
+    assert "customField2: 42" in result
+    # "updated" is a known built-in field, should not appear in Other Fields
+    assert "updated:" not in result
+
+
+def test_format_wellness_entry_no_extra_fields_by_default():
+    """
+    Test that format_wellness_entry without include_all_fields does not include additional fields.
+    """
+    entry = {
+        "id": "2024-06-01",
+        "ctl": 80,
+        "customField1": "hello",
+    }
+    result = format_wellness_entry(entry)
+    assert "Other Fields:" not in result
+    assert "customField1" not in result
+
+
 def test_format_event_summary():
     """
     Test that format_event_summary returns a string containing the event date and type.

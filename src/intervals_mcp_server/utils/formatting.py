@@ -9,6 +9,26 @@ from datetime import datetime
 from typing import Any
 
 
+class _KeyTracker(dict):
+    """A dict wrapper that records which keys are accessed."""
+
+    def __init__(self, data: dict[str, Any]) -> None:
+        super().__init__(data)
+        self.accessed: set[str] = set()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        self.accessed.add(key)
+        return super().get(key, default)
+
+    def __getitem__(self, key: str) -> Any:
+        self.accessed.add(key)
+        return super().__getitem__(key)
+
+    def __contains__(self, key: object) -> bool:
+        self.accessed.add(key)
+        return super().__contains__(key)
+
+
 def format_activity_summary(activity: dict[str, Any]) -> str:
     """Format an activity into a readable string."""
     start_time = activity.get("startTime", activity.get("start_date", "Unknown"))
@@ -236,7 +256,19 @@ def _format_nutrition_hydration(entries: dict[str, Any]) -> list[str]:
     return nutrition_lines
 
 
-def format_wellness_entry(entries: dict[str, Any]) -> str:
+def _format_other_fields(entries: dict[str, Any], known_keys: set[str]) -> list[str]:
+    """Format any fields not already handled by the standard formatting sections."""
+    other_lines = []
+    for key, value in entries.items():
+        if key not in known_keys and value is not None:
+            if isinstance(value, (dict, list)):
+                other_lines.append(f"- {key}: {json.dumps(value)}")
+            else:
+                other_lines.append(f"- {key}: {value}")
+    return other_lines
+
+
+def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = False) -> str:
     """Format wellness entry data into a readable string.
 
     Formats various wellness metrics including training metrics, vital signs,
@@ -258,6 +290,12 @@ def format_wellness_entry(entries: dict[str, Any]) -> str:
     Returns:
         A formatted string representation of the wellness entry.
     """
+    if include_all_fields:
+        entries = _KeyTracker(entries)
+        # Mark metadata keys so they don't appear in "Other Fields"
+        entries.get("date")
+        entries.get("updated")
+
     lines = ["Wellness Data:"]
     lines.append(f"Date: {entries.get('id', 'N/A')}")
     lines.append("")
@@ -313,6 +351,13 @@ def format_wellness_entry(entries: dict[str, Any]) -> str:
         lines.append(f"Comments: {entries['comments']}")
     if "locked" in entries:
         lines.append(f"Status: {'Locked' if entries.get('locked') else 'Unlocked'}")
+
+    if include_all_fields:
+        other_lines = _format_other_fields(entries, entries.accessed)
+        if other_lines:
+            lines.append("")
+            lines.append("Other Fields:")
+            lines.extend(other_lines)
 
     return "\n".join(lines)
 
