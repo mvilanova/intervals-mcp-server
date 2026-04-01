@@ -29,9 +29,9 @@ Usage:
         - add_activity_message
         - get_events
         - get_event_by_id
+        - add_or_update_event
         - delete_event
         - delete_events_by_date_range
-        - add_or_update_event
         - get_wellness_data
         - get_athlete_power_curves
         - get_custom_items
