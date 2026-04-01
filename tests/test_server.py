@@ -12,7 +12,6 @@ These tests use monkeypatching to mock API responses and verify the formatting a
 - get_event_by_id
 - add_or_update_event
 - get_wellness_data
-- get_full_wellness_data
 
 The tests ensure that the server's public API returns expected strings and handles data correctly.
 """
@@ -36,7 +35,6 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_activity_streams,
     get_event_by_id,
     get_events,
-    get_full_wellness_data,
     get_wellness_data,
     get_custom_items,
     get_custom_item_by_id,
@@ -167,9 +165,9 @@ def test_get_wellness_data(monkeypatch):
     assert "2024-01-01" in result
 
 
-def test_get_full_wellness_data(monkeypatch):
+def test_get_wellness_data_include_all_fields(monkeypatch):
     """
-    Test get_full_wellness_data returns a formatted string including additional fields.
+    Test get_wellness_data with include_all_fields=True returns a formatted string including additional fields.
     """
     wellness = [
         {
@@ -185,40 +183,12 @@ def test_get_full_wellness_data(monkeypatch):
 
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
     monkeypatch.setattr("intervals_mcp_server.tools.wellness.make_intervals_request", fake_request)
-    result = asyncio.run(get_full_wellness_data(athlete_id="1"))
-    assert "Full Wellness Data:" in result
+    result = asyncio.run(get_wellness_data(athlete_id="1", include_all_fields=True))
+    assert "Wellness Data:" in result
     assert "2024-01-01" in result
     assert "Fitness (CTL): 75" in result
     assert "Other Fields:" in result
     assert "customField: custom_value" in result
-
-
-def test_get_full_wellness_data_error(monkeypatch):
-    """
-    Test get_full_wellness_data returns an error message when the API returns an error.
-    """
-
-    async def fake_request(*_args, **_kwargs):
-        return {"error": True, "message": "Unauthorized"}
-
-    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
-    monkeypatch.setattr("intervals_mcp_server.tools.wellness.make_intervals_request", fake_request)
-    result = asyncio.run(get_full_wellness_data(athlete_id="1"))
-    assert "Error fetching wellness data" in result
-
-
-def test_get_full_wellness_data_empty(monkeypatch):
-    """
-    Test get_full_wellness_data returns a no-data message when the API returns an empty result.
-    """
-
-    async def fake_request(*_args, **_kwargs):
-        return []
-
-    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
-    monkeypatch.setattr("intervals_mcp_server.tools.wellness.make_intervals_request", fake_request)
-    result = asyncio.run(get_full_wellness_data(athlete_id="1"))
-    assert "No wellness data found" in result
 
 
 def test_get_activity_intervals(monkeypatch):
