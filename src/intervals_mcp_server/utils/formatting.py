@@ -25,7 +25,8 @@ class _KeyTracker(dict):
         return super().__getitem__(key)
 
     def __contains__(self, key: object) -> bool:
-        self.accessed.add(key)
+        if isinstance(key, str):
+            self.accessed.add(key)
         return super().__contains__(key)
 
 
@@ -352,7 +353,7 @@ def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = Fa
     if "locked" in entries:
         lines.append(f"Status: {'Locked' if entries.get('locked') else 'Unlocked'}")
 
-    if include_all_fields:
+    if include_all_fields and isinstance(entries, _KeyTracker):
         other_lines = _format_other_fields(entries, entries.accessed)
         if other_lines:
             lines.append("")

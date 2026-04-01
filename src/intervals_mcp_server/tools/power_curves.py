@@ -136,6 +136,7 @@ async def get_athlete_power_curves(
     last_season: bool = True,
     include_normalised: bool = True,
     athlete_id: str | None = None,
+    api_key: str | None = None,
 ) -> str:
     """Get power curves for an athlete from Intervals.icu.
 
@@ -152,6 +153,7 @@ async def get_athlete_power_curves(
         last_season: Include last season's curve (default True)
         include_normalised: Include weight-normalised W/kg values (default True)
         athlete_id: Intervals.icu athlete ID (optional, uses ATHLETE_ID from .env if not provided)
+        api_key: Optional API key override. Uses API_KEY from .env if not provided.
     """
     if durations is None:
         durations = list(DEFAULT_DURATIONS)
@@ -186,6 +188,7 @@ async def get_athlete_power_curves(
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/power-curves",
         params=params,
+        api_key=api_key,
     )
 
     if isinstance(result, dict) and "error" in result:
