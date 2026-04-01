@@ -12,6 +12,7 @@ from intervals_mcp_server.utils.formatting import (
     format_event_summary,
     format_event_details,
     format_intervals,
+    format_power_curves,
 )
 from tests.sample_data import INTERVALS_DATA
 
@@ -149,3 +150,52 @@ def test_format_intervals():
     result = format_intervals(INTERVALS_DATA)
     assert "Intervals Analysis:" in result
     assert "Rep 1" in result
+
+
+def test_format_power_curves():
+    """
+    Test that format_power_curves returns a concise string with curve labels,
+    power values, W/kg values, and activity IDs.
+    """
+    curves = [
+        {
+            "id": "s0",
+            "label": "This season",
+            "start": "2025-09-29T00:00:00",
+            "end": "2026-03-14T00:00:00",
+            "data_points": [
+                {"secs": 5, "watts": 780, "activity_id": "i100", "watts_per_kg": 10.4, "wkg_activity_id": "i100"},
+                {"secs": 60, "watts": 380, "activity_id": "i102", "watts_per_kg": 5.07, "wkg_activity_id": "i102"},
+                {"secs": 3600, "watts": 210, "activity_id": "i107", "watts_per_kg": 2.8, "wkg_activity_id": "i107"},
+            ],
+        },
+    ]
+    result = format_power_curves(curves, "Ride", include_normalised=True)
+    assert "Power Curves (Ride):" in result
+    assert "This season" in result
+    assert "5s: 780W" in result
+    assert "10.40W/kg" in result
+    assert "1m: 380W" in result
+    assert "1h: 210W" in result
+    assert "i100" in result
+    assert "i107" in result
+
+
+def test_format_power_curves_without_normalised():
+    """
+    Test that format_power_curves without normalised data does not include W/kg.
+    """
+    curves = [
+        {
+            "id": "s0",
+            "label": "This season",
+            "start": "",
+            "end": "",
+            "data_points": [
+                {"secs": 5, "watts": 780, "activity_id": "i100"},
+            ],
+        },
+    ]
+    result = format_power_curves(curves, "Ride", include_normalised=False)
+    assert "780W" in result
+    assert "W/kg" not in result
