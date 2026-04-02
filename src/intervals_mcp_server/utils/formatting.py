@@ -286,6 +286,8 @@ def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = Fa
             - Nutrition: kcalConsumed, hydrationVolume, hydration
             - Activity: steps
             - Other: comments, locked, date
+        include_all_fields: If True, any fields not covered by the standard
+            sections are appended under an "Other Fields" heading (default False).
 
     Returns:
         A formatted string representation of the wellness entry.
