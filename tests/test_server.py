@@ -535,6 +535,8 @@ def test_get_athlete_power_curves_no_curves_selected(monkeypatch):
     )
     assert "Error" in result
     assert "At least one curve must be selected" in result
+
+
 def test_get_custom_items(monkeypatch):
     """
     Test get_custom_items returns a formatted string containing custom item details.

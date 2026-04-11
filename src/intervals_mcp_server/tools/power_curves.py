@@ -127,7 +127,7 @@ def _extract_curve_data(
 
 @mcp.tool()
 async def get_athlete_power_curves(
-    activity_type: str,
+    activity_type: str = "Ride",
     durations: list[int] | None = None,
     indoor_outdoor: str | None = None,
     start_date: str | None = None,
@@ -144,7 +144,7 @@ async def get_athlete_power_curves(
     Uses FFT power computation. Power values are in watts.
 
     Args:
-        activity_type: Activity type (e.g. "Ride", "Run", "VirtualRide")
+        activity_type: Activity type (e.g. "Ride", "Run", "VirtualRide"). Default is "Ride".
         durations: Durations in seconds to include. Default is [5, 15, 30, 60, 120, 300, 600, 1200, 3600]
         indoor_outdoor: Filter by location — "indoor" or "outdoor". Omit for no filtering.
         start_date: Start date (YYYY-MM-DD) for custom date range curve. Must be used with end_date.
@@ -161,8 +161,6 @@ async def get_athlete_power_curves(
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
-
-    activity_type = resolve_activity_type(name=None, activity_type=activity_type)
 
     if indoor_outdoor and indoor_outdoor not in ("indoor", "outdoor"):
         return "Error: indoor_outdoor must be 'indoor', 'outdoor', or omitted."
