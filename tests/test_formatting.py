@@ -100,6 +100,44 @@ def test_format_wellness_entry_no_extra_fields_by_default():
     assert "customField1" not in result
 
 
+def test_format_wellness_entry_macros_populated():
+    """
+    Test that format_wellness_entry renders native nutrition macros
+    (carbohydrates, protein, fatTotal) in grams when present.
+    """
+    entry = {
+        "id": "2026-04-08",
+        "carbohydrates": 310,
+        "protein": 145,
+        "fatTotal": 72,
+    }
+    result = format_wellness_entry(entry)
+    assert "Nutrition & Hydration:" in result
+    assert "- Carbohydrates: 310 g" in result
+    assert "- Protein: 145 g" in result
+    assert "- Fat: 72 g" in result
+
+
+def test_format_wellness_entry_macros_null_hidden():
+    """
+    Test that format_wellness_entry hides macro lines when the fields are null,
+    preserving backward compatibility with older wellness records.
+    """
+    entry = {
+        "id": "2026-04-08",
+        "ctl": 80,
+        "carbohydrates": None,
+        "protein": None,
+        "fatTotal": None,
+    }
+    result = format_wellness_entry(entry)
+    assert "Carbohydrates" not in result
+    assert "Protein" not in result
+    # "Fat" could legitimately appear inside e.g. "Body Fat" elsewhere, so
+    # anchor the negative assertion on the line-prefix form we would emit.
+    assert "- Fat:" not in result
+
+
 def test_format_event_summary():
     """
     Test that format_event_summary returns a string containing the event date and type.

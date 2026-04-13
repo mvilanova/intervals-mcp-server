@@ -82,7 +82,7 @@ Decoupling: {activity.get("decoupling", "N/A")}
 
 Other Metrics:
 Cadence: {activity.get("average_cadence", "N/A")} rpm
-Calories: {activity.get("calories", "N/A")}
+Calories burned: {activity.get("calories", "N/A")} kcal
 Average Speed: {activity.get("average_speed", "N/A")} m/s
 Max Speed: {activity.get("max_speed", "N/A")} m/s
 Average Stride: {activity.get("average_stride", "N/A")}
@@ -241,14 +241,25 @@ def _format_subjective_feelings(entries: dict[str, Any]) -> list[str]:
 
 
 def _format_nutrition_hydration(entries: dict[str, Any]) -> list[str]:
-    """Format nutrition and hydration section."""
+    """Format nutrition and hydration section.
+
+    Handles both legacy fields (kcalConsumed, hydrationVolume) and the native
+    macro fields from the Intervals.icu API (carbohydrates, protein,
+    fatTotal). All fields are rendered conditionally — a null/missing value
+    hides the corresponding line for backward compatibility with older
+    wellness records.
+    """
     nutrition_lines = []
-    for k, label in [
-        ("kcalConsumed", "Calories Consumed"),
-        ("hydrationVolume", "Hydration Volume"),
+    for k, label, unit in [
+        ("kcalConsumed", "Calories Consumed", ""),
+        ("carbohydrates", "Carbohydrates", "g"),
+        ("protein", "Protein", "g"),
+        ("fatTotal", "Fat", "g"),
+        ("hydrationVolume", "Hydration Volume", ""),
     ]:
         if entries.get(k) is not None:
-            nutrition_lines.append(f"- {label}: {entries[k]}")
+            suffix = f" {unit}" if unit else ""
+            nutrition_lines.append(f"- {label}: {entries[k]}{suffix}")
 
     if entries.get("hydration") is not None:
         nutrition_lines.append(f"  Hydration Score: {entries['hydration']}/10")
@@ -283,7 +294,7 @@ def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = Fa
             - Sleep: sleepSecs, sleepHours, sleepQuality, sleepScore, readiness
             - Menstrual: menstrualPhase, menstrualPhasePredicted
             - Subjective: soreness, fatigue, stress, mood, motivation, injury
-            - Nutrition: kcalConsumed, hydrationVolume, hydration
+            - Nutrition: kcalConsumed, carbohydrates, protein, fatTotal, hydrationVolume, hydration
             - Activity: steps
             - Other: comments, locked, date
         include_all_fields: If True, any fields not covered by the standard
@@ -294,9 +305,11 @@ def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = Fa
     """
     if include_all_fields:
         entries = _KeyTracker(entries)
-        # Mark metadata keys so they don't appear in "Other Fields"
+        # Mark metadata/internal keys so they don't appear in "Other Fields"
         entries.get("date")
         entries.get("updated")
+        entries.get("tempWeight")
+        entries.get("tempRestingHR")
 
     lines = ["Wellness Data:"]
     lines.append(f"Date: {entries.get('id', 'N/A')}")
