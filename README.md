@@ -137,7 +137,7 @@ If Claude Desktop fails due to configuration changes, follow these steps:
 mcp install src/intervals_mcp_server/server.py --name "Intervals.icu" --with-editable . --env-file .env
 ```
 
-**Windows:** Re-add the entry manually as described in the [Windows configuration section](#windows) above.
+**Windows:** Re-add the entry manually as described in the [Windows configuration section](#windows).
 
 #### Common errors
 
