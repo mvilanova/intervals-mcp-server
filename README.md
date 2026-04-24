@@ -237,9 +237,9 @@ The `mcp install` command may fail on Windows due to environment or permission i
 }
 ```
 
-   - Use double backslashes (`\\`) for all Windows paths in JSON.
-   - To find the full path to `uv.exe`, run `where.exe uv` in PowerShell.
-   - To find the full path to the cloned repository, run `pwd` from inside the `intervals-mcp-server` folder.
+- Use double backslashes (`\\`) for all Windows paths in JSON.
+- To find the full path to `uv.exe`, run `where.exe uv` in PowerShell.
+- To find the full path to the cloned repository, run `pwd` from inside the `intervals-mcp-server` folder.
 
 > **Note for Windows Store installs:** Claude Desktop installed from the Microsoft Store sandboxes its config under `AppData\Local\Packages\...`. Editing `AppData\Roaming\Claude\claude_desktop_config.json` will have no effect — make sure you edit the correct file.
 
