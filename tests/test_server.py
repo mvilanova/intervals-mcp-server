@@ -165,6 +165,35 @@ def test_get_wellness_data(monkeypatch):
     assert "2024-01-01" in result
 
 
+def test_get_wellness_data_renders_macros(monkeypatch):
+    """
+    Integration test: native nutrition macros (carbohydrates, protein,
+    fatTotal) flow from the API response through get_wellness_data into the
+    formatted output.
+    """
+    wellness = [
+        {
+            "id": "2026-04-08",
+            "carbohydrates": 310,
+            "protein": 145,
+            "fatTotal": 72,
+        }
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return wellness
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.wellness.make_intervals_request", fake_request)
+    result = asyncio.run(get_wellness_data(athlete_id="1"))
+    assert "Wellness Data:" in result
+    assert "2026-04-08" in result
+    assert "Nutrition & Hydration:" in result
+    assert "- Carbohydrates: 310 g" in result
+    assert "- Protein: 145 g" in result
+    assert "- Fat: 72 g" in result
+
+
 def test_get_wellness_data_include_all_fields(monkeypatch):
     """
     Test get_wellness_data with include_all_fields=True returns a formatted string including additional fields.
