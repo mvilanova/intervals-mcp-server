@@ -115,3 +115,8 @@ asyncio_default_fixture_loop_scope = "function"
 
 [tool.uv]
 index-url = "https://pypi.org/simple"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.1",
+]
