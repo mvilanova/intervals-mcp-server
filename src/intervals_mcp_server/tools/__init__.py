@@ -31,6 +31,7 @@ from intervals_mcp_server.tools.custom_items import (  # noqa: F401
 from intervals_mcp_server.tools.power_curves import (  # noqa: F401
     get_athlete_power_curves,
 )
+from intervals_mcp_server.tools.gear import get_gear_list  # noqa: F401
 from intervals_mcp_server.tools.wellness import get_wellness_data  # noqa: F401
 
 
@@ -67,5 +68,6 @@ __all__ = [
     "update_custom_item",
     "delete_custom_item",
     "get_athlete_power_curves",
+    "get_gear_list",
     "get_wellness_data",
 ]

@@ -52,6 +52,26 @@ def format_activity_summary(activity: dict[str, Any]) -> str:
     if isinstance(feel, int):
         feel = f"{feel}/5"
 
+    # Gear (bike, shoes) - ICU activity payloads include the gear ID but not the
+    # gear name (which lives in /athlete/{id}/gear). The tools.gear module
+    # resolves the name and injects it as `_resolved_gear_name` before this
+    # formatter runs. Prefer the resolved name; otherwise fall back to whatever
+    # the raw payload provides (typically just an ID).
+    resolved_name = activity.get("_resolved_gear_name")
+    gear_raw = activity.get("gear")
+    if resolved_name:
+        gear_name = resolved_name
+        if isinstance(gear_raw, dict):
+            gear_id = gear_raw.get("id", activity.get("gear_id", "N/A"))
+        else:
+            gear_id = activity.get("gear_id", "N/A")
+    elif isinstance(gear_raw, dict):
+        gear_name = gear_raw.get("name") or gear_raw.get("display_name") or "N/A"
+        gear_id = gear_raw.get("id", "N/A")
+    else:
+        gear_name = activity.get("gear_name", "N/A")
+        gear_id = activity.get("gear_id", "N/A")
+
     return f"""
 Activity: {activity.get("name", "Unnamed")}
 ID: {activity.get("id", "N/A")}
@@ -116,6 +136,10 @@ Device Info:
 Device: {activity.get("device_name", "N/A")}
 Power Meter: {activity.get("power_meter", "N/A")}
 File Type: {activity.get("file_type", "N/A")}
+
+Gear:
+Name: {gear_name}
+ID: {gear_id}
 """
 
 

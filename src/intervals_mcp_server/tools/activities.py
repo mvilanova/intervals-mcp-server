@@ -9,6 +9,10 @@ from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
+from intervals_mcp_server.tools.gear import (
+    resolve_gear_for_activity,
+    resolve_gear_for_activities,
+)
 from intervals_mcp_server.utils.formatting import format_activity_message, format_activity_summary, format_intervals
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
 
@@ -163,6 +167,11 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     # Limit to requested count
     activities = activities[:limit]
 
+    # Resolve gear names (in-place injection of `_resolved_gear_name`)
+    await resolve_gear_for_activities(
+        activities, athlete_id=athlete_id_to_use, api_key=api_key
+    )
+
     return _format_activities_response(activities, athlete_id_to_use, include_unnamed)
 
 
@@ -189,6 +198,9 @@ async def get_activity_details(activity_id: str, api_key: str | None = None) -> 
     activity_data = result[0] if isinstance(result, list) and result else result
     if not isinstance(activity_data, dict):
         return f"Invalid activity format for activity {activity_id}."
+
+    # Resolve gear name (uses configured athlete_id via ATHLETE_ID env var)
+    await resolve_gear_for_activity(activity_data, api_key=api_key)
 
     # Return a more detailed view of the activity
     detailed_view = format_activity_summary(activity_data)
