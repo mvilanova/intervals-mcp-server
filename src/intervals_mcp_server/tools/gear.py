@@ -2,8 +2,8 @@
 Gear-related MCP tools for Intervals.icu.
 
 This module provides:
-- A module-level cache of the athlete's gear list (bikes, shoes, etc.) to avoid
-  hitting the /athlete/{id}/gear endpoint on every activity lookup.
+- A module-level cache of the athlete's raw gear catalog (bikes, shoes, etc.)
+  to avoid hitting the /athlete/{id}/gear endpoint on every activity lookup.
 - A helper to inject the human-readable gear name into an activity dict (under
   `_resolved_gear_name`), which the formatter then displays in the `Gear:` block.
 - A user-facing MCP tool `get_gear_list` so the assistant can discover or
@@ -12,8 +12,9 @@ This module provides:
 Intervals.icu's activity payload includes only the gear ID (e.g. `b16177481`)
 but not the gear name. The gear name lives in a separate endpoint
 `/athlete/{athlete_id}/gear` that returns the full catalog. To avoid an extra
-round-trip per activity, we cache the gear catalog per athlete for the lifetime
-of the MCP server process. Call `get_gear_list` again to bust the cache.
+round-trip per activity, we cache the raw gear catalog per athlete for the
+lifetime of the MCP server process and derive the `{id: name}` lookup from it.
+Call `get_gear_list(refresh=True)` to bust the cache.
 """
 
 from typing import Any
@@ -27,10 +28,9 @@ from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
 config = get_config()
 
-# Module-level cache: {athlete_id: {gear_id: gear_name}}.
-# Keyed by athlete_id so the same MCP process can serve multiple athletes,
-# although the typical case is a single athlete via ATHLETE_ID env var.
-_GEAR_CACHE: dict[str, dict[str, str]] = {}
+# Module-level cache of the raw gear catalog per athlete. Single source of
+# truth: the id->name map and the rich listing are both derived from this.
+_GEAR_RAW_CACHE: dict[str, list[dict[str, Any]]] = {}
 
 
 def _extract_gear_id(activity: dict[str, Any]) -> str | None:
@@ -46,44 +46,40 @@ def _extract_gear_id(activity: dict[str, Any]) -> str | None:
     return None
 
 
-async def _fetch_gear_map(
-    athlete_id: str,
-    api_key: str | None = None,
-) -> dict[str, str]:
-    """Fetch the athlete's gear catalog from Intervals.icu and return {id: name}."""
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id}/gear", api_key=api_key
-    )
-    gear_map: dict[str, str] = {}
-
-    items: list[Any] = []
+def _items_from_response(result: Any) -> list[dict[str, Any]]:
+    """Normalize the /athlete/{id}/gear response into a list of gear dicts."""
     if isinstance(result, list):
-        items = result
-    elif isinstance(result, dict):
+        return [item for item in result if isinstance(item, dict)]
+    if isinstance(result, dict):
         # Some endpoints wrap the list in a container; pull any list value.
         for value in result.values():
             if isinstance(value, list):
-                items = value
-                break
+                return [item for item in value if isinstance(item, dict)]
+    return []
 
+
+def _derive_gear_map(items: list[dict[str, Any]]) -> dict[str, str]:
+    """Convert a raw gear list into a {gear_id: gear_name} lookup."""
+    gear_map: dict[str, str] = {}
     for item in items:
-        if not isinstance(item, dict):
-            continue
         gid = item.get("id")
         name = item.get("name") or item.get("display_name")
         if gid and name:
             gear_map[str(gid)] = str(name)
-
     return gear_map
 
 
-async def get_gear_map(
+async def get_gear_raw(
     athlete_id: str | None = None,
     api_key: str | None = None,
     *,
     refresh: bool = False,
-) -> dict[str, str]:
-    """Return (and cache) the gear map {gear_id: gear_name} for an athlete.
+) -> list[dict[str, Any]]:
+    """Return (and cache) the raw gear list for an athlete.
+
+    Single source of truth that backs both the id->name map and the rich
+    listing produced by `get_gear_list`. One API call per athlete per process
+    lifetime unless `refresh=True`.
 
     Args:
         athlete_id: Athlete to look up. Defaults to ATHLETE_ID env var via config.
@@ -92,14 +88,28 @@ async def get_gear_map(
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg or not athlete_id_to_use:
-        return {}
+        return []
 
-    if not refresh and athlete_id_to_use in _GEAR_CACHE:
-        return _GEAR_CACHE[athlete_id_to_use]
+    if not refresh and athlete_id_to_use in _GEAR_RAW_CACHE:
+        return _GEAR_RAW_CACHE[athlete_id_to_use]
 
-    gear_map = await _fetch_gear_map(athlete_id_to_use, api_key=api_key)
-    _GEAR_CACHE[athlete_id_to_use] = gear_map
-    return gear_map
+    result = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/gear", api_key=api_key
+    )
+    items = _items_from_response(result)
+    _GEAR_RAW_CACHE[athlete_id_to_use] = items
+    return items
+
+
+async def get_gear_map(
+    athlete_id: str | None = None,
+    api_key: str | None = None,
+    *,
+    refresh: bool = False,
+) -> dict[str, str]:
+    """Return the {gear_id: gear_name} lookup for an athlete (derived from cache)."""
+    items = await get_gear_raw(athlete_id=athlete_id, api_key=api_key, refresh=refresh)
+    return _derive_gear_map(items)
 
 
 async def resolve_gear_for_activity(
@@ -162,28 +172,14 @@ async def get_gear_list(
     if not athlete_id_to_use:
         return "Error: athlete_id is required (either as argument or via ATHLETE_ID env var)."
 
-    # Fetch + cache via the helper.
-    gear_map = await get_gear_map(
+    # Single fetch path: get_gear_raw consults the cache and only hits the API
+    # on a cold cache or when refresh=True.
+    items = await get_gear_raw(
         athlete_id=athlete_id_to_use, api_key=api_key, refresh=refresh
     )
 
-    if not gear_map:
+    if not items:
         return f"No gear found for athlete {athlete_id_to_use}."
-
-    # For the rich listing, refetch the raw list once so we can include type
-    # and stats. (The cached map only stores id→name.)
-    raw = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/gear", api_key=api_key
-    )
-
-    items: list[dict[str, Any]] = []
-    if isinstance(raw, list):
-        items = [it for it in raw if isinstance(it, dict)]
-    elif isinstance(raw, dict):
-        for value in raw.values():
-            if isinstance(value, list):
-                items = [it for it in value if isinstance(it, dict)]
-                break
 
     output = f"Gear catalog for athlete {athlete_id_to_use}:\n\n"
     output += f"{'ID':<14} {'Type':<8} {'Name':<32} {'Default':<8} {'Acts':<6} {'Dist (km)':<10} {'Retired':<8}\n"
