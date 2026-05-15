@@ -251,21 +251,52 @@ export async function syncIntervals(opts: {
     throw new Error("No user found to sync into");
   }
 
-  // The DB has a partial unique index on SyncRun WHERE finishedAt IS NULL,
-  // so concurrent attempts to start a sync hit P2002 and are surfaced as
-  // a clear "already in progress" error instead of corrupting state.
+  // The DB has a partial unique index on SyncRun WHERE finishedAt IS NULL.
+  // Concurrent attempts to start a sync hit P2002, which we surface as
+  // "already in progress". On P2002 we also try to reclaim a stale lock —
+  // if the pending row is older than STALE_RUN_AFTER_MS we mark it failed
+  // and retry, so a crashed sync can't block all future syncs forever.
+  const STALE_RUN_AFTER_MS = 30 * 60 * 1000;
+  const isP2002 = (e: unknown): boolean =>
+    e instanceof Error &&
+    "code" in e &&
+    (e as { code?: string }).code === "P2002";
+
   let run: { id: string; startedAt: Date };
   try {
     run = await prisma.syncRun.create({ data: { mode: opts.mode } });
   } catch (err) {
-    if (
-      err instanceof Error &&
-      "code" in err &&
-      (err as { code?: string }).code === "P2002"
-    ) {
+    if (!isP2002(err)) throw err;
+
+    const pending = await prisma.syncRun.findFirst({
+      where: { finishedAt: null },
+      orderBy: { startedAt: "asc" },
+    });
+    const isStale =
+      pending && Date.now() - pending.startedAt.getTime() > STALE_RUN_AFTER_MS;
+    if (!isStale) {
       throw new Error("A sync is already in progress");
     }
-    throw err;
+
+    await prisma.syncRun.update({
+      where: { id: pending.id },
+      data: {
+        finishedAt: new Date(),
+        errors: [
+          ...pending.errors,
+          `aborted: pending > ${STALE_RUN_AFTER_MS / 60000} min`,
+        ],
+      },
+    });
+
+    try {
+      run = await prisma.syncRun.create({ data: { mode: opts.mode } });
+    } catch (retryErr) {
+      if (isP2002(retryErr)) {
+        throw new Error("A sync is already in progress");
+      }
+      throw retryErr;
+    }
   }
 
   const { oldest, newest } = dateWindow(opts.mode);

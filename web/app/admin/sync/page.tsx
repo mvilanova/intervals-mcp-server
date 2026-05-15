@@ -18,15 +18,9 @@ async function runSync(formData: FormData) {
   "use server";
   await requireSession();
 
-  // Concurrency guard — avoid two manual triggers racing on upserts.
-  const pending = await prisma.syncRun.findFirst({
-    where: { finishedAt: null },
-    select: { id: true },
-  });
-  if (pending) {
-    throw new Error("A sync is already in progress");
-  }
-
+  // Concurrency is enforced atomically at the DB layer via the partial
+  // unique index on SyncRun WHERE finishedAt IS NULL. syncIntervals()
+  // throws "A sync is already in progress" if another run owns the lock.
   const mode = formData.get("mode") === "full" ? "full" : "recent";
   try {
     await syncIntervals({ mode });
