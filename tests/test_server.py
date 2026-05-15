@@ -573,9 +573,7 @@ def test_update_custom_item(monkeypatch):
     monkeypatch.setattr(
         "intervals_mcp_server.tools.custom_items.make_intervals_request", fake_request
     )
-    result = asyncio.run(
-        update_custom_item(item_id=1, name="Updated Chart", athlete_id="1")
-    )
+    result = asyncio.run(update_custom_item(item_id=1, name="Updated Chart", athlete_id="1"))
     assert "Successfully updated custom item:" in result
     assert "Updated Chart" in result
     assert "PUBLIC" in result
