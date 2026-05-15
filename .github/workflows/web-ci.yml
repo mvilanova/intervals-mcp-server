@@ -58,4 +58,7 @@ jobs:
             git fetch --all
             git reset --hard origin/main
             docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+            echo "Waiting for web service to become healthy..."
+            timeout 90 sh -c 'until docker compose -f deploy/docker-compose.yml ps --format json web | grep -q "\"Health\":\"healthy\""; do sleep 3; done'
+            echo "Web service healthy."
             docker image prune -f

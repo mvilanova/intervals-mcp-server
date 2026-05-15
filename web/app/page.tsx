@@ -3,7 +3,9 @@ import { prisma } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const user = await prisma.user.findFirst();
+  const user = await prisma.user.findFirst({
+    orderBy: { createdAt: "asc" },
+  });
 
   return (
     <main className="mx-auto max-w-2xl p-8 space-y-4">

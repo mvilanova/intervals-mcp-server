@@ -45,6 +45,12 @@ services:
       INTERVALS_API_KEY: ${INTERVALS_API_KEY}
       INTERVALS_ATHLETE_ID: ${INTERVALS_ATHLETE_ID}
       NODE_ENV: production
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy

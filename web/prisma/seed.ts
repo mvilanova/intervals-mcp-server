@@ -4,12 +4,28 @@ const prisma = new PrismaClient();
 
 async function main() {
   const email = process.env.SEED_USER_EMAIL ?? "you@example.com";
-  const targetWeight = process.env.SEED_TARGET_WEIGHT
-    ? Number(process.env.SEED_TARGET_WEIGHT)
-    : null;
-  const targetDate = process.env.SEED_TARGET_DATE
-    ? new Date(process.env.SEED_TARGET_DATE)
-    : null;
+
+  let targetWeight: number | null = null;
+  if (process.env.SEED_TARGET_WEIGHT) {
+    const parsed = Number(process.env.SEED_TARGET_WEIGHT);
+    if (!Number.isFinite(parsed)) {
+      throw new Error(
+        `Invalid SEED_TARGET_WEIGHT: "${process.env.SEED_TARGET_WEIGHT}"`,
+      );
+    }
+    targetWeight = parsed;
+  }
+
+  let targetDate: Date | null = null;
+  if (process.env.SEED_TARGET_DATE) {
+    const parsed = new Date(process.env.SEED_TARGET_DATE);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new Error(
+        `Invalid SEED_TARGET_DATE: "${process.env.SEED_TARGET_DATE}"`,
+      );
+    }
+    targetDate = parsed;
+  }
 
   // Only include fields the env actually set so re-running the seed never
   // clobbers values set via the dashboard UI.

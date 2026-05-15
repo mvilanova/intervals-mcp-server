@@ -44,5 +44,7 @@ RUN apk add --no-cache openssl
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+ENV PATH="/app/node_modules/.bin:${PATH}"
 
-CMD ["node", "node_modules/prisma/build/index.js", "migrate", "deploy"]
+CMD ["prisma", "migrate", "deploy"]
