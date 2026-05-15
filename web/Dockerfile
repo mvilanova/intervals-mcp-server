@@ -48,3 +48,17 @@ COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 ENV PATH="/app/node_modules/.bin:${PATH}"
 
 CMD ["prisma", "migrate", "deploy"]
+
+# Cron sidecar — runs cron.ts on a 4-hour loop. Reuses the builder stage's
+# generated Prisma client + tsx (already in node_modules) so we don't reinstall.
+# Built with `--target cron` in compose.
+FROM node:22-alpine AS cron
+WORKDIR /app
+RUN apk add --no-cache openssl
+ENV NODE_ENV=production
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
+COPY --from=builder /app/lib ./lib
+COPY --from=builder /app/cron.ts ./cron.ts
+
+CMD ["node_modules/.bin/tsx", "cron.ts"]

@@ -45,20 +45,37 @@ model MealLog {
 }
 
 model DailyMetrics {
-  id         String   @id @default(cuid())
-  userId     String
-  date       DateTime @db.Date
-  ctl        Float?
-  atl        Float?
-  rampRate   Float?
-  rhr        Int?
-  hrv        Float?
-  sleepHours Float?
-  sleepScore Int?
-  steps      Int?
-  user       User     @relation(fields: [userId], references: [id])
+  id           String   @id @default(cuid())
+  userId       String
+  date         DateTime @db.Date
+  ctl          Float?
+  atl          Float?
+  rampRate     Float?
+  rhr          Int?
+  hrv          Float?
+  sleepHours   Float?
+  sleepScore   Int?
+  steps        Int?
+  kcalConsumed Int?
+  carbsGrams   Float?
+  proteinGrams Float?
+  fatGrams     Float?
+  user         User     @relation(fields: [userId], references: [id])
 
   @@unique([userId, date])
+}
+
+model SyncRun {
+  id              String    @id @default(cuid())
+  startedAt       DateTime  @default(now())
+  finishedAt      DateTime?
+  mode            String
+  wellnessUpserts Int       @default(0)
+  activityUpserts Int       @default(0)
+  weightUpserts   Int       @default(0)
+  errors          String[]  @default([])
+
+  @@index([startedAt])
 }
 
 model Activity {
