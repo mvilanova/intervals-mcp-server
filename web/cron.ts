@@ -11,14 +11,20 @@ if (HOURS !== HOURS_RAW) {
 }
 
 let shutdownRequested = false;
+let resolveShutdown: (() => void) | null = null;
+const shutdownPromise = new Promise<void>((resolve) => {
+  resolveShutdown = resolve;
+});
+
 for (const sig of ["SIGTERM", "SIGINT"] as const) {
   process.on(sig, () => {
     console.log(`[cron] ${sig} received, finishing current sync...`);
     shutdownRequested = true;
+    resolveShutdown?.();
   });
 }
 
-async function runOnce(mode: "full" | "recent") {
+async function runOnce(mode: "full" | "recent", { rethrow = false } = {}) {
   const startedAt = new Date();
   try {
     const result = await syncIntervals({ mode });
@@ -35,6 +41,7 @@ async function runOnce(mode: "full" | "recent") {
     console.error(
       `[cron] ${startedAt.toISOString()} fatal: ${err instanceof Error ? err.message : String(err)}`,
     );
+    if (rethrow) throw err;
   }
 }
 
@@ -44,10 +51,15 @@ function sleep(ms: number): Promise<void> {
 
 async function main() {
   console.log(`[cron] starting, period=${HOURS}h`);
-  await runOnce("full");
+  // Bootstrap sync — if this fails the process exits non-zero via the outer
+  // .catch() so the container restarts (or fails the deploy).
+  await runOnce("full", { rethrow: true });
+
   // Sequential awaited delays: a slow sync can never overlap the next tick.
+  // Race the sleep against shutdownPromise so SIGTERM/SIGINT can break out
+  // mid-wait instead of stalling up to PERIOD_MS.
   while (!shutdownRequested) {
-    await sleep(PERIOD_MS);
+    await Promise.race([sleep(PERIOD_MS), shutdownPromise]);
     if (shutdownRequested) break;
     await runOnce("recent");
   }

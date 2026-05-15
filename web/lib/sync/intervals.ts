@@ -251,9 +251,22 @@ export async function syncIntervals(opts: {
     throw new Error("No user found to sync into");
   }
 
-  const run = await prisma.syncRun.create({
-    data: { mode: opts.mode },
-  });
+  // The DB has a partial unique index on SyncRun WHERE finishedAt IS NULL,
+  // so concurrent attempts to start a sync hit P2002 and are surfaced as
+  // a clear "already in progress" error instead of corrupting state.
+  let run: { id: string; startedAt: Date };
+  try {
+    run = await prisma.syncRun.create({ data: { mode: opts.mode } });
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      "code" in err &&
+      (err as { code?: string }).code === "P2002"
+    ) {
+      throw new Error("A sync is already in progress");
+    }
+    throw err;
+  }
 
   const { oldest, newest } = dateWindow(opts.mode);
   const errors: string[] = [];

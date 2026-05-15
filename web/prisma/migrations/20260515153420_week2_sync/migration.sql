@@ -20,3 +20,11 @@ CREATE TABLE "SyncRun" (
 
 -- CreateIndex
 CREATE INDEX "SyncRun_startedAt_idx" ON "SyncRun"("startedAt");
+
+-- Partial unique index: at most one in-progress SyncRun at a time.
+-- Prisma's schema doesn't model partial unique indexes, so this index is
+-- the authoritative concurrency guard. Application code catches P2002 from
+-- syncRun.create() and surfaces it as "already in progress".
+CREATE UNIQUE INDEX "SyncRun_single_pending_idx"
+    ON "SyncRun" ((1))
+    WHERE "finishedAt" IS NULL;
