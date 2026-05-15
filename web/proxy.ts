@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-
-const COOKIE = "dashboard_pin";
+import { COOKIE_NAME, verifySession } from "@/lib/auth";
 
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -14,13 +13,15 @@ export function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const expected = process.env.DASHBOARD_PIN;
-  if (!expected) {
-    return new NextResponse("Authentication configuration missing", { status: 500 });
+  // Fail closed: refuse to serve protected routes if either secret is missing.
+  if (!process.env.DASHBOARD_PIN || !process.env.SESSION_SECRET) {
+    return new NextResponse(
+      "Server misconfigured: DASHBOARD_PIN and SESSION_SECRET must be set.",
+      { status: 503 },
+    );
   }
 
-  const provided = req.cookies.get(COOKIE)?.value;
-  if (provided === expected) {
+  if (verifySession(req.cookies.get(COOKIE_NAME)?.value)) {
     return NextResponse.next();
   }
 

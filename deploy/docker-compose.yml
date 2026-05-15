@@ -25,9 +25,9 @@ services:
   migrate:
     build:
       context: ../web
+      target: migrator
     environment:
       DATABASE_URL: ${DATABASE_URL}
-    command: ["npx", "prisma", "migrate", "deploy"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -36,10 +36,12 @@ services:
   web:
     build:
       context: ../web
+      target: runner
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
       DASHBOARD_PIN: ${DASHBOARD_PIN}
+      SESSION_SECRET: ${SESSION_SECRET}
       INTERVALS_API_KEY: ${INTERVALS_API_KEY}
       INTERVALS_ATHLETE_ID: ${INTERVALS_ATHLETE_ID}
       NODE_ENV: production

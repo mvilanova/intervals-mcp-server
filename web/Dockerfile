@@ -15,8 +15,9 @@ COPY . .
 RUN npx prisma generate
 RUN npm run build
 
-# Final runtime image. Keeps the full node_modules so prisma CLI is available
-# (the same image is reused by the `migrate` sidecar in docker-compose).
+# Slim runtime image — only the Next.js standalone output + static assets.
+# The Prisma client engine is bundled into .next/standalone/node_modules by
+# Next.js because it's imported from our app code.
 FROM node:22-alpine AS runner
 WORKDIR /app
 RUN apk add --no-cache openssl
@@ -29,11 +30,19 @@ RUN addgroup --system --gid 1001 nodejs \
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
 USER nextjs
 EXPOSE 3000
 
 CMD ["node", "server.js"]
+
+# Separate image for the migrate sidecar — copies only the Prisma CLI and
+# its engines from the builder. Built with `--target migrator` in compose.
+FROM node:22-alpine AS migrator
+WORKDIR /app
+RUN apk add --no-cache openssl
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
+CMD ["node", "node_modules/prisma/build/index.js", "migrate", "deploy"]
