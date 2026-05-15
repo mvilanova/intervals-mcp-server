@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const COOKIE = "dashboard_pin";
 
-export function proxy(req: NextRequest) {
+export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (
