@@ -13,7 +13,7 @@ CREATE TABLE "SyncRun" (
     "wellnessUpserts" INTEGER NOT NULL DEFAULT 0,
     "activityUpserts" INTEGER NOT NULL DEFAULT 0,
     "weightUpserts" INTEGER NOT NULL DEFAULT 0,
-    "errors" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "errors" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
 
     CONSTRAINT "SyncRun_pkey" PRIMARY KEY ("id")
 );

@@ -1,7 +1,22 @@
 import { syncIntervals } from "@/lib/sync/intervals";
 
-const HOURS = Number(process.env.SYNC_INTERVAL_HOURS ?? 4);
-const PERIOD_MS = Math.max(1, HOURS) * 60 * 60 * 1000;
+const HOURS_RAW = Number(process.env.SYNC_INTERVAL_HOURS ?? 4);
+const HOURS = Number.isFinite(HOURS_RAW) && HOURS_RAW > 0 ? HOURS_RAW : 4;
+const PERIOD_MS = HOURS * 60 * 60 * 1000;
+
+if (HOURS !== HOURS_RAW) {
+  console.warn(
+    `[cron] Invalid SYNC_INTERVAL_HOURS=${process.env.SYNC_INTERVAL_HOURS}, falling back to 4h`,
+  );
+}
+
+let shutdownRequested = false;
+for (const sig of ["SIGTERM", "SIGINT"] as const) {
+  process.on(sig, () => {
+    console.log(`[cron] ${sig} received, finishing current sync...`);
+    shutdownRequested = true;
+  });
+}
 
 async function runOnce(mode: "full" | "recent") {
   const startedAt = new Date();
@@ -29,14 +44,20 @@ function sleep(ms: number): Promise<void> {
 
 async function main() {
   console.log(`[cron] starting, period=${HOURS}h`);
-  // First run pulls the full 30d window so a fresh deploy backfills history.
   await runOnce("full");
-  // Use sequential awaited delays instead of setInterval so a slow sync can
-  // never overlap with the next tick (which would race on upserts / API).
-  for (;;) {
+  // Sequential awaited delays: a slow sync can never overlap the next tick.
+  while (!shutdownRequested) {
     await sleep(PERIOD_MS);
+    if (shutdownRequested) break;
     await runOnce("recent");
   }
+  console.log("[cron] shutdown complete");
+  process.exit(0);
 }
 
-void main();
+main().catch((err) => {
+  console.error(
+    `[cron] fatal startup error: ${err instanceof Error ? err.message : String(err)}`,
+  );
+  process.exit(1);
+});

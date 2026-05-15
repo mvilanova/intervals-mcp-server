@@ -17,8 +17,25 @@ async function requireSession() {
 async function runSync(formData: FormData) {
   "use server";
   await requireSession();
+
+  // Concurrency guard — avoid two manual triggers racing on upserts.
+  const pending = await prisma.syncRun.findFirst({
+    where: { finishedAt: null },
+    select: { id: true },
+  });
+  if (pending) {
+    throw new Error("A sync is already in progress");
+  }
+
   const mode = formData.get("mode") === "full" ? "full" : "recent";
-  await syncIntervals({ mode });
+  try {
+    await syncIntervals({ mode });
+  } catch (err) {
+    console.error("[admin] sync failed:", err);
+    throw new Error(
+      `Sync failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
   revalidatePath("/admin/sync");
 }
 

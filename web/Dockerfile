@@ -56,9 +56,12 @@ FROM node:22-alpine AS cron
 WORKDIR /app
 RUN apk add --no-cache openssl
 ENV NODE_ENV=production
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/tsconfig.json ./tsconfig.json
-COPY --from=builder /app/lib ./lib
-COPY --from=builder /app/cron.ts ./cron.ts
+RUN addgroup --system --gid 1001 nodejs \
+ && adduser --system --uid 1001 nextjs
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
+COPY --from=builder --chown=nextjs:nodejs /app/lib ./lib
+COPY --from=builder --chown=nextjs:nodejs /app/cron.ts ./cron.ts
+USER nextjs
 
 CMD ["node_modules/.bin/tsx", "cron.ts"]

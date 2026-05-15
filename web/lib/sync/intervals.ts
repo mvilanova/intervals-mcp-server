@@ -39,6 +39,8 @@ class IntervalsError extends Error {
   }
 }
 
+const FETCH_TIMEOUT_MS = 30_000;
+
 async function intervalsFetch(
   path: string,
   apiKey: string,
@@ -47,23 +49,39 @@ async function intervalsFetch(
   const url = new URL(`${BASE_URL}${path}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
-  const res = await fetch(url, {
-    headers: {
-      Authorization: basicAuthHeader(apiKey),
-      Accept: "application/json",
-      "User-Agent": "getmAIlean-dashboard/0.1",
-    },
-    cache: "no-store",
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new IntervalsError(
-      `Intervals.icu ${res.status} ${res.statusText} on ${path}${body ? `: ${body.slice(0, 200)}` : ""}`,
-      res.status,
-    );
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: basicAuthHeader(apiKey),
+        Accept: "application/json",
+        "User-Agent": "getmAIlean-dashboard/0.1",
+      },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new IntervalsError(
+        `Intervals.icu ${res.status} ${res.statusText} on ${path}${body ? `: ${body.slice(0, 200)}` : ""}`,
+        res.status,
+      );
+    }
+    return await res.json();
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new IntervalsError(
+        `Intervals.icu request timeout after ${FETCH_TIMEOUT_MS}ms on ${path}`,
+        408,
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return res.json();
 }
 
 function normalizeWellness(raw: unknown): WellnessEntry[] {
@@ -143,24 +161,43 @@ async function upsertWeightFromWellness(
     if (!dateStr) continue;
     const date = new Date(dateStr);
 
-    // Don't overwrite a manual log. Only upsert if the existing row (if any)
-    // is itself a from-intervals entry.
-    const existing = await prisma.weightLog.findUnique({
-      where: { userId_date: { userId, date } },
+    // Atomic update: only touch rows already marked "from intervals".
+    // Manual weight entries (notes != "from intervals") are never overwritten,
+    // and the where-filter on updateMany makes the check + write atomic.
+    const updated = await prisma.weightLog.updateMany({
+      where: { userId, date, notes: "from intervals" },
+      data: { weightKg: entry.weight },
     });
-    if (existing && existing.notes !== "from intervals") continue;
 
-    await prisma.weightLog.upsert({
-      where: { userId_date: { userId, date } },
-      update: { weightKg: entry.weight, notes: "from intervals" },
-      create: {
-        userId,
-        date,
-        weightKg: entry.weight,
-        notes: "from intervals",
-      },
-    });
-    count++;
+    if (updated.count > 0) {
+      count++;
+      continue;
+    }
+
+    // No from-intervals row existed. Try to create one. The unique constraint
+    // on (userId, date) means this fails if a manual entry was inserted
+    // concurrently — in that case we skip, preserving the manual entry.
+    try {
+      await prisma.weightLog.create({
+        data: {
+          userId,
+          date,
+          weightKg: entry.weight,
+          notes: "from intervals",
+        },
+      });
+      count++;
+    } catch (err) {
+      if (
+        err instanceof Error &&
+        "code" in err &&
+        (err as { code?: string }).code === "P2002"
+      ) {
+        // Manual entry beat us to it; that's the desired behaviour.
+        continue;
+      }
+      throw err;
+    }
   }
   return count;
 }
@@ -209,7 +246,7 @@ export async function syncIntervals(opts: {
 
   const user = opts.userId
     ? await prisma.user.findUnique({ where: { id: opts.userId } })
-    : await prisma.user.findFirst();
+    : await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
   if (!user) {
     throw new Error("No user found to sync into");
   }
