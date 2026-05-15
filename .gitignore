@@ -14,8 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -183,3 +183,18 @@ TODO
 .claude/
 .DS_Store
 CLAUDE.md
+
+# Next.js app (/web)
+web/node_modules/
+web/.next/
+web/out/
+web/build/
+web/.env
+web/.env.local
+web/.env*.local
+web/next-env.d.ts.bak
+web/tsconfig.tsbuildinfo
+
+# Deploy stack (/deploy)
+deploy/.env
+

@@ -1,0 +1,64 @@
+name: web-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "deploy/**"
+      - ".github/workflows/web-ci.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - "deploy/**"
+      - ".github/workflows/web-ci.yml"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+
+      - run: npx prisma generate
+
+      - run: npm run typecheck
+
+      - run: npm run lint
+
+      - run: npm run build
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db
+
+  deploy:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script: |
+            set -euo pipefail
+            cd /srv/dashboard
+            git fetch --all
+            git reset --hard origin/main
+            docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+            echo "Waiting for web service to become healthy..."
+            timeout 90 sh -c 'until docker compose -f deploy/docker-compose.yml ps --format json web | grep -q "\"Health\":\"healthy\""; do sleep 3; done'
+            echo "Web service healthy."
+            docker image prune -f

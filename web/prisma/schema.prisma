@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String         @id @default(cuid())
+  email          String         @unique
+  targetWeight   Float?
+  targetDate     DateTime?
+  baselineRhr    Int?
+  createdAt      DateTime       @default(now())
+  weightLogs     WeightLog[]
+  mealLogs       MealLog[]
+  dailyMetrics   DailyMetrics[]
+  activities     Activity[]
+  dailySummaries DailySummary[]
+}
+
+model WeightLog {
+  id       String   @id @default(cuid())
+  userId   String
+  date     DateTime @db.Date
+  weightKg Float
+  notes    String?
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date])
+}
+
+model MealLog {
+  id       String   @id @default(cuid())
+  userId   String
+  date     DateTime @db.Date
+  mealType String
+  status   String
+  notes    String?
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date, mealType])
+}
+
+model DailyMetrics {
+  id         String   @id @default(cuid())
+  userId     String
+  date       DateTime @db.Date
+  ctl        Float?
+  atl        Float?
+  rampRate   Float?
+  rhr        Int?
+  hrv        Float?
+  sleepHours Float?
+  sleepScore Int?
+  steps      Int?
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date])
+}
+
+model Activity {
+  id          String   @id @default(cuid())
+  userId      String
+  intervalsId String
+  date        DateTime @db.Date
+  type        String
+  durationMin Float?
+  tss         Float?
+  distanceKm  Float?
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, intervalsId])
+}
+
+model DailySummary {
+  id          String   @id @default(cuid())
+  userId      String
+  date        DateTime @db.Date
+  summaryText String
+  generatedAt DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date])
+}

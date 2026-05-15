@@ -1,0 +1,29 @@
+# Local development: Postgres only.
+# Web runs on the host via `npm run dev` in /web for fast HMR.
+#
+# Bring up:    docker compose -f deploy/docker-compose.dev.yml up -d
+# Tear down:   docker compose -f deploy/docker-compose.dev.yml down
+# Wipe data:   docker compose -f deploy/docker-compose.dev.yml down -v
+
+name: dashboard-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dashboard
+      POSTGRES_PASSWORD: dashboard
+      POSTGRES_DB: dashboard
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dashboard -d dashboard"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata_dev:
