@@ -1,6 +1,6 @@
 "use client";
 
-import { useOptimistic, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import type { MealLog } from "@prisma/client";
 import { logMeal } from "../actions/logging";
 import type { MealStatus, MealType } from "../actions/logging";
@@ -56,6 +56,7 @@ export function MealGrid({ initial }: Props) {
     },
   );
   const [, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   const currentStatus = (type: MealType): MealStatus | null => {
     const found = optimistic.find((m) => m.mealType === type);
@@ -64,8 +65,12 @@ export function MealGrid({ initial }: Props) {
 
   const handleClick = (mealType: MealType, status: MealStatus) => {
     startTransition(async () => {
+      setError(null);
       setOptimistic({ mealType, status });
-      await logMeal(mealType, status);
+      const result = await logMeal(mealType, status);
+      if (!result.ok) {
+        setError(result.error);
+      }
     });
   };
 
@@ -103,6 +108,7 @@ export function MealGrid({ initial }: Props) {
           );
         })}
       </div>
+      {error ? <p className="text-xs text-red-600">{error}</p> : null}
     </section>
   );
 }

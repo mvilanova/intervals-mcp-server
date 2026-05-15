@@ -10,10 +10,13 @@ import { MealGrid } from "./_components/MealGrid";
 export const dynamic = "force-dynamic";
 
 function formatToday(date: Date): string {
+  // todayDate is UTC midnight; without timeZone: "UTC" the formatter uses
+  // the runtime tz and renders the previous day for negative offsets.
   return date.toLocaleDateString(undefined, {
     weekday: "long",
     month: "short",
     day: "numeric",
+    timeZone: "UTC",
   });
 }
 

@@ -6,9 +6,12 @@ type Props = {
 
 function fmtDuration(min: number | null): string {
   if (min == null) return "—";
-  if (min < 60) return `${Math.round(min)}m`;
-  const h = Math.floor(min / 60);
-  const m = Math.round(min % 60);
+  // Round total minutes first so the minute remainder is always 0–59;
+  // splitting before rounding could yield e.g. "1h 60m" when min = 119.7.
+  const totalMin = Math.round(min);
+  if (totalMin < 60) return `${totalMin}m`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
