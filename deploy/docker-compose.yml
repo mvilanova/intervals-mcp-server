@@ -59,6 +59,23 @@ services:
     expose:
       - "3000"
 
+  cron:
+    build:
+      context: ../web
+      target: cron
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      INTERVALS_API_KEY: ${INTERVALS_API_KEY}
+      INTERVALS_ATHLETE_ID: ${INTERVALS_ATHLETE_ID}
+      SYNC_INTERVAL_HOURS: ${SYNC_INTERVAL_HOURS:-4}
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped

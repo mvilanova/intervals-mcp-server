@@ -6,10 +6,15 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     await prisma.$queryRaw`SELECT 1`;
+    const latest = await prisma.syncRun.findFirst({
+      where: { finishedAt: { not: null } },
+      orderBy: { finishedAt: "desc" },
+      select: { finishedAt: true },
+    });
     return NextResponse.json({
       ok: true,
       db: "up",
-      latestSync: null,
+      latestSync: latest?.finishedAt ?? null,
     });
   } catch {
     return NextResponse.json(
