@@ -16,7 +16,7 @@ export function middleware(req: NextRequest) {
 
   const expected = process.env.DASHBOARD_PIN;
   if (!expected) {
-    return NextResponse.next();
+    return new NextResponse("Authentication configuration missing", { status: 500 });
   }
 
   const provided = req.cookies.get(COOKIE)?.value;
