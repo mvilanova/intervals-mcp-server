@@ -4,6 +4,15 @@ Model Context Protocol (MCP) server for connecting Claude and ChatGPT with the I
 
 If you find the Model Context Protocol (MCP) server useful, please consider supporting its continued development with a donation.
 
+## Repository contents
+
+This repository hosts two related components:
+
+- **MCP server** (this directory, `src/intervals_mcp_server/`) — read-only MCP tools that surface Intervals.icu data to Claude Desktop or ChatGPT. Setup and usage are documented below.
+- **Personal dashboard** (`web/`) — a self-hosted Next.js dashboard that syncs Intervals.icu wellness + activities into Postgres, lets you log weight and meal adherence, and runs on a small VPS via Docker Compose. See [`web/README.md`](web/README.md) for setup.
+
+The two components share an Intervals.icu API key but otherwise run independently — you can install one without the other.
+
 ## Requirements
 
 - Python 3.12 or higher
