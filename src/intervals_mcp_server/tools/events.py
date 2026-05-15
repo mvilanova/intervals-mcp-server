@@ -279,7 +279,7 @@ async def delete_events_by_date_range(
 
 
 @mcp.tool()
-async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+async def add_or_update_event(  # noqa: PLR0913 — MCP tool maps directly to Intervals.icu API parameters
     workout_type: str,
     name: str,
     athlete_id: str | None = None,

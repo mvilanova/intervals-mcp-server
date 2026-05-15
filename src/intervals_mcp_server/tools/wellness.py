@@ -60,11 +60,12 @@ async def get_wellness_data(
 
     if isinstance(result, dict):
         for date_str, data in result.items():
-            if isinstance(data, dict) and "date" not in data:
-                data["date"] = date_str
-            wellness_summary += (
-                format_wellness_entry(data, include_all_fields=include_all_fields) + "\n\n"
-            )
+            if isinstance(data, dict):
+                if "date" not in data:
+                    data["date"] = date_str
+                wellness_summary += (
+                    format_wellness_entry(data, include_all_fields=include_all_fields) + "\n\n"
+                )
     elif isinstance(result, list):
         for entry in result:
             if isinstance(entry, dict):
