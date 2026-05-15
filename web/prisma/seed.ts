@@ -15,7 +15,7 @@ async function main() {
     where: { email },
     update: {
       targetWeight,
-      targetDate: targetDate ?? undefined,
+      targetDate: targetDate,
     },
     create: {
       email,
