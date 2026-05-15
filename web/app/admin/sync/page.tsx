@@ -1,17 +1,29 @@
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { syncIntervals } from "@/lib/sync/intervals";
 
 export const dynamic = "force-dynamic";
 
+async function requireSession() {
+  const jar = await cookies();
+  if (!verifySession(jar.get(COOKIE_NAME)?.value)) {
+    redirect("/login");
+  }
+}
+
 async function runSync(formData: FormData) {
   "use server";
+  await requireSession();
   const mode = formData.get("mode") === "full" ? "full" : "recent";
   await syncIntervals({ mode });
   revalidatePath("/admin/sync");
 }
 
 export default async function AdminSyncPage() {
+  await requireSession();
   const runs = await prisma.syncRun.findMany({
     orderBy: { startedAt: "desc" },
     take: 10,

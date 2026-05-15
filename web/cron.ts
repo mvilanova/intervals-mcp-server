@@ -23,13 +23,20 @@ async function runOnce(mode: "full" | "recent") {
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function main() {
   console.log(`[cron] starting, period=${HOURS}h`);
   // First run pulls the full 30d window so a fresh deploy backfills history.
   await runOnce("full");
-  setInterval(() => {
-    void runOnce("recent");
-  }, PERIOD_MS);
+  // Use sequential awaited delays instead of setInterval so a slow sync can
+  // never overlap with the next tick (which would race on upserts / API).
+  for (;;) {
+    await sleep(PERIOD_MS);
+    await runOnce("recent");
+  }
 }
 
 void main();
