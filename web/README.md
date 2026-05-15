@@ -101,4 +101,4 @@ See [`./.env.example`](./.env.example) for local dev and [`../deploy/.env.exampl
 - `DATABASE_URL`
 - `DASHBOARD_PIN`
 - `SESSION_SECRET` (32+ chars, generated with `openssl rand -hex 32`)
-- `INTERVALS_API_KEY` + `INTERVALS_ATHLETE_ID` (Week 2 sync onward)
+- `INTERVALS_API_KEY` + `INTERVALS_ATHLETE_ID` — needed for the sync (cron sidecar + `/admin/sync`); the app boots without them but the sync route will refuse to run
