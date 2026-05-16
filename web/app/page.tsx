@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getTodayBundle } from "@/lib/queries/today";
 import { TrainingLoadCard } from "./_components/TrainingLoadCard";
 import { RecoveryCard } from "./_components/RecoveryCard";
@@ -6,6 +7,7 @@ import { ActivityCard } from "./_components/ActivityCard";
 import { SyncStatusPill } from "./_components/SyncStatusPill";
 import { WeightForm } from "./_components/WeightForm";
 import { MealGrid } from "./_components/MealGrid";
+import { DailySummaryCard } from "./_components/DailySummaryCard";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +49,10 @@ export default async function Home() {
         <SyncStatusPill status={bundle.syncStatus} />
       </header>
 
+      <Suspense fallback={<SummarySkeleton />}>
+        <DailySummaryCard userId={bundle.user.id} date={bundle.todayDate} />
+      </Suspense>
+
       <WeightCard
         latest={bundle.latestWeight}
         weekAgo={bundle.weightWeekAgo}
@@ -70,5 +76,17 @@ export default async function Home() {
 
       <ActivityCard activities={bundle.todayActivities} />
     </main>
+  );
+}
+
+function SummarySkeleton() {
+  return (
+    <section className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+      <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
+        Summary
+      </div>
+      <div className="h-4 w-3/4 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+      <div className="h-4 w-1/2 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+    </section>
   );
 }
