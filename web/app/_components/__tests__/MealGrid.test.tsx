@@ -59,7 +59,7 @@ describe("MealGrid", () => {
 
     it("does not show error message initially", () => {
       render(<MealGrid initial={[]} />);
-      expect(screen.queryByRole("paragraph", { name: /error/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
   });
 

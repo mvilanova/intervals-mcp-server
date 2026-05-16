@@ -42,7 +42,9 @@ export function WeightForm({ todayWeight }: Props) {
         <SubmitButton />
       </div>
       {state?.ok === false ? (
-        <p className="text-xs text-red-600">{state.error}</p>
+        <p role="alert" aria-live="polite" className="text-xs text-red-600">
+          {state.error}
+        </p>
       ) : null}
     </form>
   );

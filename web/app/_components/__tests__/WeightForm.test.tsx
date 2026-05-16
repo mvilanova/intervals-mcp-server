@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { WeightForm } from "../WeightForm";
 import type { WeightLog } from "@prisma/client";
-import type { ActionResult } from "../../actions/logging";
 
 // Mock the logWeight server action
 vi.mock("../../actions/logging", () => ({
@@ -58,7 +57,7 @@ describe("WeightForm", () => {
 
     it("does not show error when no error state", () => {
       render(<WeightForm todayWeight={null} />);
-      expect(screen.queryByRole("paragraph")).not.toBeInTheDocument();
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
   });
 

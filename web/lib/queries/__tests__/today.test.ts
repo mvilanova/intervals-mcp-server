@@ -45,11 +45,16 @@ function setupDefaultMocks() {
 describe("getTodayBundle", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(Date, "now").mockReturnValue(FIXED_NOW);
+    // Freeze the entire system clock — production code uses `new Date()`
+    // directly in places, not just Date.now(), so a Date.now spy alone
+    // would leak real time into those calls.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(FIXED_NOW));
     setupDefaultMocks();
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 

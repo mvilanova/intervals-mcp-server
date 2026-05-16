@@ -179,10 +179,8 @@ describe("TrainingLoadCard", () => {
           yesterday={makeMetrics({ rampRate: 3.0 })}
         />,
       );
-      // Ramp always passes delta={null} to Metric component
-      // Only CTL and ATL deltas would show
-      const dashes = screen.queryAllByText("±0");
-      // No delta for ramp even though values differ
+      // Ramp always passes delta={null} to Metric component, so even
+      // when today/yesterday ramp values differ, no "+2.0" delta appears.
       expect(screen.queryByText("+2.0")).not.toBeInTheDocument();
     });
   });
