@@ -57,6 +57,11 @@ export function MealGrid({ initial }: Props) {
   );
   const [, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Per-meal-type gate: serializes writes for the same meal so rapid taps
+  // (hit → partial → missed) can't persist out of order when server calls
+  // resolve in a different order from the clicks. Per-meal rather than
+  // global so the user can still log multiple meals concurrently.
+  const [pending, setPending] = useState<Set<MealType>>(new Set());
 
   const currentStatus = (type: MealType): MealStatus | null => {
     const found = optimistic.find((m) => m.mealType === type);
@@ -64,12 +69,22 @@ export function MealGrid({ initial }: Props) {
   };
 
   const handleClick = (mealType: MealType, status: MealStatus) => {
+    if (pending.has(mealType)) return;
+    setPending((prev) => new Set(prev).add(mealType));
     startTransition(async () => {
       setError(null);
       setOptimistic({ mealType, status });
-      const result = await logMeal(mealType, status);
-      if (!result.ok) {
-        setError(result.error);
+      try {
+        const result = await logMeal(mealType, status);
+        if (!result.ok) setError(result.error);
+      } catch {
+        setError("Could not save meal. Please try again.");
+      } finally {
+        setPending((prev) => {
+          const next = new Set(prev);
+          next.delete(mealType);
+          return next;
+        });
       }
     });
   };
@@ -82,10 +97,16 @@ export function MealGrid({ initial }: Props) {
       <div className="space-y-2">
         {MEALS.map(({ type, label }) => {
           const active = currentStatus(type);
+          const isPending = pending.has(type);
           return (
             <div key={type} className="grid grid-cols-[6rem_1fr] items-center gap-2">
               <div className="text-sm">{label}</div>
-              <div className="grid grid-cols-3 gap-1.5">
+              <div
+                role="group"
+                aria-label={`${label} status`}
+                aria-busy={isPending}
+                className="grid grid-cols-3 gap-1.5"
+              >
                 {STATUSES.map(({ value, label: btnLabel, activeClass }) => {
                   const isActive = active === value;
                   return (
@@ -93,7 +114,9 @@ export function MealGrid({ initial }: Props) {
                       key={value}
                       type="button"
                       onClick={() => handleClick(type, value)}
-                      className={`rounded border px-2 py-1.5 text-xs font-medium transition-colors ${
+                      disabled={isPending}
+                      aria-pressed={isActive}
+                      className={`rounded border px-2 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                         isActive
                           ? activeClass
                           : "border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300"
@@ -108,7 +131,11 @@ export function MealGrid({ initial }: Props) {
           );
         })}
       </div>
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      {error ? (
+        <p role="alert" aria-live="polite" className="text-xs text-red-600">
+          {error}
+        </p>
+      ) : null}
     </section>
   );
 }
