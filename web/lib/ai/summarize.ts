@@ -128,8 +128,10 @@ async function loadInput(userId: string, date: Date): Promise<GenInput | null> {
       prisma.mealLog.findMany({
         where: { userId, date },
       }),
+      // Constrained by `date` (not "latest in DB") so a summary generated
+      // for a historical day reflects the user's weight as of that day.
       prisma.weightLog.findFirst({
-        where: { userId },
+        where: { userId, date: { lte: date } },
         orderBy: { date: "desc" },
       }),
       prisma.weightLog.findFirst({
