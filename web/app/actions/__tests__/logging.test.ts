@@ -197,12 +197,14 @@ describe("logMeal", () => {
 
   describe("input validation", () => {
     it("returns error for invalid mealType", async () => {
-      const result = await logMeal("invalid" as any, "hit");
+      // @ts-expect-error - testing runtime validation of invalid meal type
+      const result = await logMeal("invalid", "hit");
       expect(result.ok).toBe(false);
     });
 
     it("returns error for invalid status", async () => {
-      const result = await logMeal("breakfast", "invalid" as any);
+      // @ts-expect-error - testing runtime validation of invalid status
+      const result = await logMeal("breakfast", "invalid");
       expect(result.ok).toBe(false);
     });
 
@@ -235,7 +237,8 @@ describe("logMeal", () => {
     });
 
     it("does not call prisma when validation fails", async () => {
-      await logMeal("breakfast", "invalid" as any);
+      // @ts-expect-error - testing runtime validation of invalid status
+      await logMeal("breakfast", "invalid");
       expect(mocks.mockPrisma.mealLog.upsert).not.toHaveBeenCalled();
     });
   });

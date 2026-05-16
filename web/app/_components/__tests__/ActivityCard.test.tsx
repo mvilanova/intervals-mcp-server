@@ -12,9 +12,7 @@ function makeActivity(overrides: Partial<Activity> = {}): Activity {
     durationMin: 60,
     distanceKm: null,
     tss: null,
-    externalId: null,
-    name: null,
-    description: null,
+    intervalsId: "intervals-1",
     ...overrides,
   };
 }

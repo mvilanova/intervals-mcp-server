@@ -15,6 +15,11 @@ function makeMetrics(overrides: Partial<DailyMetrics> = {}): DailyMetrics {
     hrv: null,
     sleepHours: null,
     sleepScore: null,
+    steps: null,
+    kcalConsumed: null,
+    carbsGrams: null,
+    proteinGrams: null,
+    fatGrams: null,
     ...overrides,
   };
 }
