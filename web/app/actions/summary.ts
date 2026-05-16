@@ -3,7 +3,6 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/db";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { regenerateDailySummary } from "@/lib/ai/summarize";
 
@@ -14,16 +13,17 @@ function todayUTC(): Date {
   );
 }
 
-export async function regenerateSummaryAction(): Promise<void> {
+// `userId` is bound by the calling card via `.bind()` so the refresh
+// acts on the exact user whose summary the card rendered. The bound
+// value is client-tamperable in principle; safe here because the project
+// is single-user v1 and the session cookie doesn't yet bind to a user.
+// When multi-tenant lands, this needs to verify userId matches the
+// session-resolved user id.
+export async function regenerateSummaryAction(userId: string): Promise<void> {
   const jar = await cookies();
   if (!verifySession(jar.get(COOKIE_NAME)?.value)) {
     redirect("/login");
   }
-  const user = await prisma.user.findFirst({
-    orderBy: { createdAt: "asc" },
-  });
-  if (!user) return;
-
-  await regenerateDailySummary(user.id, todayUTC());
+  await regenerateDailySummary(userId, todayUTC());
   revalidatePath("/");
 }

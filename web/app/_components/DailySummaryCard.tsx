@@ -54,7 +54,7 @@ export async function DailySummaryCard({ userId, date }: Props) {
         <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
           Summary
         </h2>
-        <form action={regenerateSummaryAction}>
+        <form action={regenerateSummaryAction.bind(null, userId)}>
           <button
             type="submit"
             className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"

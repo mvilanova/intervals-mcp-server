@@ -12,13 +12,23 @@ import { prisma } from "@/lib/db";
 
 const MODEL = "claude-sonnet-4-6";
 const MAX_TOKENS = 200;
+// 30s for a ~200-token call is generous (typical: 1–3s). The SDK default
+// of 10 minutes would hang the user's page render on a stuck call.
+const REQUEST_TIMEOUT_MS = 30_000;
+const MAX_RETRIES = 2;
 
 const SYSTEM_PROMPT = `You summarize one day of personal health and training data for the user. Output 1–2 sentences, conversational second person, under 40 words. Pick the most actionable signal — don't list every field. Mention weight only when noteworthy (logged today, hit/missed target trend). Mention training load when it's climbing, falling, or freshly elevated. If recovery is poor (RHR up, sleep short), say so. If a meal type was missed, call it out gently. No greeting, no "today you...", no markdown.`;
 
 let client: Anthropic | null = null;
 function getClient(): Anthropic | null {
   if (!process.env.ANTHROPIC_API_KEY) return null;
-  if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  if (!client) {
+    client = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      timeout: REQUEST_TIMEOUT_MS,
+      maxRetries: MAX_RETRIES,
+    });
+  }
   return client;
 }
 
