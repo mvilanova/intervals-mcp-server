@@ -141,3 +141,47 @@ def test_format_duration_hour_minute_seconds_mixed():
 def test_format_duration_seconds_only_below_minute():
     """Durations under a minute keep their `Xs` form."""
     assert Step(duration=45)._format_duration() == "45s"
+
+
+# --- Step.to_dict resolved-only field exclusion ----------------------------
+
+
+def test_step_to_dict_excludes_underscore_prefixed_fields():
+    """``_power`` / ``_hr`` / ``_pace`` / ``_distance`` are response-only
+    fields the API rejects on writes. They must not appear in to_dict output
+    even when populated (which happens whenever a ``resolve=true`` GET is
+    round-tripped back through the dataclass)."""
+    step = Step(
+        intensity=Intensity.ACTIVE,
+        duration=60,
+        _power=Value(value=250.0, units=ValueUnits.WATTS),
+        _hr=Value(value=150.0, units=ValueUnits.HR_ZONE),
+        _pace=Value(value=4.0, units=ValueUnits.PACE_ZONE),
+        _distance=1000.0,
+    )
+    out = step.to_dict()
+    assert "_power" not in out
+    assert "_hr" not in out
+    assert "_pace" not in out
+    assert "_distance" not in out
+    # Non-private fields are still emitted.
+    assert out["intensity"] == "active"
+    assert out["duration"] == 60
+
+
+def test_step_round_trip_strips_resolved_fields():
+    """End-to-end: a payload from a ``resolve=true`` GET must not leak its
+    resolved sentinels back on the next write."""
+    resolved_payload = {
+        "intensity": "interval",
+        "duration": 30,
+        "_power": {"value": 300, "units": "w"},
+        "_hr": {"value": 170, "units": "hr_zone"},
+        "_distance": 200,
+    }
+    step = Step.from_dict(resolved_payload)
+    out = step.to_dict()
+    # The underscore fields survived parsing (so callers can read them) ...
+    assert step._power is not None
+    # ... but never make it back into the write payload.
+    assert all(not k.startswith("_") for k in out)

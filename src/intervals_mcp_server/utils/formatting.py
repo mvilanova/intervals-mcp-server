@@ -34,21 +34,28 @@ def _format_iso_datetime(value: Any) -> Any:
 
 def _first_present(d: dict[str, Any], *keys: str, default: Any = "N/A") -> Any:
     """
-    Selects and returns the value for the first key that exists in the given dictionary.
+    Return the value for the first key whose entry is both present and non-`None`.
 
-    Presence is determined by key membership (i.e., a key whose value is `None` counts as present and will be returned). If none of the provided keys are present in `d`, the `default` is returned.
+    The Intervals.icu API expresses an unset field as an explicit ``null`` rather
+    than by omitting the key — e.g. ``{"duration": null, "elapsed_time": 3600}``
+    means "duration is unknown, fall back to elapsed_time". Treating a
+    present-but-`None` key as "missing" matches that convention and keeps the
+    rendered output free of literal ``Duration: None seconds`` strings.
 
     Parameters:
         d (dict[str, Any]): Dictionary to query.
         *keys (str): Candidate keys checked in order.
-        default (Any): Value returned when no keys are present (defaults to "N/A").
+        default (Any): Value returned when no key has a non-`None` value
+            (defaults to ``"N/A"``).
 
     Returns:
-        Any: The value associated with the first present key, or `default` if none are present.
+        Any: The value associated with the first key whose value is not
+        ``None``, or ``default`` if every candidate is missing or ``None``.
     """
     for k in keys:
-        if k in d:
-            return d[k]
+        val = d.get(k)
+        if val is not None:
+            return val
     return default
 
 
@@ -576,8 +583,12 @@ Description: {event.get("description", "No description")}"""
             f"Result: {event.get('result', 'N/A')}"
         )
 
-    if "calendar" in event:
-        parts.append(f"Calendar: {event['calendar'].get('name', 'N/A')}")
+    # `event.get("calendar")` can return None for payloads that include the
+    # key but omit the nested object — guard before dereferencing so a partial
+    # API response can't raise AttributeError on `.get`.
+    calendar = event.get("calendar")
+    if isinstance(calendar, dict):
+        parts.append(f"Calendar: {calendar.get('name', 'N/A')}")
 
     return "\n\n".join(parts)
 

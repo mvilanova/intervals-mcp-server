@@ -240,6 +240,41 @@ def test_format_event_details_tolerates_null_start_date_local():
     assert "Date: None" not in details
 
 
+def test_format_activity_summary_falls_back_when_primary_key_is_null():
+    """When the primary key is present but ``None``, ``_first_present`` must
+    keep walking to the next candidate. The API expresses an unset field as
+    explicit ``null``, so rendering ``Duration: None seconds`` (the previous
+    behaviour) would be a real regression for partial payloads."""
+    # `duration: None` should fall through to `elapsed_time` instead of
+    # rendering "Duration: None seconds".
+    activity = {
+        "name": "Recovery spin",
+        "id": "a1",
+        "type": "Ride",
+        "duration": None,
+        "elapsed_time": 3600,
+    }
+    summary = format_activity_summary(activity)
+    assert "Duration: 3600 seconds" in summary
+    assert "Duration: None" not in summary
+
+
+def test_format_event_details_tolerates_null_calendar():
+    """``{"calendar": None}`` must not crash — `"calendar" in event` is True
+    but `None.get("name")` would raise. The formatter has to guard the
+    dereference rather than rely on the membership check."""
+    event = {
+        "id": "e1",
+        "date": "2024-05-15",
+        "name": "Stage 1",
+        "description": "",
+        "calendar": None,
+    }
+    # No exception, and no `Calendar:` line for an absent calendar object.
+    details = format_event_details(event)
+    assert "Calendar:" not in details
+
+
 @pytest.mark.parametrize(
     "fixture_name, fn",
     [

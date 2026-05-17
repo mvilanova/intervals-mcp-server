@@ -386,10 +386,18 @@ class Step:
         """
         Convert the dataclass instance to a JSON-compatible dictionary for API serialization.
 
+        Underscore-prefixed fields (``_power``, ``_hr``, ``_pace``, ``_distance``)
+        are *response-only*: the Intervals.icu API populates them on
+        ``resolve=true`` GETs but rejects them on writes. They must be stripped
+        from any payload that round-trips a resolved step back to the API.
+
         Returns:
-            dict[str, Any]: A dictionary containing all fields that are not `None`. Enum values are converted to their raw values, dataclass fields are converted to dictionaries, and lists/dicts are recursively serialized to JSON-compatible types.
+            dict[str, Any]: A dictionary containing all non-`None`,
+            non-underscore-prefixed fields. Enum values are converted to their
+            raw values, dataclass fields are converted to dictionaries, and
+            lists/dicts are recursively serialized to JSON-compatible types.
         """
-        return _to_dict(self)
+        return {k: v for k, v in _to_dict(self).items() if not k.startswith("_")}
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Step:
