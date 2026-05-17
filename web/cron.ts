@@ -1,4 +1,4 @@
-import { syncIntervals } from "@/lib/sync/intervals";
+import { NoUserFoundError, syncIntervals } from "@/lib/sync/intervals";
 
 const HOURS_RAW = Number(process.env.SYNC_INTERVAL_HOURS ?? 4);
 const HOURS = Number.isFinite(HOURS_RAW) && HOURS_RAW > 0 ? HOURS_RAW : 4;
@@ -69,10 +69,9 @@ async function main() {
   try {
     await runOnce("full", { rethrow: true });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!msg.includes("No user found")) throw err;
+    if (!(err instanceof NoUserFoundError)) throw err;
     console.warn(
-      `[cron] bootstrap skipped (${msg}); will retry on next ${HOURS}h tick`,
+      `[cron] bootstrap skipped (${err.message}); will retry on next ${HOURS}h tick`,
     );
   }
 

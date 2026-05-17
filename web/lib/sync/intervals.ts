@@ -39,6 +39,17 @@ class IntervalsError extends Error {
   }
 }
 
+// Thrown when syncIntervals can't find any User row to sync into. Separate
+// from IntervalsError so callers (the cron bootstrap, in particular) can
+// match this specific expected-fresh-deploy condition with `instanceof`
+// instead of a substring check on the message.
+export class NoUserFoundError extends Error {
+  constructor() {
+    super("No user found to sync into");
+    this.name = "NoUserFoundError";
+  }
+}
+
 const FETCH_TIMEOUT_MS = 30_000;
 
 async function intervalsFetch(
@@ -248,7 +259,7 @@ export async function syncIntervals(opts: {
     ? await prisma.user.findUnique({ where: { id: opts.userId } })
     : await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
   if (!user) {
-    throw new Error("No user found to sync into");
+    throw new NoUserFoundError();
   }
 
   // The DB has a partial unique index on SyncRun WHERE finishedAt IS NULL.
