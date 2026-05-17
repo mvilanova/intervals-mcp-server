@@ -47,9 +47,7 @@ def patch_request(monkeypatch):
             captured["kwargs"] = kwargs
             return payload
 
-        monkeypatch.setattr(
-            "intervals_mcp_server.api.client.make_intervals_request", fake
-        )
+        monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake)
         if tool_module is not None:
             monkeypatch.setattr(
                 f"intervals_mcp_server.tools.{tool_module}.make_intervals_request",

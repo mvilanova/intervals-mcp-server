@@ -159,9 +159,7 @@ def _coerce(val: Any, hint: Any) -> Any:
     return val
 
 
-def _from_dict(
-    cls: type, data: dict[str, Any], rename: dict[str, str] | None = None
-) -> Any:
+def _from_dict(cls: type, data: dict[str, Any], rename: dict[str, str] | None = None) -> Any:
     """Build a dataclass instance from a dict using its type hints for coercion."""
     inv_rename = {v: k for k, v in (rename or {}).items()}
     hints = get_type_hints(cls)
