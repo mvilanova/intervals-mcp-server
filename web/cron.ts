@@ -1,4 +1,4 @@
-import { syncIntervals } from "@/lib/sync/intervals";
+import { NoUserFoundError, syncIntervals } from "@/lib/sync/intervals";
 
 const HOURS_RAW = Number(process.env.SYNC_INTERVAL_HOURS ?? 4);
 const HOURS = Number.isFinite(HOURS_RAW) && HOURS_RAW > 0 ? HOURS_RAW : 4;
@@ -38,10 +38,13 @@ async function runOnce(mode: "full" | "recent", { rethrow = false } = {}) {
     );
     for (const err of result.errors) console.error(`[cron] error: ${err}`);
   } catch (err) {
+    // When rethrowing, let the caller decide how to classify (e.g. the
+    // bootstrap path downgrades NoUserFoundError to a warning). Logging
+    // "fatal" here too would produce a misleading contradictory pair.
+    if (rethrow) throw err;
     console.error(
       `[cron] ${startedAt.toISOString()} fatal: ${err instanceof Error ? err.message : String(err)}`,
     );
-    if (rethrow) throw err;
   }
 }
 
@@ -49,11 +52,31 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Start the cron loop that bootstraps and schedules periodic syncs until shutdown.
+ *
+ * Performs an initial "full" sync then repeatedly runs "recent" syncs at the configured interval.
+ * Startup errors representing real infrastructure failures are allowed to propagate, but a
+ * `NoUserFoundError` from syncIntervals is logged and suppressed so the cron stays up and retries
+ * on the next tick. The loop sleeps for the configured period between runs but wakes early when a
+ * shutdown signal is received; after shutdown completes the process exits with code 0.
+ */
 async function main() {
   console.log(`[cron] starting, period=${HOURS}h`);
-  // Bootstrap sync — if this fails the process exits non-zero via the outer
-  // .catch() so the container restarts (or fails the deploy).
-  await runOnce("full", { rethrow: true });
+  // Bootstrap sync: fail-fast on real infrastructure problems (bad
+  // DATABASE_URL, invalid INTERVALS_API_KEY, network unreachable) so the
+  // operator notices via the container's restart loop. The single exception
+  // is "no user seeded yet" — that's an expected fresh-deploy state, not a
+  // misconfiguration, so log it and let the cron stay up until a user is
+  // created. The next tick will pick the user up automatically.
+  try {
+    await runOnce("full", { rethrow: true });
+  } catch (err) {
+    if (!(err instanceof NoUserFoundError)) throw err;
+    console.warn(
+      `[cron] bootstrap skipped (${err.message}); will retry on next ${HOURS}h tick`,
+    );
+  }
 
   // Sequential awaited delays: a slow sync can never overlap the next tick.
   // Race the sleep against shutdownPromise so SIGTERM/SIGINT can break out
