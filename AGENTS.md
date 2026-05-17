@@ -1,6 +1,15 @@
 # Contributor Guide
 
-This project is a Python 3.12 backend service built with FastMCP and httpx. All source code lives under `src/intervals_mcp_server` and tests live under `tests`.
+This project contains a Python 3.12 backend service (source in `src/intervals_mcp_server`, tests in `tests`) plus a Next.js dashboard under `web/`.
+
+## Product Direction
+
+Before implementing dashboard, coach, analytics, roadmap, or product-facing work, read:
+
+- `docs/PRODUCT_DIRECTION.md` - product north star and feature gate.
+- `docs/fitness-intelligence-model.md` - decision-engine/spec, if present.
+
+All GitHub issues and PRs should align with the product direction. If an issue conflicts with it, pause and ask the maintainer before implementing.
 
 ## Development Environment
 - Use [uv](https://github.com/astral-sh/uv) to create and manage the virtual environment.
@@ -47,4 +56,10 @@ gh issue comment <issue-number> --body "Claimed by: <agent-name>\n\nScope: <shor
 
 When stopping work without finishing, remove `status:claimed`, unassign yourself, and either restore `status:available` or add `status:blocked` with a comment explaining the blocker.
 
-There is currently no frontend code in this repository. If a frontend is added in the future (for example with React or another framework), document how to run and test it within this file.
+## Web Dashboard
+
+The Next.js dashboard lives under `web/`.
+
+- Install/sync dependencies from `web/`: `npm install`.
+- Start local development from `web/`: `npm run dev`.
+- Run dashboard checks from `web/`: `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run build`.
