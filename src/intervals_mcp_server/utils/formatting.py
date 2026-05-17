@@ -380,8 +380,8 @@ def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = Fa
 def format_event_summary(event: dict[str, Any]) -> str:
     """Format a basic event summary into a readable string."""
 
-    # Update to check for "date" if "start_date_local" is not provided
-    event_date = event.get("start_date_local", event.get("date", "Unknown"))
+    # Fall back to "date" if "start_date_local" is missing or null.
+    event_date = event.get("start_date_local") or event.get("date") or "Unknown"
     event_type = "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
     event_name = event.get("name", "Unnamed")
     event_id = event.get("id", "N/A")

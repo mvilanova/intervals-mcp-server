@@ -206,6 +206,31 @@ def test_format_event_details_prefers_start_date_local_over_date():
     assert "Date: 2024-02-02" in details
 
 
+def test_format_event_details_falls_back_when_start_date_local_is_null():
+    """
+    Test that format_event_details falls back to date when start_date_local is explicitly None
+    (the or-chain must skip null values, not return them).
+    """
+    event = {
+        "id": "e1",
+        "start_date_local": None,
+        "date": "2024-01-01",
+        "name": "X",
+        "description": "",
+    }
+    details = format_event_details(event)
+    assert "Date: 2024-01-01" in details
+
+
+def test_format_event_details_renders_unknown_when_both_dates_missing():
+    """
+    Test that format_event_details renders 'Unknown' when both date fields are absent.
+    """
+    event = {"id": "e1", "name": "X", "description": ""}
+    details = format_event_details(event)
+    assert "Date: Unknown" in details
+
+
 def test_format_event_details_handles_null_calendar():
     """
     Test that format_event_details does not crash when "calendar" exists but is None
