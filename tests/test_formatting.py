@@ -5,6 +5,10 @@ These tests verify that the formatting functions produce expected output strings
 """
 
 import json
+from pathlib import Path
+
+import pytest
+
 from intervals_mcp_server.utils.formatting import (
     format_activity_summary,
     format_workout,
@@ -13,24 +17,18 @@ from intervals_mcp_server.utils.formatting import (
     format_event_details,
     format_intervals,
 )
-from tests.sample_data import INTERVALS_DATA
+from tests.sample_data import INTERVALS_DATA, SAMPLE_ACTIVITY
+
+_RESOURCES = Path(__file__).parent / "ressources"
 
 
 def test_format_activity_summary():
     """
     Test that format_activity_summary returns a string containing the activity name and ID.
     """
-    data = {
-        "name": "Morning Ride",
-        "id": 1,
-        "type": "Ride",
-        "startTime": "2024-01-01T08:00:00Z",
-        "distance": 1000,
-        "duration": 3600,
-    }
-    result = format_activity_summary(data)
+    result = format_activity_summary(SAMPLE_ACTIVITY)
     assert "Activity: Morning Ride" in result
-    assert "ID: 1" in result
+    assert f"ID: {SAMPLE_ACTIVITY['id']}" in result
 
 
 def test_format_workout():
@@ -136,6 +134,28 @@ def test_format_wellness_entry_macros_null_hidden():
     # "Fat" could legitimately appear inside e.g. "Body Fat" elsewhere, so
     # anchor the negative assertion on the line-prefix form we would emit.
     assert "- Fat:" not in result
+
+
+def test_format_wellness_entry_systolic_only_renders_solo():
+    """
+    If only `systolic` is present, the formatter should render it on its
+    own line rather than dropping it (the combined `Blood Pressure: …`
+    line is only valid when both values are available).
+    """
+    entry = {"id": "2026-04-08", "systolic": 121}
+    result = format_wellness_entry(entry)
+    assert "Blood Pressure:" not in result
+    assert "- Systolic BP: 121" in result
+
+
+def test_format_wellness_entry_diastolic_only_renders_solo():
+    """
+    Symmetric case: `diastolic` alone should still surface in the output.
+    """
+    entry = {"id": "2026-04-08", "diastolic": 79}
+    result = format_wellness_entry(entry)
+    assert "Blood Pressure:" not in result
+    assert "- Diastolic BP: 79" in result
 
 
 def test_format_event_summary():
@@ -254,3 +274,46 @@ def test_format_intervals():
     result = format_intervals(INTERVALS_DATA)
     assert "Intervals Analysis:" in result
     assert "Rep 1" in result
+
+
+def test_format_activity_summary_falls_back_when_primary_key_is_null():
+    """When the primary key is present but ``None``, ``_first_present`` must
+    keep walking to the next candidate. The API expresses an unset field as
+    explicit ``null``, so rendering ``Duration: None seconds`` (the previous
+    behaviour) would be a real regression for partial payloads."""
+    # `duration: None` should fall through to `elapsed_time` instead of
+    # rendering "Duration: None seconds".
+    activity = {
+        "name": "Recovery spin",
+        "id": "a1",
+        "type": "Ride",
+        "duration": None,
+        "elapsed_time": 3600,
+    }
+    summary = format_activity_summary(activity)
+    assert "Duration: 3600 seconds" in summary
+    assert "Duration: None" not in summary
+
+
+@pytest.mark.parametrize(
+    "fixture_name, fn",
+    [
+        ("activity_summary_full", format_activity_summary),
+        ("event_details_workout_race", format_event_details),
+        ("intervals_full", format_intervals),
+    ],
+)
+def test_formatter_matches_snapshot(fixture_name, fn):
+    """
+    Verify a formatter's output matches the stored snapshot for a given fixture.
+
+    Parameters:
+        fixture_name (str): Base name of the fixture files (JSON input and expected formatted text).
+        fn (Callable): Formatter function that accepts the loaded JSON payload and returns the formatted string.
+
+    Notes:
+        Asserts exact equality between the formatter's output and the snapshot file.
+    """
+    payload = json.loads((_RESOURCES / f"{fixture_name}.json").read_text(encoding="utf-8"))
+    expected = (_RESOURCES / f"{fixture_name}_formatted.txt").read_text(encoding="utf-8")
+    assert fn(payload) == expected

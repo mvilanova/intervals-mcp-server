@@ -1,38 +1,35 @@
 """
 Type definitions for Intervals.icu MCP Server.
 
-This module contains dataclasses and enums for representing workout data structures
-used in the Intervals.icu API, including workout steps, values, and documentation.
-Also includes enums for server configuration.
+This module contains dataclasses and enums for representing workout data
+structures used in the Intervals.icu API, including workout steps, values,
+and documentation. Also includes enums for server configuration.
+
+The per-class ``to_dict`` / ``from_dict`` methods are thin wrappers around
+the module-level :func:`_to_dict` / :func:`_from_dict` helpers, which iterate
+``dataclasses.fields()`` and use :func:`typing.get_type_hints` to coerce
+JSON values back into the right enum / dataclass / list types. Adding a new
+field to one of the dataclasses below requires no serializer changes.
 """
 
-from dataclasses import dataclass
-from typing import List, Dict, Optional, Any, Union
+from __future__ import annotations
+
+from dataclasses import dataclass, fields, is_dataclass
 from enum import Enum, StrEnum
-import json
+from types import UnionType
+from typing import Any, Union, get_args, get_origin, get_type_hints
 
 
 __all__ = [
-    "Option",
-    "WorkoutTarget",
-    "HrTarget",
-    "Intensity",
-    "PaceUnits",
-    "ValueUnits",
+    "Step",
     "TransportAliases",
     "Value",
-    "Step",
-    "SportSettings",
+    "ValueUnits",
     "WorkoutDoc",
 ]
 
 
-class Option(Enum):
-    """Enumeration of workout option types."""
-
-    CATEGORY = "category"
-    POOL_LENGTH = "pool_length"
-    POWER = "power"
+# --- Enums ------------------------------------------------------------------
 
 
 class WorkoutTarget(Enum):
@@ -100,277 +97,359 @@ class TransportAliases(StrEnum):
     STREAMABLE_HTTP = "streamable-http"
 
 
+# --- Generic dataclass <-> dict helpers -------------------------------------
+
+
+def _serialize(val: Any) -> Any:
+    """
+    Convert a Python value into a JSON-compatible representation.
+
+    Converts Enum members to their `.value`, dataclass instances to their `to_dict()` output, and recursively serializes lists and dicts so nested enums/dataclasses are converted. Values that are already JSON-compatible are returned unchanged.
+
+    Returns:
+        Any: A JSON-serializable representation of `val` (primitive, dict, list, or converted enum/dataclass form).
+    """
+    if isinstance(val, Enum):
+        return val.value
+    if is_dataclass(val) and not isinstance(val, type):
+        return val.to_dict()  # type: ignore[attr-defined]
+    if isinstance(val, list):
+        return [_serialize(v) for v in val]
+    if isinstance(val, dict):
+        # Recurse so nested enums / dataclasses inside dict values (e.g.
+        # WorkoutDoc.sport_settings) survive json.dumps.
+        return {k: _serialize(v) for k, v in val.items()}
+    return val
+
+
+def _to_dict(obj: Any, rename: dict[str, str] | None = None) -> dict[str, Any]:
+    """
+    Convert a dataclass instance to a JSON-serializable dict, omitting fields whose value is None.
+
+    Parameters:
+        obj (Any): A dataclass instance to serialize.
+        rename (dict[str, str] | None): Optional mapping from Python field names to output keys (e.g., snake_case -> camelCase). Keys not present in this mapping are emitted using the original field name.
+
+    Returns:
+        dict[str, Any]: A dict mapping output keys to serialized values (enums, nested dataclasses, lists, and dict values are converted via the module's serialization rules).
+    """
+    rename = rename or {}
+    out: dict[str, Any] = {}
+    for f in fields(obj):
+        val = getattr(obj, f.name)
+        if val is None:
+            continue
+        out[rename.get(f.name, f.name)] = _serialize(val)
+    return out
+
+
+def _coerce(val: Any, hint: Any) -> Any:
+    """
+    Coerce a JSON-derived value into the Python type described by `hint`.
+
+    Parameters:
+        val (Any): The JSON-derived value to coerce (may be None).
+        hint (Any): A type hint or annotation indicating the desired target type
+            (may be a concrete type, dataclass, Enum, `list[...]`, `typing.Union`, or
+            PEP 604 union).
+
+    Returns:
+        Any: The value converted to the hinted type when conversion is applicable:
+            - `None` if `val` is `None`.
+            - For `Optional[T]`/`T | None` with a single non-None arm, the result of
+              coercing to `T`.
+            - For `list[T]`, a list with each element coerced to `T`.
+            - For `Enum` subclasses, an enum instance constructed from `val`.
+            - For dataclass types, an instance built via `from_dict`.
+            - Numeric inputs coerced to `float` or `int` when the hint is `float` or
+              `int`, respectively.
+            If no applicable conversion is available, returns `val` unchanged.
+    """
+    # Null in JSON → None in Python, regardless of declared type. Without this
+    # guard, an explicit `null` for a `list[X] | None` field would crash the
+    # list comprehension below.
+    if val is None:
+        return None
+    origin = get_origin(hint)
+    # Both `typing.Union[X, None]` and PEP 604 `X | None` need to be matched:
+    # `get_origin(int | None)` returns `types.UnionType`, not `typing.Union`,
+    # so the legacy check alone silently misses every `X | None` field.
+    if origin is Union or origin is UnionType:
+        non_none = [a for a in get_args(hint) if a is not type(None)]
+        # Single non-None arm (Optional[X]) → recurse. Anything broader passes through.
+        if len(non_none) == 1:
+            return _coerce(val, non_none[0])
+        return val
+    if origin is list:
+        elem_hint = get_args(hint)[0] if get_args(hint) else Any
+        return [_coerce(v, elem_hint) for v in val]
+    if isinstance(hint, type):
+        if issubclass(hint, Enum):
+            return hint(val)
+        if is_dataclass(hint):
+            return hint.from_dict(val)  # type: ignore[attr-defined]
+        # `Value.value` / `Step.distance` are annotated `float`, but the API
+        # sends bare integers for round numbers. Without this cast, callers see
+        # an `int` where a `float` is declared — sloppy enough on py312 (where
+        # `int.is_integer()` happens to exist) and a real AttributeError on
+        # older runtimes if this code is ever back-ported. Branch explicitly
+        # so mypy can narrow the constructor call.
+        if isinstance(val, (int, float)):
+            if hint is float:
+                return float(val)
+            if hint is int:
+                return int(val)
+    return val
+
+
+def _from_dict(cls: type, data: dict[str, Any], rename: dict[str, str] | None = None) -> Any:
+    """
+    Create an instance of the given dataclass-like type from a JSON-compatible dictionary by coercing values to the annotated field types.
+
+    Parameters:
+        cls (type): The target dataclass/type to instantiate.
+        data (dict[str, Any]): Mapping of JSON keys to values to populate the instance.
+        rename (dict[str, str] | None): Optional mapping from Python field names to JSON keys; when provided, JSON keys will be mapped back to Python field names before coercion.
+
+    Returns:
+        An instance of `cls` constructed with values from `data` coerced to the corresponding type hints. Keys in `data` that do not correspond to `cls` type hints are ignored.
+    """
+    inv_rename = {v: k for k, v in (rename or {}).items()}
+    hints = get_type_hints(cls)
+    kwargs: dict[str, Any] = {}
+    for json_key, val in data.items():
+        py_key = inv_rename.get(json_key, json_key)
+        if py_key in hints:
+            kwargs[py_key] = _coerce(val, hints[py_key])
+    return cls(**kwargs)
+
+
 def float_to_str(value: float) -> str:
-    """Format the value without decimals if it's a whole number."""
+    """
+    Format a float as a string, omitting the decimal point when the value is a whole number.
+
+    Returns:
+        The string representation of the value; if the float is a whole number the decimal part is removed (e.g. 2.0 -> "2"), otherwise the standard float string is returned.
+    """
     return str(int(value)) if value.is_integer() else str(value)
+
+
+# --- Domain types -----------------------------------------------------------
+
+
+_VALUE_FORMATS: dict[ValueUnits, str] = {
+    ValueUnits.PERCENT_MMP: "{v}%",
+    ValueUnits.PERCENT_HR: "{v}%",
+    ValueUnits.PERCENT_LTHR: "{v}%",
+    ValueUnits.PERCENT_PACE: "{v}%",
+    ValueUnits.PERCENT_FTP: "{v}%",
+    ValueUnits.POWER_ZONE: "Z{v}",
+    ValueUnits.HR_ZONE: "Z{v}",
+    ValueUnits.PACE_ZONE: "Z{v}",
+    ValueUnits.WATTS: "{v}W",
+    ValueUnits.CADENCE: "{v}rpm",
+}
+
+_VALUE_UNIT_LABELS: dict[ValueUnits, str] = {
+    ValueUnits.PERCENT_HR: "HR",
+    ValueUnits.HR_ZONE: "HR",
+    ValueUnits.PERCENT_MMP: "MMP",
+    ValueUnits.PERCENT_LTHR: "LTHR",
+    ValueUnits.PERCENT_PACE: "Pace",
+    ValueUnits.PACE_ZONE: "Pace",
+    ValueUnits.PERCENT_FTP: "ftp",
+    ValueUnits.POWER_ZONE: "W",
+    ValueUnits.CADENCE: "Cadence",
+}
 
 
 @dataclass
 class Value:
-    """Represents a value with units for workout step intensity (power, heart rate, pace, cadence).
+    """Represents a value with units for workout step intensity.
 
-    Can represent a single value, a range (start-end), or a ramp. Supports various unit types
-    including percentages, zones, and absolute values.
+    Can represent a single value, a range (start-end), or a ramp. Supports
+    various unit types including percentages, zones, and absolute values.
     """
 
-    value: Optional[float] = None
-    start: Optional[float] = None
-    end: Optional[float] = None
-    units: Optional[ValueUnits] = None
-    target: Optional[HrTarget] = None
+    value: float | None = None
+    start: float | None = None
+    end: float | None = None
+    units: ValueUnits | None = None
+    target: HrTarget | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert Value instance to dictionary for JSON serialization."""
-        data: Dict[str, Any] = {}
-        if self.value is not None:
-            data["value"] = self.value
-        if self.start is not None:
-            data["start"] = self.start
-        if self.end is not None:
-            data["end"] = self.end
-        if self.units is not None:
-            data["units"] = self.units.value
-        if self.target is not None:
-            data["target"] = self.target.value
-        return data
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert the dataclass instance to a JSON-compatible dictionary for API serialization.
+
+        Returns:
+            dict[str, Any]: A dictionary containing all fields that are not `None`. Enum values are converted to their raw values, dataclass fields are converted to dictionaries, and lists/dicts are recursively serialized to JSON-compatible types.
+        """
+        return _to_dict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Value":
-        """Create Value instance from dictionary."""
-        kwargs = {}
-        if "value" in data:
-            kwargs["value"] = data["value"]
-        if "start" in data:
-            kwargs["start"] = data["start"]
-        if "end" in data:
-            kwargs["end"] = data["end"]
-        if "units" in data:
-            kwargs["units"] = ValueUnits(data["units"])
-        if "target" in data:
-            kwargs["target"] = HrTarget(data["target"])
-        return cls(**kwargs)
+    def from_dict(cls, data: dict[str, Any]) -> Value:
+        """
+        Create a Value instance from a JSON-compatible dictionary.
 
-    def to_json(self) -> str:
-        """Convert Value instance to JSON string."""
-        return json.dumps(self.to_dict())
+        Parameters:
+            data (dict[str, Any]): Dictionary containing keys that match Value's fields; values will be coerced to the annotated types.
 
-    @classmethod
-    def from_json(cls, json_str: str) -> "Value":
-        """Create Value instance from JSON string."""
-        return cls.from_dict(json.loads(json_str))
+        Returns:
+            Value: A new Value instance populated from `data`.
+        """
+        return _from_dict(cls, data)
 
     def _format_value(self, value: float) -> str:
-        if self.units in [
-            ValueUnits.PERCENT_HR,
-            ValueUnits.PERCENT_MMP,
-            ValueUnits.PERCENT_LTHR,
-            ValueUnits.PERCENT_PACE,
-            ValueUnits.PERCENT_FTP,
-        ]:
-            return f"{float_to_str(value)}%"
-        if self.units in [ValueUnits.POWER_ZONE, ValueUnits.HR_ZONE, ValueUnits.PACE_ZONE]:
-            return f"Z{float_to_str(value)}"
-        if self.units in [ValueUnits.WATTS]:
-            return f"{float_to_str(value)}W"
-        if self.units in [ValueUnits.CADENCE]:
-            return f"{float_to_str(value)}rpm"
-        return float_to_str(value)
+        """
+        Format a numeric value according to this Value's units for display.
+
+        Parameters:
+                value (float): The numeric value to format.
+
+        Returns:
+                formatted (str): The value formatted as a string using the unit-specific template (or plain numeric string if units are not set).
+        """
+        template = _VALUE_FORMATS.get(self.units, "{v}") if self.units else "{v}"
+        return template.format(v=float_to_str(value))
 
     def _format_units(self) -> str:
-        """Format units into a human-readable string using dictionary mapping."""
-        units_map = {
-            ValueUnits.PERCENT_HR: "HR",
-            ValueUnits.HR_ZONE: "HR",
-            ValueUnits.PERCENT_MMP: "MMP",
-            ValueUnits.PERCENT_LTHR: "LTHR",
-            ValueUnits.PERCENT_PACE: "Pace",
-            ValueUnits.PACE_ZONE: "Pace",
-            ValueUnits.PERCENT_FTP: "ftp",
-            ValueUnits.POWER_ZONE: "W",
-            ValueUnits.CADENCE: "Cadence",
-        }
+        """
+        Get the short label for this Value's units.
+
+        Returns:
+            The unit label string, or an empty string if `units` is `None` or no label is available.
+        """
         if self.units is None:
             return ""
-        return units_map.get(self.units, "")
+        return _VALUE_UNIT_LABELS.get(self.units, "")
 
     def __str__(self) -> str:
-        val = ""
+        """
+        Produce a compact human-readable representation of the Value.
+
+        The string includes, in order:
+        - a range formatted as `start-end` if both `start` and `end` are present,
+        - the primary value if present,
+        - the unit label if present,
+        - the heart-rate target as `hr=<target>` if present.
+        All present components are joined with single spaces.
+
+        Returns:
+            A formatted string describing the value and any available range, units, and HR target.
+        """
+        parts: list[str] = []
         if self.start is not None and self.end is not None:
-            val += f"{self._format_value(self.start)}-{self._format_value(self.end)} "
+            parts.append(f"{self._format_value(self.start)}-{self._format_value(self.end)}")
         if self.value is not None:
-            val += f"{self._format_value(self.value)} "
+            parts.append(self._format_value(self.value))
         if self.units is not None:
-            val += f"{self._format_units()} "
+            parts.append(self._format_units())
         if self.target is not None:
-            val += f"hr={self.target.value} "
-        return val.strip()
+            parts.append(f"hr={self.target.value}")
+        return " ".join(parts)
 
 
 @dataclass
-class Step:  # pylint: disable=too-many-instance-attributes
+class Step:
     """Represents a single step in a workout.
 
-    A step can be a warmup, cooldown, interval, or repeat block. It can specify
-    duration, distance, intensity targets (power, heart rate, pace, cadence), and
-    contain nested steps for repeats.
+    A step can be a warmup, cooldown, interval, or repeat block. It can
+    specify duration, distance, intensity targets, and contain nested steps
+    for repeats.
     """
 
-    text: Optional[str] = None
-    text_locale: Optional[Dict[str, str]] = None
-    duration: Optional[int] = None
-    distance: Optional[float] = None
-    until_lap_press: Optional[bool] = None
-    reps: Optional[int] = None
-    warmup: Optional[bool] = None
-    cooldown: Optional[bool] = None
-    intensity: Optional[Intensity] = None
-    steps: Optional[List["Step"]] = None
-    ramp: Optional[bool] = None
-    freeride: Optional[bool] = None
-    maxeffort: Optional[bool] = None
-    power: Optional[Value] = None
-    hr: Optional[Value] = None
-    pace: Optional[Value] = None
-    cadence: Optional[Value] = None
-    hidepower: Optional[bool] = None
-    # these are filled in with actual watts, bpm etc. when resolve=true parameter is supplied to the endpoint
-    _power: Optional[Value] = None
-    _hr: Optional[Value] = None
-    _pace: Optional[Value] = None
-    _distance: Optional[float] = None
+    text: str | None = None
+    text_locale: dict[str, str] | None = None
+    duration: int | None = None
+    distance: float | None = None
+    until_lap_press: bool | None = None
+    reps: int | None = None
+    warmup: bool | None = None
+    cooldown: bool | None = None
+    intensity: Intensity | None = None
+    steps: list[Step] | None = None
+    ramp: bool | None = None
+    freeride: bool | None = None
+    maxeffort: bool | None = None
+    power: Value | None = None
+    hr: Value | None = None
+    pace: Value | None = None
+    cadence: Value | None = None
+    hidepower: bool | None = None
+    # Resolved actual watts / bpm etc. when resolve=true is supplied to the endpoint.
+    _power: Value | None = None
+    _hr: Value | None = None
+    _pace: Value | None = None
+    _distance: float | None = None
 
-    def to_dict(self) -> Dict[str, Any]:  # pylint: disable=too-many-branches
-        """Convert Step instance to dictionary for JSON serialization.
-
-        Many branches are required to handle all optional fields of the Step dataclass.
+    def to_dict(self) -> dict[str, Any]:
         """
-        data: Dict[str, Any] = {}
-        if self.text is not None:
-            data["text"] = self.text
-        if self.text_locale is not None:
-            data["text_locale"] = self.text_locale
-        if self.duration is not None:
-            data["duration"] = self.duration
-        if self.distance is not None:
-            data["distance"] = self.distance
-        if self.until_lap_press is not None:
-            data["until_lap_press"] = self.until_lap_press
-        if self.reps is not None:
-            data["reps"] = self.reps
-        if self.warmup is not None:
-            data["warmup"] = self.warmup
-        if self.cooldown is not None:
-            data["cooldown"] = self.cooldown
-        if self.intensity is not None:
-            data["intensity"] = self.intensity.value
-        if self.steps is not None:
-            data["steps"] = [step.to_dict() for step in self.steps]
-        if self.ramp is not None:
-            data["ramp"] = self.ramp
-        if self.freeride is not None:
-            data["freeride"] = self.freeride
-        if self.maxeffort is not None:
-            data["maxeffort"] = self.maxeffort
-        if self.power is not None:
-            data["power"] = self.power.to_dict()
-        if self.hr is not None:
-            data["hr"] = self.hr.to_dict()
-        if self.pace is not None:
-            data["pace"] = self.pace.to_dict()
-        if self.cadence is not None:
-            data["cadence"] = self.cadence.to_dict()
-        if self.hidepower is not None:
-            data["hidepower"] = self.hidepower
-        if self._power is not None:
-            data["_power"] = self._power.to_dict()
-        if self._hr is not None:
-            data["_hr"] = self._hr.to_dict()
-        if self._pace is not None:
-            data["_pace"] = self._pace.to_dict()
-        if self._distance is not None:
-            data["_distance"] = self._distance
-        return data
+        Convert the dataclass instance to a JSON-compatible dictionary for API serialization.
+
+        Underscore-prefixed fields (``_power``, ``_hr``, ``_pace``, ``_distance``)
+        are *response-only*: the Intervals.icu API populates them on
+        ``resolve=true`` GETs but rejects them on writes. They must be stripped
+        from any payload that round-trips a resolved step back to the API.
+
+        Returns:
+            dict[str, Any]: A dictionary containing all non-`None`,
+            non-underscore-prefixed fields. Enum values are converted to their
+            raw values, dataclass fields are converted to dictionaries, and
+            lists/dicts are recursively serialized to JSON-compatible types.
+        """
+        return {k: v for k, v in _to_dict(self).items() if not k.startswith("_")}
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Step":  # pylint: disable=too-many-branches
-        """Create Step instance from dictionary.
-
-        Many branches are required to handle all optional fields of the Step dataclass.
+    def from_dict(cls, data: dict[str, Any]) -> Step:
         """
-        kwargs = {}
-        if "text" in data:
-            kwargs["text"] = data["text"]
-        if "text_locale" in data:
-            kwargs["text_locale"] = data["text_locale"]
-        if "duration" in data:
-            kwargs["duration"] = data["duration"]
-        if "distance" in data:
-            kwargs["distance"] = data["distance"]
-        if "until_lap_press" in data:
-            kwargs["until_lap_press"] = data["until_lap_press"]
-        if "reps" in data:
-            kwargs["reps"] = data["reps"]
-        if "warmup" in data:
-            kwargs["warmup"] = data["warmup"]
-        if "cooldown" in data:
-            kwargs["cooldown"] = data["cooldown"]
-        if "intensity" in data:
-            kwargs["intensity"] = Intensity(data["intensity"])
-        if "steps" in data:
-            kwargs["steps"] = [cls.from_dict(step) for step in data["steps"]]
-        if "ramp" in data:
-            kwargs["ramp"] = data["ramp"]
-        if "freeride" in data:
-            kwargs["freeride"] = data["freeride"]
-        if "maxeffort" in data:
-            kwargs["maxeffort"] = data["maxeffort"]
-        if "power" in data:
-            kwargs["power"] = Value.from_dict(data["power"])
-        if "hr" in data:
-            kwargs["hr"] = Value.from_dict(data["hr"])
-        if "pace" in data:
-            kwargs["pace"] = Value.from_dict(data["pace"])
-        if "cadence" in data:
-            kwargs["cadence"] = Value.from_dict(data["cadence"])
-        if "hidepower" in data:
-            kwargs["hidepower"] = data["hidepower"]
-        if "_power" in data:
-            kwargs["_power"] = Value.from_dict(data["_power"])
-        if "_hr" in data:
-            kwargs["_hr"] = Value.from_dict(data["_hr"])
-        if "_pace" in data:
-            kwargs["_pace"] = Value.from_dict(data["_pace"])
-        if "_distance" in data:
-            kwargs["_distance"] = data["_distance"]
-        return cls(**kwargs)
+        Create a Step instance from a dictionary containing serialized Step fields.
 
-    def to_json(self) -> str:
-        """Convert Step instance to JSON string."""
-        return json.dumps(self.to_dict())
+        Parameters:
+            data (dict[str, Any]): Mapping of field names to values representing a Step.
 
-    @classmethod
-    def from_json(cls, json_str: str) -> "Step":
-        """Create Step instance from JSON string."""
-        return cls.from_dict(json.loads(json_str))
+        Returns:
+            Step: The deserialized Step instance.
+        """
+        return _from_dict(cls, data)
 
     def _format_duration(self) -> str:
-        """Format duration into a human-readable string."""
+        """
+        Format self.duration (seconds) into a compact human-readable string.
+
+        If `self.duration` is None an empty string is returned. Hours are emitted as
+        "{h}h" when duration >= 3600, minutes as "{m}m" when the remaining seconds
+        are greater than 100 or exactly 60, and seconds as "{s}s" for any remaining
+        seconds > 0. Components are concatenated without separators.
+
+        Returns:
+            str: The formatted duration string, or an empty string if `duration` is None.
+        """
         if self.duration is None:
             return ""
-        remaining_duration = self.duration
-        val = ""
-        if remaining_duration > 3600:
-            val += f"{remaining_duration // 3600}h"
-            remaining_duration %= 3600
-        if remaining_duration > 100 or remaining_duration == 60:
-            val += f"{remaining_duration // 60}m"
-            remaining_duration %= 60
-        if remaining_duration > 0:
-            val += f"{remaining_duration}s"
-        return val
+        remaining = self.duration
+        parts: list[str] = []
+        # `>=` rather than `>` so exact-hour and exact-minute boundaries
+        # render with their natural unit (3600s → "1h", not "60m"; 90s →
+        # "1m30s", not "90s").
+        if remaining >= 3600:
+            parts.append(f"{remaining // 3600}h")
+            remaining %= 3600
+        if remaining >= 60:
+            parts.append(f"{remaining // 60}m")
+            remaining %= 60
+        if remaining > 0:
+            parts.append(f"{remaining}s")
+        return "".join(parts)
 
     def _format_distance(self) -> str:
-        """Format distance into a human-readable string."""
+        """
+        Format the instance's distance into a compact human-readable string.
+
+        Returns:
+            A short string representing `distance`: `''` if `distance` is None; otherwise
+            `'<n>mtr'` when `distance` is less than 1000 (meters) or `'<n>km'` for
+            kilometer values. The numeric portion omits a decimal point for whole numbers.
+        """
         if self.distance is None:
             return ""
         if self.distance < 1000:
@@ -378,13 +457,28 @@ class Step:  # pylint: disable=too-many-instance-attributes
         return f"{float_to_str(self.distance / 1000)}km"
 
     def __str__(self) -> str:
-        """Convert Step to string representation."""
+        """
+        Provide a human-readable, formatted string representation of the Step.
+
+        Returns:
+            A formatted, human-readable string describing the step (may include multiple lines and nested step text).
+        """
         return self._to_str()
 
-    def _to_str(self, nested: bool = False) -> str:  # pylint: disable=too-many-branches
-        """Convert Step to string representation.
+    def _to_str(self, nested: bool = False) -> str:
+        """
+        Render this Step as a formatted multi-line string describing its duration/distance, flags, intensity, targets, text, and any nested steps.
 
-        Many branches are required to format all optional fields and handle different step types.
+        If `reps` is set the string is prefixed with "{reps}x " and, when `steps` are present, each nested step is appended on its own line. When not repeated, warmup/cooldown headers are included (unless `nested` is True), and duration or distance is shown with any enabled flags (`freeride`, `maxeffort`, `ramp`, `hidepower`), intensity, and target values appended. Trailing newlines are added for repeated groups and for top-level warmup/cooldown sections.
+
+        Parameters:
+                nested (bool): If True, render this step in a nested context (suppresses warmup/cooldown headers and disallows top-level repeats).
+
+        Returns:
+                str: The composed, human-readable representation of the step.
+
+        Raises:
+                ValueError: If `nested` is True while `reps` is set (nested repeated groups are not supported).
         """
         val = ""
         if self.reps is not None:
@@ -397,190 +491,104 @@ class Step:  # pylint: disable=too-many-instance-attributes
             if not nested and self.cooldown:
                 val += "\nCooldown\n"
 
-            val += ""
             if self.duration is not None:
                 val += f"- {self._format_duration()} "
             elif self.distance is not None:
                 val += f"- {self._format_distance()} "
 
-            if self.freeride:
-                val += "freeride "
-            if self.maxeffort:
-                val += "maxeffort "
-            if self.ramp:
-                val += "ramp "
-            if self.hidepower:
-                val += "hidepower "
+            for flag, label in (
+                (self.freeride, "freeride"),
+                (self.maxeffort, "maxeffort"),
+                (self.ramp, "ramp"),
+                (self.hidepower, "hidepower"),
+            ):
+                if flag:
+                    val += f"{label} "
             if self.intensity is not None:
                 val += f"intensity={self.intensity.value} "
 
-            if self.power is not None:
-                val += f"{self.power} "
-            if self.hr is not None:
-                val += f"{self.hr} "
-            if self.pace is not None:
-                val += f"{self.pace} "
-            if self.cadence is not None:
-                val += f"{self.cadence} "
+            for target in (self.power, self.hr, self.pace, self.cadence):
+                if target is not None:
+                    val += f"{target} "
         if self.text is not None:
             val += f"{self.text} "
         if self.reps is not None and self.steps is not None:
             for step in self.steps:
-                # Using _to_str instead of __str__ because we need the nested=True arg;
-                # __str__ can't accept extra parameters.
-                val += "\n" + step._to_str(nested=True)  # pylint: disable=protected-access
+                # nested=True requires the private helper; __str__ can't take args.
+                val += "\n" + step._to_str(nested=True)  # noqa: SLF001
             val += "\n"
         elif not nested and (self.warmup or self.cooldown):
             val += "\n"
         return val
 
 
-@dataclass
-class SportSettings:
-    """Represents sport-specific settings for a workout.
-
-    Currently empty, but can be extended with sport-specific configuration
-    as needed by the Intervals.icu API.
-    """
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert SportSettings instance to dictionary for JSON serialization."""
-        return {}
-
-    @classmethod
-    def from_dict(cls, _data: Dict[str, Any]) -> "SportSettings":
-        """Create SportSettings instance from dictionary."""
-        return cls()
-
-    def to_json(self) -> str:
-        """Convert SportSettings instance to JSON string."""
-        return json.dumps(self.to_dict())
-
-    @classmethod
-    def from_json(cls, json_str: str) -> "SportSettings":
-        """Create SportSettings instance from JSON string."""
-        return cls.from_dict(json.loads(json_str))
+# WorkoutDoc.sport_settings is a free-form dict (the Intervals.icu API
+# documents no fixed fields). It used to be a dedicated empty dataclass
+# that always serialized to {}; inlining as a dict is observationally
+# identical and removes a 25-line placeholder class.
 
 
 @dataclass
-class WorkoutDoc:  # pylint: disable=too-many-instance-attributes
-    """Represents a complete workout document with description, steps, and settings.
+class WorkoutDoc:
+    """Represents a complete workout document for the Intervals.icu API.
 
-    This is the main structure used to define workouts for the Intervals.icu API,
-    containing workout metadata, step definitions, and sport-specific settings.
-
-    Many instance attributes are required to match the Intervals.icu API schema exactly.
+    Contains workout metadata, step definitions, and sport-specific settings.
     """
 
-    description: Optional[str] = None
-    description_locale: Optional[Dict[str, str]] = None
-    duration: Optional[int] = None
-    distance: Optional[float] = None
-    ftp: Optional[int] = None
-    lthr: Optional[int] = None
-    threshold_pace: Optional[float] = None  # meters/sec
-    pace_units: Optional[PaceUnits] = None
-    sport_settings: Optional[SportSettings] = None
-    category: Optional[str] = None
-    target: Optional[WorkoutTarget] = None
-    steps: Optional[List[Step]] = None
-    zone_times: Optional[List[Union[int, Any]]] = (
-        None  # sometimes array of ints otherwise array of objects
-    )
-    options: Optional[Dict[str, str]] = None
-    locales: Optional[List[str]] = None
+    description: str | None = None
+    description_locale: dict[str, str] | None = None
+    duration: int | None = None
+    distance: float | None = None
+    ftp: int | None = None
+    lthr: int | None = None
+    threshold_pace: float | None = None  # meters/sec
+    pace_units: PaceUnits | None = None
+    sport_settings: dict[str, Any] | None = None
+    category: str | None = None
+    target: WorkoutTarget | None = None
+    steps: list[Step] | None = None
+    # `zone_times` is sometimes an array of ints, sometimes of objects.
+    zone_times: list[int | dict[str, Any]] | None = None
+    options: dict[str, str] | None = None
+    locales: list[str] | None = None
 
-    def to_dict(self) -> Dict[str, Any]:  # pylint: disable=too-many-branches
-        """Convert WorkoutDoc instance to dictionary for JSON serialization.
+    # Snake-case fields that the API spells in camelCase.
+    _RENAME = {"sport_settings": "sportSettings", "zone_times": "zoneTimes"}
 
-        Many branches are required to handle all optional fields of the WorkoutDoc dataclass.
+    def to_dict(self) -> dict[str, Any]:
         """
-        data: Dict[str, Any] = {}
-        if self.description is not None:
-            data["description"] = self.description
-        if self.description_locale is not None:
-            data["description_locale"] = self.description_locale
-        if self.duration is not None:
-            data["duration"] = self.duration
-        if self.distance is not None:
-            data["distance"] = self.distance
-        if self.ftp is not None:
-            data["ftp"] = self.ftp
-        if self.lthr is not None:
-            data["lthr"] = self.lthr
-        if self.threshold_pace is not None:
-            data["threshold_pace"] = self.threshold_pace
-        if self.pace_units is not None:
-            data["pace_units"] = self.pace_units.value
-        if self.sport_settings is not None:
-            data["sportSettings"] = self.sport_settings.to_dict()  # API uses camelCase
-        if self.category is not None:
-            data["category"] = self.category
-        if self.target is not None:
-            data["target"] = self.target.value
-        if self.steps is not None:
-            data["steps"] = [step.to_dict() for step in self.steps]
-        if self.zone_times is not None:
-            data["zoneTimes"] = self.zone_times  # API uses camelCase
-        if self.options is not None:
-            data["options"] = self.options
-        if self.locales is not None:
-            data["locales"] = self.locales
-        return data
+        Serialize the workout document into a JSON-compatible dictionary suitable for the API.
+
+        Returns:
+            dict[str, Any]: A dictionary using the API's field names (camelCase where applicable); any fields with value `None` are omitted.
+        """
+        return _to_dict(self, rename=self._RENAME)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "WorkoutDoc":  # pylint: disable=too-many-branches
-        """Create WorkoutDoc instance from dictionary.
-
-        Many branches are required to handle all optional fields of the WorkoutDoc dataclass.
+    def from_dict(cls, data: dict[str, Any]) -> WorkoutDoc:
         """
-        kwargs = {}
-        if "description" in data:
-            kwargs["description"] = data["description"]
-        if "description_locale" in data:
-            kwargs["description_locale"] = data["description_locale"]
-        if "duration" in data:
-            kwargs["duration"] = data["duration"]
-        if "distance" in data:
-            kwargs["distance"] = data["distance"]
-        if "ftp" in data:
-            kwargs["ftp"] = data["ftp"]
-        if "lthr" in data:
-            kwargs["lthr"] = data["lthr"]
-        if "threshold_pace" in data:
-            kwargs["threshold_pace"] = data["threshold_pace"]
-        if "pace_units" in data:
-            kwargs["pace_units"] = PaceUnits(data["pace_units"])
-        if "sportSettings" in data:  # API uses camelCase
-            kwargs["sport_settings"] = SportSettings.from_dict(data["sportSettings"])
-        if "category" in data:
-            kwargs["category"] = data["category"]
-        if "target" in data:
-            kwargs["target"] = WorkoutTarget(data["target"])
-        if "steps" in data:
-            kwargs["steps"] = [Step.from_dict(step) for step in data["steps"]]
-        if "zoneTimes" in data:  # API uses camelCase
-            kwargs["zone_times"] = data["zoneTimes"]
-        if "options" in data:
-            kwargs["options"] = data["options"]
-        if "locales" in data:
-            kwargs["locales"] = data["locales"]
-        return cls(**kwargs)
+        Create a WorkoutDoc from a JSON-style dictionary.
 
-    def to_json(self) -> str:
-        """Convert WorkoutDoc instance to JSON string."""
-        return json.dumps(self.to_dict())
+        Parameters:
+            data (dict[str, Any]): Dictionary of workout fields (typically API/camelCase keys) to be coerced into the typed WorkoutDoc structure, including nested steps and enum values.
 
-    @classmethod
-    def from_json(cls, json_str: str) -> "WorkoutDoc":
-        """Create WorkoutDoc instance from JSON string."""
-        return cls.from_dict(json.loads(json_str))
+        Returns:
+            WorkoutDoc: An instance populated from the provided dictionary.
+        """
+        return _from_dict(cls, data, rename=cls._RENAME)
 
     def __str__(self) -> str:
-        val = ""
+        """
+        Return a human-readable workout document consisting of the optional description followed by each step on its own line.
+
+        If `description` is present it appears first followed by a newline. Each step in `steps`, if present, is rendered using the step's string representation with a trailing newline. Returns an empty string when neither `description` nor `steps` are set.
+
+        Returns:
+            str: The concatenated description and step lines.
+        """
+        parts: list[str] = []
         if self.description is not None:
-            val += f"{self.description}\n"
+            parts.append(f"{self.description}\n")
         if self.steps is not None:
-            for step in self.steps:
-                val += step.__str__() + "\n"
-        return val
+            parts.extend(f"{step}\n" for step in self.steps)
+        return "".join(parts)

@@ -4,6 +4,23 @@ Sample data for testing Intervals.icu MCP server functions.
 This module contains test data structures used across the test suite.
 """
 
+SAMPLE_ACTIVITY = {
+    "name": "Morning Ride",
+    "id": 123,
+    "type": "Ride",
+    "startTime": "2024-01-01T08:00:00Z",
+    "distance": 1000,
+    "duration": 3600,
+}
+
+SAMPLE_EVENT = {
+    "id": "e1",
+    "date": "2024-01-01",
+    "name": "Test Event",
+    "description": "desc",
+    "race": True,
+}
+
 INTERVALS_DATA = {
     "id": "i1",
     "analyzed": True,

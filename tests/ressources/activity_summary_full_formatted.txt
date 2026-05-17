@@ -1,0 +1,64 @@
+
+Activity: Hill Repeats
+ID: 987654
+Type: Ride
+Date: 2024-05-15 07:30:00
+Description: 5x5min Z4 with 3min recoveries
+Distance: 42500 meters
+Duration: 5400 seconds
+Moving Time: 5100 seconds
+Elevation Gain: 850 meters
+Elevation Loss: 820 meters
+
+Power Data:
+Average Power: 245 watts
+Weighted Avg Power: 268 watts
+Training Load: 92
+FTP: 280 watts
+Kilojoules: 1323000
+Intensity: 0.88
+Power:HR Ratio: 1.62
+Variability Index: 1.09
+
+Heart Rate Data:
+Average Heart Rate: 148 bpm
+Max Heart Rate: 175 bpm
+LTHR: 165 bpm
+Resting HR: 48 bpm
+Decoupling: 4.2
+
+Other Metrics:
+Cadence: 88 rpm
+Calories burned: 1240 kcal
+Average Speed: 7.85 m/s
+Max Speed: 12.3 m/s
+Average Stride: 0
+L/R Balance: 50
+Weight: 72 kg
+RPE: 7/10
+Session RPE: 6
+Feel: 4/5
+
+Environment:
+Trainer: False
+Average Temp: 18°C
+Min Temp: 14°C
+Max Temp: 22°C
+Avg Wind Speed: 12 km/h
+Headwind %: 35%
+Tailwind %: 30%
+
+Training Metrics:
+Fitness (CTL): 78.5
+Fatigue (ATL): 92.1
+TRIMP: 145
+Polarization Index: 2.4
+Power Load: 92
+HR Load: 88
+Pace Load: 0
+Efficiency Factor: 1.85
+
+Device Info:
+Device: Garmin Edge 1040
+Power Meter: Quarq DZero
+File Type: .fit

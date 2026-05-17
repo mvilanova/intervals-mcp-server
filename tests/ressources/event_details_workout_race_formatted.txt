@@ -1,0 +1,19 @@
+Event Details:
+
+ID: e123
+Date: 2024-05-15
+Name: Stage 1: Pyrenees Climb
+Description: Cat 1 climb to summit, 18km @ 7.5%
+
+Workout Information:
+Workout ID: w42
+Sport: Ride
+Duration: 3600 seconds
+TSS: 95
+Intervals: 5
+
+Race Information:
+Priority: A
+Result: 12th
+
+Calendar: TdF Etape Tour 2024

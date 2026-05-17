@@ -1,0 +1,187 @@
+"""
+Regression tests for the generic dataclass helpers in
+``intervals_mcp_server.utils.types``.
+
+The helpers (`_coerce`, `_serialize`) are module-private but cover the
+JSON ↔ dataclass round-trip for every dataclass in this module. The cases
+below pin down three failure modes that were not exercised by the
+original suite:
+
+* ``_coerce(None, list[Foo] | None)`` must return ``None`` rather than
+  crashing on the list comprehension (Optional list fields receiving
+  explicit ``null`` from the API).
+* ``_coerce`` must recognise PEP 604 unions (``X | None``) the same way
+  it recognises ``typing.Union[X, None]``. Every field in ``types.py``
+  is declared with the PEP 604 syntax, so this is the path that
+  actually runs in production.
+* ``_serialize`` must recurse into dict values so enums and dataclasses
+  nested inside ``WorkoutDoc.sport_settings`` survive ``json.dumps``.
+"""
+
+from __future__ import annotations
+
+from intervals_mcp_server.utils.types import (
+    Intensity,
+    Step,
+    Value,
+    ValueUnits,
+    _coerce,
+    _serialize,
+)
+
+
+# --- _coerce ----------------------------------------------------------------
+
+
+def test_coerce_none_returns_none_for_optional_list():
+    """``None`` should pass through, even when the hint is a list union."""
+    hint = list[Step] | None
+    assert _coerce(None, hint) is None
+
+
+def test_coerce_pep604_union_dispatches_to_enum():
+    """`X | None` must trigger the same Optional-recursion as `Union[X, None]`.
+
+    Before the fix, ``get_origin(Intensity | None)`` returned
+    ``types.UnionType`` and the legacy ``origin is Union`` check missed
+    it, so the raw string fell through unchanged.
+    """
+    step = Step.from_dict({"intensity": "active"})
+    assert step.intensity is Intensity.ACTIVE
+
+
+def test_coerce_pep604_union_dispatches_to_nested_list():
+    """``list[Step] | None`` must coerce the inner elements via Step.from_dict."""
+    step = Step.from_dict(
+        {
+            "steps": [
+                {"intensity": "warmup", "duration": 600},
+                {"intensity": "interval", "duration": 60},
+            ],
+        }
+    )
+    assert step.steps is not None
+    assert all(isinstance(s, Step) for s in step.steps)
+    assert step.steps[0].intensity is Intensity.WARMUP
+    assert step.steps[1].duration == 60
+
+
+# --- _serialize -------------------------------------------------------------
+
+
+def test_serialize_recurses_into_dict_values():
+    """Enums and lists nested inside dict values must be serialised, not leaked.
+
+    ``WorkoutDoc.sport_settings`` is typed ``dict[str, Any]``; this is the
+    only field that can carry enum / dataclass values inside a dict.
+    """
+    serialized = _serialize(
+        {
+            "units": ValueUnits.WATTS,
+            "intensities": [Intensity.ACTIVE, Intensity.RECOVERY],
+        }
+    )
+    assert serialized == {
+        "units": "w",
+        "intensities": ["active", "recovery"],
+    }
+
+
+def test_serialize_recurses_into_nested_dataclass_in_dict():
+    """A dataclass tucked inside a dict value should serialise via its to_dict."""
+    serialized = _serialize({"target": Value(value=95.0, units=ValueUnits.PERCENT_FTP)})
+    assert serialized == {"target": {"value": 95.0, "units": "%ftp"}}
+
+
+# --- numeric coercion ------------------------------------------------------
+
+
+def test_coerce_int_to_float_for_float_hint():
+    """
+    Ensure integers from JSON are converted to the expected numeric representation for fields annotated as float.
+
+    This test verifies that constructing a Value from JSON with an integer `value` yields a Python float (e.g., `95` -> `95.0`) so downstream float-only helpers operate correctly.
+    """
+    value = Value.from_dict({"value": 95, "units": "%ftp"})
+    assert value.value == 95.0
+    assert isinstance(value.value, float)
+
+
+def test_coerce_float_passthrough_for_float_hint():
+    """Floats stay floats — the int branch must not over-cast."""
+    value = Value.from_dict({"value": 95.5, "units": "%ftp"})
+    assert value.value == 95.5
+    assert isinstance(value.value, float)
+
+
+# --- Step._format_duration boundary cases ----------------------------------
+
+
+def test_format_duration_exact_hour_renders_as_h():
+    """3600 seconds is one hour, not sixty minutes (`>=` not `>`)."""
+    assert Step(duration=3600)._format_duration() == "1h"
+
+
+def test_format_duration_exact_minute_renders_as_m():
+    """60 seconds is one minute — preserved across the threshold fix."""
+    assert Step(duration=60)._format_duration() == "1m"
+
+
+def test_format_duration_minute_plus_seconds_is_split():
+    """90 seconds should render as `1m30s`, not the previous `90s`."""
+    assert Step(duration=90)._format_duration() == "1m30s"
+
+
+def test_format_duration_hour_minute_seconds_mixed():
+    """Multi-unit durations should compose all three parts."""
+    # 1h 2m 3s = 3723
+    assert Step(duration=3723)._format_duration() == "1h2m3s"
+
+
+def test_format_duration_seconds_only_below_minute():
+    """Durations under a minute keep their `Xs` form."""
+    assert Step(duration=45)._format_duration() == "45s"
+
+
+# --- Step.to_dict resolved-only field exclusion ----------------------------
+
+
+def test_step_to_dict_excludes_underscore_prefixed_fields():
+    """``_power`` / ``_hr`` / ``_pace`` / ``_distance`` are response-only
+    fields the API rejects on writes. They must not appear in to_dict output
+    even when populated (which happens whenever a ``resolve=true`` GET is
+    round-tripped back through the dataclass)."""
+    step = Step(
+        intensity=Intensity.ACTIVE,
+        duration=60,
+        _power=Value(value=250.0, units=ValueUnits.WATTS),
+        _hr=Value(value=150.0, units=ValueUnits.HR_ZONE),
+        _pace=Value(value=4.0, units=ValueUnits.PACE_ZONE),
+        _distance=1000.0,
+    )
+    out = step.to_dict()
+    assert "_power" not in out
+    assert "_hr" not in out
+    assert "_pace" not in out
+    assert "_distance" not in out
+    # Non-private fields are still emitted.
+    assert out["intensity"] == "active"
+    assert out["duration"] == 60
+
+
+def test_step_round_trip_strips_resolved_fields():
+    """End-to-end: a payload from a ``resolve=true`` GET must not leak its
+    resolved sentinels back on the next write."""
+    resolved_payload = {
+        "intensity": "interval",
+        "duration": 30,
+        "_power": {"value": 300, "units": "w"},
+        "_hr": {"value": 170, "units": "hr_zone"},
+        "_distance": 200,
+    }
+    step = Step.from_dict(resolved_payload)
+    out = step.to_dict()
+    # The underscore fields survived parsing (so callers can read them) ...
+    assert step._power is not None
+    # ... but never make it back into the write payload.
+    assert all(not k.startswith("_") for k in out)
