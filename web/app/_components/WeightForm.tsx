@@ -28,6 +28,7 @@ export function WeightForm({ todayWeight }: Props) {
       </div>
       <div className="flex gap-2">
         <input
+          id="weightKg-input"
           name="weightKg"
           type="number"
           inputMode="decimal"
@@ -37,12 +38,20 @@ export function WeightForm({ todayWeight }: Props) {
           required
           defaultValue={todayWeight?.weightKg ?? ""}
           placeholder="kg"
+          aria-label="Weight in kilograms"
+          aria-describedby={state?.ok === false ? "weightKg-error" : undefined}
+          aria-invalid={state?.ok === false || undefined}
           className="flex-1 rounded border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-base tabular-nums"
         />
         <SubmitButton />
       </div>
       {state?.ok === false ? (
-        <p role="alert" aria-live="polite" className="text-xs text-red-600">
+        <p
+          id="weightKg-error"
+          role="alert"
+          aria-live="polite"
+          className="text-xs text-red-600"
+        >
           {state.error}
         </p>
       ) : null}

@@ -30,6 +30,7 @@ function makeMealLog(
 
 describe("MealGrid", () => {
   beforeEach(() => {
+    mockLogMeal.mockReset();
     mockLogMeal.mockResolvedValue({ ok: true });
   });
 
