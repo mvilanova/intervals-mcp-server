@@ -1,4 +1,5 @@
 import type { DailyMetrics } from "@prisma/client";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
 type Props = {
   today: DailyMetrics | null;
@@ -23,20 +24,22 @@ export function TrainingLoadCard({ today, yesterday }: Props) {
   const ramp = today?.rampRate;
 
   return (
-    <section className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
-      <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-        Training load
-      </h2>
-      <div className="grid grid-cols-3 gap-2">
-        <Metric label="CTL" value={fmt(today?.ctl ?? null)} delta={ctlDelta} />
-        <Metric label="ATL" value={fmt(today?.atl ?? null)} delta={atlDelta} />
-        <Metric
-          label="Ramp"
-          value={ramp == null ? "—" : `${ramp.toFixed(1)}`}
-          delta={null}
-        />
-      </div>
-    </section>
+    <Card>
+      <CardHeader>
+        <CardTitle>Training load</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-3 gap-2">
+          <Metric label="CTL" value={fmt(today?.ctl ?? null)} delta={ctlDelta} />
+          <Metric label="ATL" value={fmt(today?.atl ?? null)} delta={atlDelta} />
+          <Metric
+            label="Ramp"
+            value={ramp == null ? "—" : `${ramp.toFixed(1)}`}
+            delta={null}
+          />
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

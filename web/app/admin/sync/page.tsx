@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { syncIntervals } from "@/lib/sync/intervals";
+import { Button } from "@/app/_components/ui/button";
 
 export const dynamic = "force-dynamic";
 
@@ -47,21 +48,13 @@ export default async function AdminSyncPage() {
       <section className="flex gap-2">
         <form action={runSync}>
           <input type="hidden" name="mode" value="recent" />
-          <button
-            type="submit"
-            className="rounded bg-black px-4 py-2 text-white"
-          >
-            Sync now (last 3d)
-          </button>
+          <Button type="submit">Sync now (last 3d)</Button>
         </form>
         <form action={runSync}>
           <input type="hidden" name="mode" value="full" />
-          <button
-            type="submit"
-            className="rounded border border-gray-300 px-4 py-2"
-          >
+          <Button type="submit" variant="outline">
             Full sync (30d)
-          </button>
+          </Button>
         </form>
       </section>
 

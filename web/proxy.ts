@@ -40,5 +40,8 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|fonts/).*)"],
+  // `fonts(?:/|$)` excludes both `/fonts` and `/fonts/*` from middleware —
+  // a bare `fonts/` would only exclude the trailing-slash form, leaking
+  // `/fonts` into the auth-gated path.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|fonts(?:/|$)).*)"],
 };

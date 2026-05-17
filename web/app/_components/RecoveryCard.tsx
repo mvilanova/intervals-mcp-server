@@ -1,4 +1,5 @@
 import type { DailyMetrics } from "@prisma/client";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
 type Props = {
   today: DailyMetrics | null;
@@ -18,40 +19,42 @@ export function RecoveryCard({ today, baselineRhr }: Props) {
   const sleepScore = today?.sleepScore;
 
   return (
-    <section className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
-      <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-        Recovery
-      </h2>
-      <div className="grid grid-cols-3 gap-2">
-        <div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">RHR</div>
-          <div className="text-2xl font-semibold tabular-nums">
-            {today?.rhr ?? "—"}
-          </div>
-          {rhrDelta(today?.rhr ?? null, baselineRhr) ? (
-            <div className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-              {rhrDelta(today?.rhr ?? null, baselineRhr)}
+    <Card>
+      <CardHeader>
+        <CardTitle>Recovery</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-3 gap-2">
+          <div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">RHR</div>
+            <div className="text-2xl font-semibold tabular-nums">
+              {today?.rhr ?? "—"}
             </div>
-          ) : null}
-        </div>
-        <div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">HRV</div>
-          <div className="text-2xl font-semibold tabular-nums">
-            {today?.hrv != null ? today.hrv.toFixed(0) : "—"}
+            {rhrDelta(today?.rhr ?? null, baselineRhr) ? (
+              <div className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
+                {rhrDelta(today?.rhr ?? null, baselineRhr)}
+              </div>
+            ) : null}
           </div>
-        </div>
-        <div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">Sleep</div>
-          <div className="text-2xl font-semibold tabular-nums">
-            {sleepHours != null ? `${sleepHours.toFixed(1)}h` : "—"}
-          </div>
-          {sleepScore != null ? (
-            <div className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-              score {sleepScore}
+          <div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">HRV</div>
+            <div className="text-2xl font-semibold tabular-nums">
+              {today?.hrv != null ? today.hrv.toFixed(0) : "—"}
             </div>
-          ) : null}
+          </div>
+          <div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Sleep</div>
+            <div className="text-2xl font-semibold tabular-nums">
+              {sleepHours != null ? `${sleepHours.toFixed(1)}h` : "—"}
+            </div>
+            {sleepScore != null ? (
+              <div className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
+                score {sleepScore}
+              </div>
+            ) : null}
+          </div>
         </div>
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }

@@ -4,6 +4,7 @@ import { useOptimistic, useState, useTransition } from "react";
 import type { MealLog } from "@prisma/client";
 import { logMeal } from "../actions/logging";
 import type { MealStatus, MealType } from "../actions/logging";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
 const MEALS: { type: MealType; label: string }[] = [
   { type: "breakfast", label: "Breakfast" },
@@ -90,52 +91,54 @@ export function MealGrid({ initial }: Props) {
   };
 
   return (
-    <section className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
-      <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-        Meals
-      </h2>
-      <div className="space-y-2">
-        {MEALS.map(({ type, label }) => {
-          const active = currentStatus(type);
-          const isPending = pending.has(type);
-          return (
-            <div key={type} className="grid grid-cols-[6rem_1fr] items-center gap-2">
-              <div className="text-sm">{label}</div>
-              <div
-                role="group"
-                aria-label={`${label} status`}
-                aria-busy={isPending}
-                className="grid grid-cols-3 gap-1.5"
-              >
-                {STATUSES.map(({ value, label: btnLabel, activeClass }) => {
-                  const isActive = active === value;
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => handleClick(type, value)}
-                      disabled={isPending}
-                      aria-pressed={isActive}
-                      className={`rounded border px-2 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                        isActive
-                          ? activeClass
-                          : "border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300"
-                      }`}
-                    >
-                      {btnLabel}
-                    </button>
-                  );
-                })}
+    <Card>
+      <CardHeader>
+        <CardTitle>Meals</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="space-y-2">
+          {MEALS.map(({ type, label }) => {
+            const active = currentStatus(type);
+            const isPending = pending.has(type);
+            return (
+              <div key={type} className="grid grid-cols-[6rem_1fr] items-center gap-2">
+                <div className="text-sm">{label}</div>
+                <div
+                  role="group"
+                  aria-label={`${label} status`}
+                  aria-busy={isPending}
+                  className="grid grid-cols-3 gap-1.5"
+                >
+                  {STATUSES.map(({ value, label: btnLabel, activeClass }) => {
+                    const isActive = active === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => handleClick(type, value)}
+                        disabled={isPending}
+                        aria-pressed={isActive}
+                        className={`rounded border px-2 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                          isActive
+                            ? activeClass
+                            : "border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300"
+                        }`}
+                      >
+                        {btnLabel}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
-      {error ? (
-        <p role="alert" aria-live="polite" className="text-xs text-red-600">
-          {error}
-        </p>
-      ) : null}
-    </section>
+            );
+          })}
+        </div>
+        {error ? (
+          <p role="alert" aria-live="polite" className="text-xs text-red-600">
+            {error}
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }

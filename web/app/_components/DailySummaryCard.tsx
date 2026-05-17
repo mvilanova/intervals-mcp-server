@@ -1,6 +1,8 @@
 import type { DailySummary } from "@prisma/client";
 import { getOrGenerateDailySummary, isEnabled } from "@/lib/ai/summarize";
 import { regenerateSummaryAction } from "../actions/summary";
+import { Button } from "./ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
 type Props = {
   userId: string;
@@ -50,36 +52,33 @@ export async function DailySummaryCard({ userId, date }: Props) {
   const { summary, error, generatedRelative } = await loadSummary(userId, date);
 
   return (
-    <section className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-          Summary
-        </h2>
+    <Card>
+      <CardHeader className="flex-row items-baseline justify-between space-y-0 gap-3">
+        <CardTitle>Summary</CardTitle>
         <form action={regenerateSummaryAction.bind(null, userId)}>
-          <button
-            type="submit"
-            className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          >
+          <Button type="submit" variant="ghost" size="sm">
             Refresh
-          </button>
+          </Button>
         </form>
-      </div>
-      {summary ? (
-        <>
-          <p className="text-sm leading-relaxed">{summary.summaryText}</p>
-          {generatedRelative ? (
-            <p className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-              {generatedRelative}
-            </p>
-          ) : null}
-        </>
-      ) : error ? (
-        <p className="text-sm text-red-600">{error}</p>
-      ) : (
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          No data yet.
-        </p>
-      )}
-    </section>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {summary ? (
+          <>
+            <p className="text-sm leading-relaxed">{summary.summaryText}</p>
+            {generatedRelative ? (
+              <p className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
+                {generatedRelative}
+              </p>
+            ) : null}
+          </>
+        ) : error ? (
+          <p className="text-sm text-red-600">{error}</p>
+        ) : (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No data yet.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

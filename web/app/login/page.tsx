@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { COOKIE_NAME, signSession } from "@/lib/auth";
+import { Button } from "@/app/_components/ui/button";
 
 async function login(formData: FormData) {
   "use server";
@@ -45,12 +46,9 @@ export default async function LoginPage({
           placeholder="PIN"
           className="w-full rounded border border-gray-300 px-3 py-2 text-base"
         />
-        <button
-          type="submit"
-          className="w-full rounded bg-black px-3 py-2 text-white"
-        >
+        <Button type="submit" className="w-full">
           Continue
-        </button>
+        </Button>
         {error === "1" ? (
           <p className="text-sm text-red-600">Incorrect PIN.</p>
         ) : null}

@@ -181,7 +181,6 @@
    Body — warm-peach blended gradient background (the roots.design signature),
    plus typographic smoothing and the default Calibre stack.
    ────────────────────────────────────────────────────────────────────────── */
-
 body {
   color: var(--foreground);
   background-color: var(--background);
@@ -189,6 +188,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  min-height: 100vh;
 }
 
 /* Warm signature gradient — light mode only. In dark mode the body
@@ -221,7 +221,6 @@ body {
     background-attachment: fixed;
   }
 }
-
 /* ──────────────────────────────────────────────────────────────────────────
    Signature utilities ported from roots.design.
    ────────────────────────────────────────────────────────────────────────── */

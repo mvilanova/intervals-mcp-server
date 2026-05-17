@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import type { WeightLog } from "@prisma/client";
 import { logWeight } from "../actions/logging";
 import type { ActionResult } from "../actions/logging";
+import { Button } from "./ui/button";
 
 type Props = {
   todayWeight: WeightLog | null;
@@ -62,12 +63,8 @@ export function WeightForm({ todayWeight }: Props) {
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="rounded bg-black px-4 py-2 text-white text-sm disabled:opacity-50"
-    >
+    <Button type="submit" disabled={pending}>
       {pending ? "Saving…" : "Save"}
-    </button>
+    </Button>
   );
 }

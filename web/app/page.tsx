@@ -8,6 +8,7 @@ import { SyncStatusPill } from "./_components/SyncStatusPill";
 import { WeightForm } from "./_components/WeightForm";
 import { MealGrid } from "./_components/MealGrid";
 import { DailySummaryCard } from "./_components/DailySummaryCard";
+import { Card, CardContent, CardHeader, CardTitle } from "./_components/ui/card";
 
 export const dynamic = "force-dynamic";
 
@@ -61,9 +62,11 @@ export default async function Home() {
         targetDate={bundle.user.targetDate}
       />
 
-      <section className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-        <WeightForm todayWeight={bundle.todayWeight} />
-      </section>
+      <Card>
+        <CardContent className="pt-6">
+          <WeightForm todayWeight={bundle.todayWeight} />
+        </CardContent>
+      </Card>
 
       <MealGrid initial={bundle.todayMealLogs} />
 
@@ -81,12 +84,14 @@ export default async function Home() {
 
 function SummarySkeleton() {
   return (
-    <section className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
-      <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
-        Summary
-      </div>
-      <div className="h-4 w-3/4 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-      <div className="h-4 w-1/2 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-    </section>
+    <Card>
+      <CardHeader>
+        <CardTitle>Summary</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="h-4 w-3/4 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="h-4 w-1/2 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+      </CardContent>
+    </Card>
   );
 }
