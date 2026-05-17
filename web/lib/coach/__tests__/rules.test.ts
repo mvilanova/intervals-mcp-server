@@ -12,6 +12,9 @@ function makeInput(overrides: Partial<CoachInput> = {}): CoachInput {
     sleepHours: null,
     sleepScore: null,
     yesterdayHrv: null,
+    confidence: 100,
+    syncStaleDays: 0,
+    freshnessWarnings: [],
     ...overrides,
   };
 }
@@ -190,6 +193,91 @@ describe("computeCoachDecision", () => {
   });
 });
 
+describe("confidence and staleness overrides", () => {
+  it("returns missing-data when confidence < 40", () => {
+    const decision = computeCoachDecision(
+      makeInput({ rampRate: 2, sleepHours: 7.5, confidence: 35 }),
+    );
+    expect(decision.category).toBe("missing-data");
+    expect(decision.dataQuality).toBe("insufficient");
+  });
+
+  it("returns missing-data when syncStaleDays > 3 regardless of confidence", () => {
+    const decision = computeCoachDecision(
+      makeInput({ rampRate: 2, sleepHours: 7.5, confidence: 90, syncStaleDays: 4 }),
+    );
+    expect(decision.category).toBe("missing-data");
+  });
+
+  it("surfaces freshnessWarnings as why when confidence < 40", () => {
+    const warnings = [{ source: "wellness" as const, freshness: "missing" as const, message: "Wellness data not synced today." }];
+    const decision = computeCoachDecision(
+      makeInput({ confidence: 30, freshnessWarnings: warnings }),
+    );
+    expect(decision.why).toContain("Wellness data not synced today.");
+    expect(decision.freshnessWarnings).toHaveLength(1);
+  });
+
+  it("propagates freshnessWarnings to output for non-override decisions", () => {
+    const warnings = [{ source: "weight" as const, freshness: "stale" as const, message: "Weight last logged 2 days ago." }];
+    const decision = computeCoachDecision(
+      makeInput({ rampRate: 2, sleepHours: 7.5, confidence: 85, freshnessWarnings: warnings }),
+    );
+    expect(decision.category).toBe("steady");
+    expect(decision.freshnessWarnings).toHaveLength(1);
+    expect(decision.confidence).toBe(85);
+  });
+
+  it("includes confidence in output for all categories", () => {
+    const cases: Partial<CoachInput>[] = [
+      { rampRate: 9, sleepHours: 5, confidence: 80 },
+      { rampRate: 6, sleepHours: 7.5, confidence: 75 },
+      { rampRate: 2, sleepHours: 7.5, confidence: 100 },
+    ];
+    for (const overrides of cases) {
+      const decision = computeCoachDecision(makeInput(overrides));
+      expect(typeof decision.confidence).toBe("number");
+    }
+  });
+
+  it("does NOT return missing-data when syncStaleDays = 3 (boundary: > 3 required)", () => {
+    const decision = computeCoachDecision(
+      makeInput({ rampRate: 2, sleepHours: 7.5, confidence: 90, syncStaleDays: 3 }),
+    );
+    expect(decision.category).not.toBe("missing-data");
+  });
+
+  it("does NOT return missing-data override when confidence = 40 (< 40 required)", () => {
+    const decision = computeCoachDecision(
+      makeInput({ rampRate: 2, sleepHours: 7.5, confidence: 40 }),
+    );
+    expect(decision.category).not.toBe("missing-data");
+  });
+
+  it("DOES return missing-data override when confidence = 39 (below 40 threshold)", () => {
+    const decision = computeCoachDecision(
+      makeInput({ rampRate: 2, sleepHours: 7.5, confidence: 39 }),
+    );
+    expect(decision.category).toBe("missing-data");
+    expect(decision.dataQuality).toBe("insufficient");
+  });
+
+  it("uses fallback 'Key metrics are not available yet.' when no freshnessWarnings and confidence < 40", () => {
+    const decision = computeCoachDecision(
+      makeInput({ confidence: 35, freshnessWarnings: [] }),
+    );
+    expect(decision.why).toContain("Key metrics are not available yet.");
+  });
+
+  it("returns missing-data with dataQuality=insufficient when syncStaleDays > 3", () => {
+    const decision = computeCoachDecision(
+      makeInput({ rampRate: 2, sleepHours: 7.5, confidence: 95, syncStaleDays: 5 }),
+    );
+    expect(decision.category).toBe("missing-data");
+    expect(decision.dataQuality).toBe("insufficient");
+  });
+});
+
 describe("buildCoachInput", () => {
   it("maps bundle fields correctly", () => {
     const bundle = {
@@ -202,6 +290,11 @@ describe("buildCoachInput", () => {
         sleepScore: 72,
       },
       yesterday: { hrv: 70 },
+      latestSync: null,
+      hrv7dBaseline: 62,
+      todayWeight: { weightKg: 72 },
+      daysSinceLastActivity: 1,
+      latestWeightDaysAgo: 0,
     } as unknown as TodayBundle;
 
     const input = buildCoachInput(bundle);
@@ -219,6 +312,11 @@ describe("buildCoachInput", () => {
       user: { baselineRhr: null },
       today: null,
       yesterday: null,
+      latestSync: null,
+      hrv7dBaseline: null,
+      todayWeight: null,
+      daysSinceLastActivity: null,
+      latestWeightDaysAgo: null,
     } as unknown as TodayBundle;
 
     const input = buildCoachInput(bundle);
@@ -235,10 +333,119 @@ describe("buildCoachInput", () => {
       user: { baselineRhr: 52 },
       today: { rampRate: 3, hrv: 60, rhr: 55, sleepHours: 7, sleepScore: 70 },
       yesterday: null,
+      latestSync: null,
+      hrv7dBaseline: null,
+      todayWeight: null,
+      daysSinceLastActivity: null,
+      latestWeightDaysAgo: null,
     } as unknown as TodayBundle;
 
     const input = buildCoachInput(bundle);
     expect(input.yesterdayHrv).toBeNull();
     expect(input.rampRate).toBe(3);
+  });
+
+  it("includes confidence, syncStaleDays, and freshnessWarnings in output", () => {
+    const bundle = {
+      user: { baselineRhr: 52 },
+      today: { rampRate: 3, hrv: 60, rhr: 55, sleepHours: 7, sleepScore: 70 },
+      yesterday: null,
+      latestSync: null,
+      hrv7dBaseline: 58,
+      todayWeight: { weightKg: 72 },
+      daysSinceLastActivity: 1,
+      latestWeightDaysAgo: 0,
+    } as unknown as TodayBundle;
+
+    const input = buildCoachInput(bundle);
+    expect(typeof input.confidence).toBe("number");
+    expect(typeof input.syncStaleDays).toBe("number");
+    expect(Array.isArray(input.freshnessWarnings)).toBe(true);
+  });
+
+  it("produces syncStaleDays = 999 when latestSync is null (never synced)", () => {
+    const bundle = {
+      user: { baselineRhr: null },
+      today: null,
+      yesterday: null,
+      latestSync: null,
+      hrv7dBaseline: null,
+      todayWeight: null,
+      daysSinceLastActivity: null,
+      latestWeightDaysAgo: null,
+    } as unknown as TodayBundle;
+
+    const input = buildCoachInput(bundle);
+    expect(input.syncStaleDays).toBe(999);
+  });
+
+  it("produces syncStaleDays = 0 when latestSync finishedAt is recent", () => {
+    const bundle = {
+      user: { baselineRhr: 52 },
+      today: { rampRate: 2, hrv: 60, rhr: 55, sleepHours: 7, sleepScore: 70 },
+      yesterday: null,
+      latestSync: { finishedAt: new Date() }, // just now
+      hrv7dBaseline: 60,
+      todayWeight: { weightKg: 72 },
+      daysSinceLastActivity: 1,
+      latestWeightDaysAgo: 0,
+    } as unknown as TodayBundle;
+
+    const input = buildCoachInput(bundle);
+    expect(input.syncStaleDays).toBe(0);
+  });
+
+  it("lowers confidence when hrv7dBaseline is null", () => {
+    const bundleWithBaseline = {
+      user: { baselineRhr: 52 },
+      today: { rampRate: 2, hrv: 60, rhr: 55, sleepHours: 7 },
+      yesterday: null,
+      latestSync: { finishedAt: new Date() },
+      hrv7dBaseline: 60,
+      todayWeight: { weightKg: 72 },
+      daysSinceLastActivity: 1,
+      latestWeightDaysAgo: 0,
+    } as unknown as TodayBundle;
+
+    const bundleWithoutBaseline = {
+      ...bundleWithBaseline,
+      hrv7dBaseline: null,
+    } as unknown as TodayBundle;
+
+    const withBaseline = buildCoachInput(bundleWithBaseline);
+    const withoutBaseline = buildCoachInput(bundleWithoutBaseline);
+    expect(withoutBaseline.confidence).toBeLessThan(withBaseline.confidence);
+  });
+
+  it("generates activity freshness warning when daysSinceLastActivity >= 4", () => {
+    const bundle = {
+      user: { baselineRhr: 52 },
+      today: { rampRate: 2, hrv: 60, rhr: 55, sleepHours: 7 },
+      yesterday: null,
+      latestSync: { finishedAt: new Date() },
+      hrv7dBaseline: 60,
+      todayWeight: { weightKg: 72 },
+      daysSinceLastActivity: 5,
+      latestWeightDaysAgo: 0,
+    } as unknown as TodayBundle;
+
+    const input = buildCoachInput(bundle);
+    expect(input.freshnessWarnings.some((w) => w.source === "activity")).toBe(true);
+  });
+
+  it("generates weight freshness warning when todayWeight is null", () => {
+    const bundle = {
+      user: { baselineRhr: 52 },
+      today: { rampRate: 2, hrv: 60, rhr: 55, sleepHours: 7 },
+      yesterday: null,
+      latestSync: { finishedAt: new Date() },
+      hrv7dBaseline: 60,
+      todayWeight: null,
+      daysSinceLastActivity: 1,
+      latestWeightDaysAgo: 4,
+    } as unknown as TodayBundle;
+
+    const input = buildCoachInput(bundle);
+    expect(input.freshnessWarnings.some((w) => w.source === "weight")).toBe(true);
   });
 });

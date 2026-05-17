@@ -26,6 +26,8 @@ export type TodayBundle = {
   syncStatus: SyncStatus;
   latestWeightDaysAgo: number | null;
   todayDate: Date;
+  hrv7dBaseline: number | null;
+  daysSinceLastActivity: number | null;
 };
 
 const SYNC_STALE_AFTER_MS = 6 * 60 * 60 * 1000;
@@ -74,6 +76,8 @@ export async function getTodayBundle(): Promise<TodayBundle | null> {
     latestWeight,
     weightWeekAgo,
     latestSync,
+    recentMetricsForHrv,
+    latestActivity,
   ] = await Promise.all([
     prisma.dailyMetrics.findUnique({
       where: { userId_date: { userId: user.id, date: today } },
@@ -104,6 +108,19 @@ export async function getTodayBundle(): Promise<TodayBundle | null> {
       orderBy: { finishedAt: "desc" },
       select: { finishedAt: true },
     }),
+    // Rolling 7-day HRV baseline: exclude today to avoid anchoring on today's value.
+    // Requires ≥3 non-null HRV values to be meaningful.
+    prisma.dailyMetrics.findMany({
+      where: { userId: user.id, date: { gte: addDays(today, -7), lt: today } },
+      select: { hrv: true },
+      orderBy: { date: "desc" },
+      take: 7,
+    }),
+    prisma.activity.findFirst({
+      where: { userId: user.id },
+      orderBy: { date: "desc" },
+      select: { date: true },
+    }),
   ]);
 
   const nowMs = Date.now();
@@ -116,6 +133,18 @@ export async function getTodayBundle(): Promise<TodayBundle | null> {
 
   const latestWeightDaysAgo = latestWeight
     ? Math.floor((nowMs - latestWeight.date.getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+
+  const hrvValues = recentMetricsForHrv
+    .map((r) => r.hrv)
+    .filter((v): v is number => v != null);
+  const hrv7dBaseline =
+    hrvValues.length >= 3
+      ? hrvValues.reduce((a, b) => a + b, 0) / hrvValues.length
+      : null;
+
+  const daysSinceLastActivity = latestActivity
+    ? Math.max(0, Math.floor((today.getTime() - latestActivity.date.getTime()) / (1000 * 60 * 60 * 24)))
     : null;
 
   return {
@@ -131,5 +160,7 @@ export async function getTodayBundle(): Promise<TodayBundle | null> {
     syncStatus,
     latestWeightDaysAgo,
     todayDate: today,
+    hrv7dBaseline,
+    daysSinceLastActivity,
   };
 }

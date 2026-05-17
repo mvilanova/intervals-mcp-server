@@ -1,6 +1,7 @@
 import type { TodayBundle } from "@/lib/queries/today";
 import { buildCoachInput, computeCoachDecision } from "@/lib/coach/rules";
 import type { RecommendationCategory, DataQuality } from "@/lib/coach/rules";
+import type { FreshnessWarning } from "@/lib/coach/confidence";
 import { BADGE_LABELS, DATA_LABEL, QUALITY_LABEL } from "@/lib/coach/copy";
 import { Card, CardContent } from "./ui/card";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,19 @@ const QUALITY_STYLES: Record<DataQuality, string> = {
   insufficient: "text-slate-500 dark:text-slate-400",
 };
 
+function confidenceColor(confidence: number): string {
+  if (confidence >= 85) return "text-emerald-600 dark:text-emerald-400";
+  if (confidence >= 60) return "text-yellow-600 dark:text-yellow-400";
+  if (confidence >= 40) return "text-orange-600 dark:text-orange-400";
+  return "text-rose-600 dark:text-rose-400";
+}
+
+const SOURCE_LABEL: Record<FreshnessWarning["source"], string> = {
+  wellness: "Wellness",
+  activity: "Activity",
+  weight: "Weight",
+};
+
 type Props = {
   bundle: TodayBundle;
 };
@@ -40,15 +54,38 @@ export function TodayHero({ bundle }: Props) {
       <CardContent className="pt-6 space-y-5">
         {/* Category badge + title */}
         <div className="space-y-2">
-          <span
-            className={cn(
-              "inline-block text-xs font-medium px-2.5 py-0.5 rounded-full",
-              BADGE_STYLES[decision.category],
-            )}
-          >
-            {BADGE_LABELS[decision.category]}
-          </span>
+          <div className="flex items-center justify-between gap-3">
+            <span
+              className={cn(
+                "inline-block text-xs font-medium px-2.5 py-0.5 rounded-full",
+                BADGE_STYLES[decision.category],
+              )}
+            >
+              {BADGE_LABELS[decision.category]}
+            </span>
+            <span
+              className={cn("text-xs font-medium", confidenceColor(decision.confidence))}
+              aria-label={`Data confidence: ${decision.confidence}%`}
+              title={`Data confidence: ${decision.confidence}%`}
+            >
+              {decision.confidence}% confidence
+            </span>
+          </div>
           <h2 className="text-2xl font-semibold leading-snug">{decision.title}</h2>
+
+          {decision.freshnessWarnings.length > 0 && (
+            <ul className="space-y-0.5">
+              {decision.freshnessWarnings.map((warning) => (
+                <li
+                  key={warning.source}
+                  className="text-xs text-gray-500 dark:text-gray-400 flex gap-1.5"
+                >
+                  <span className="font-medium shrink-0">{SOURCE_LABEL[warning.source]}:</span>
+                  <span>{warning.message}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* Why */}
@@ -76,7 +113,7 @@ export function TodayHero({ bundle }: Props) {
           <ul className="space-y-1.5">
             {decision.doItems.map((item, index) => (
               <li key={`${item}-${index}`} className="text-sm flex gap-2">
-                <span className="text-gray-400 dark:text-gray-500 shrink-0 mt-0.5">—</span>
+                <span className="text-gray-400 dark:text-gray-500 shrink-0 mt-0.5">-</span>
                 <span>{item}</span>
               </li>
             ))}
@@ -91,7 +128,7 @@ export function TodayHero({ bundle }: Props) {
           <p className="text-sm text-gray-600 dark:text-gray-300">{decision.watch}</p>
         </div>
 
-        {/* Data confidence slot — accepts richer score from issue #31 without rework */}
+        {/* Data confidence slot accepts richer score from issue #31 without rework */}
         <div className="flex items-center gap-1.5 text-xs">
           <span className="text-gray-400 dark:text-gray-500">{DATA_LABEL}</span>
           <span className={QUALITY_STYLES[decision.dataQuality]}>

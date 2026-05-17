@@ -1,5 +1,11 @@
 import type { TodayBundle } from "@/lib/queries/today";
 import { COACH_DO_ITEMS, COACH_TITLES, COACH_WATCH_NOTES } from "./copy";
+import {
+  buildFreshnessWarnings,
+  computeConfidence,
+  computeSyncStaleDays,
+  type FreshnessWarning,
+} from "./confidence";
 
 export type RecommendationCategory =
   | "recovery"
@@ -18,6 +24,9 @@ export interface CoachInput {
   sleepHours: number | null;
   sleepScore: number | null;
   yesterdayHrv: number | null;
+  confidence: number;
+  syncStaleDays: number;
+  freshnessWarnings: FreshnessWarning[];
 }
 
 export interface CoachDecision {
@@ -27,9 +36,35 @@ export interface CoachDecision {
   doItems: string[];
   watch: string;
   dataQuality: DataQuality;
+  confidence: number;
+  freshnessWarnings: FreshnessWarning[];
 }
 
 export function buildCoachInput(bundle: TodayBundle): CoachInput {
+  const syncStaleDays = computeSyncStaleDays(bundle.latestSync?.finishedAt ?? null);
+
+  const confidence = computeConfidence({
+    todayMetrics: bundle.today
+      ? {
+          rhr: bundle.today.rhr ?? null,
+          hrv: bundle.today.hrv ?? null,
+          sleepHours: bundle.today.sleepHours ?? null,
+        }
+      : null,
+    hrv7dBaseline: bundle.hrv7dBaseline,
+    hasTodayWeight: bundle.todayWeight != null,
+    syncStaleDays,
+  });
+
+  const freshnessWarnings = buildFreshnessWarnings({
+    hasTodayMetrics: bundle.today != null,
+    todayHrv: bundle.today?.hrv ?? null,
+    todayRhr: bundle.today?.rhr ?? null,
+    daysSinceLastActivity: bundle.daysSinceLastActivity,
+    hasTodayWeight: bundle.todayWeight != null,
+    latestWeightDaysAgo: bundle.latestWeightDaysAgo,
+  });
+
   return {
     rampRate: bundle.today?.rampRate ?? null,
     hrv: bundle.today?.hrv ?? null,
@@ -38,6 +73,9 @@ export function buildCoachInput(bundle: TodayBundle): CoachInput {
     sleepHours: bundle.today?.sleepHours ?? null,
     sleepScore: bundle.today?.sleepScore ?? null,
     yesterdayHrv: bundle.yesterday?.hrv ?? null,
+    confidence,
+    syncStaleDays,
+    freshnessWarnings,
   };
 }
 
@@ -107,6 +145,26 @@ function assessDataQuality(input: CoachInput): DataQuality {
 }
 
 export function computeCoachDecision(input: CoachInput): CoachDecision {
+  // Hard overrides: not enough data to make a meaningful recommendation.
+  // syncStaleDays > 3 is an explicit override even when confidence > 40
+  // because stale-sync alone only deducts 15 pts, which wouldn't cross the floor.
+  if (input.syncStaleDays > 3 || input.confidence < 40) {
+    const why =
+      input.freshnessWarnings.length > 0
+        ? input.freshnessWarnings.map((w) => w.message)
+        : ["Key metrics are not available yet."];
+    return {
+      category: "missing-data",
+      title: COACH_TITLES["missing-data"],
+      why,
+      doItems: COACH_DO_ITEMS["missing-data"],
+      watch: COACH_WATCH_NOTES["missing-data"],
+      dataQuality: "insufficient",
+      confidence: input.confidence,
+      freshnessWarnings: input.freshnessWarnings,
+    };
+  }
+
   const dataQuality = assessDataQuality(input);
 
   if (dataQuality === "insufficient") {
@@ -117,6 +175,8 @@ export function computeCoachDecision(input: CoachInput): CoachDecision {
       doItems: COACH_DO_ITEMS["missing-data"],
       watch: COACH_WATCH_NOTES["missing-data"],
       dataQuality,
+      confidence: input.confidence,
+      freshnessWarnings: input.freshnessWarnings,
     };
   }
 
@@ -141,5 +201,7 @@ export function computeCoachDecision(input: CoachInput): CoachDecision {
     doItems: COACH_DO_ITEMS[category],
     watch: COACH_WATCH_NOTES[category],
     dataQuality,
+    confidence: input.confidence,
+    freshnessWarnings: input.freshnessWarnings,
   };
 }

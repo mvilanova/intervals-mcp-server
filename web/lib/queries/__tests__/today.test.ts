@@ -3,8 +3,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const mocks = vi.hoisted(() => {
   const mockPrisma = {
     user: { findFirst: vi.fn() },
-    dailyMetrics: { findUnique: vi.fn() },
-    activity: { findMany: vi.fn() },
+    dailyMetrics: { findUnique: vi.fn(), findMany: vi.fn() },
+    activity: { findMany: vi.fn(), findFirst: vi.fn() },
     mealLog: { findMany: vi.fn() },
     weightLog: {
       findUnique: vi.fn(),
@@ -35,7 +35,9 @@ const FIXED_NOW = new Date("2024-06-15T12:00:00.000Z").getTime();
 function setupDefaultMocks() {
   mocks.mockPrisma.user.findFirst.mockResolvedValue(MOCK_USER);
   mocks.mockPrisma.dailyMetrics.findUnique.mockResolvedValue(null);
+  mocks.mockPrisma.dailyMetrics.findMany.mockResolvedValue([]);
   mocks.mockPrisma.activity.findMany.mockResolvedValue([]);
+  mocks.mockPrisma.activity.findFirst.mockResolvedValue(null);
   mocks.mockPrisma.mealLog.findMany.mockResolvedValue([]);
   mocks.mockPrisma.weightLog.findUnique.mockResolvedValue(null);
   mocks.mockPrisma.weightLog.findFirst.mockResolvedValue(null);
@@ -334,15 +336,150 @@ describe("getTodayBundle", () => {
       expect(mocks.mockPrisma.dailyMetrics.findUnique).toHaveBeenCalledTimes(2);
     });
 
-    it("queries all 8 data sources in parallel", async () => {
+    it("queries all 10 data sources in parallel", async () => {
       await getTodayBundle();
-      // Verify all queries were made
       expect(mocks.mockPrisma.dailyMetrics.findUnique).toHaveBeenCalledTimes(2);
+      expect(mocks.mockPrisma.dailyMetrics.findMany).toHaveBeenCalledOnce();
       expect(mocks.mockPrisma.activity.findMany).toHaveBeenCalledOnce();
+      expect(mocks.mockPrisma.activity.findFirst).toHaveBeenCalledOnce();
       expect(mocks.mockPrisma.mealLog.findMany).toHaveBeenCalledOnce();
       expect(mocks.mockPrisma.weightLog.findUnique).toHaveBeenCalledOnce();
       expect(mocks.mockPrisma.weightLog.findFirst).toHaveBeenCalledTimes(2);
       expect(mocks.mockPrisma.syncRun.findFirst).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("hrv7dBaseline", () => {
+    it("returns null when no recent HRV data", async () => {
+      mocks.mockPrisma.dailyMetrics.findMany.mockResolvedValue([]);
+      const result = await getTodayBundle();
+      expect(result!.hrv7dBaseline).toBeNull();
+    });
+
+    it("returns null when fewer than 3 non-null HRV values", async () => {
+      mocks.mockPrisma.dailyMetrics.findMany.mockResolvedValue([
+        { hrv: 60 },
+        { hrv: null },
+        { hrv: 65 },
+      ]);
+      const result = await getTodayBundle();
+      expect(result!.hrv7dBaseline).toBeNull();
+    });
+
+    it("computes mean of ≥3 non-null HRV values", async () => {
+      mocks.mockPrisma.dailyMetrics.findMany.mockResolvedValue([
+        { hrv: 60 },
+        { hrv: 65 },
+        { hrv: 70 },
+        { hrv: null },
+      ]);
+      const result = await getTodayBundle();
+      expect(result!.hrv7dBaseline).toBeCloseTo(65, 5);
+    });
+  });
+
+  describe("daysSinceLastActivity", () => {
+    it("returns null when no activities exist", async () => {
+      mocks.mockPrisma.activity.findFirst.mockResolvedValue(null);
+      const result = await getTodayBundle();
+      expect(result!.daysSinceLastActivity).toBeNull();
+    });
+
+    it("returns 0 when most recent activity was today (UTC midnight)", async () => {
+      // FIXED_NOW = 2024-06-15T12:00:00Z; today UTC midnight = 2024-06-15T00:00:00Z
+      mocks.mockPrisma.activity.findFirst.mockResolvedValue({
+        date: new Date("2024-06-15T00:00:00.000Z"),
+      });
+      const result = await getTodayBundle();
+      expect(result!.daysSinceLastActivity).toBe(0);
+    });
+
+    it("returns 3 when most recent activity was 3 days ago", async () => {
+      mocks.mockPrisma.activity.findFirst.mockResolvedValue({
+        date: new Date("2024-06-12T00:00:00.000Z"),
+      });
+      const result = await getTodayBundle();
+      expect(result!.daysSinceLastActivity).toBe(3);
+    });
+
+    it("returns 1 when most recent activity was 1 day ago", async () => {
+      mocks.mockPrisma.activity.findFirst.mockResolvedValue({
+        date: new Date("2024-06-14T00:00:00.000Z"),
+      });
+      const result = await getTodayBundle();
+      expect(result!.daysSinceLastActivity).toBe(1);
+    });
+
+    it("returns 0 (not negative) when activity date is in the future", () => {
+      // Math.max(0, ...) clamps negatives to 0
+      mocks.mockPrisma.activity.findFirst.mockResolvedValue({
+        date: new Date("2024-06-20T00:00:00.000Z"), // 5 days ahead of FIXED_NOW
+      });
+      return getTodayBundle().then((result) => {
+        expect(result!.daysSinceLastActivity).toBe(0);
+      });
+    });
+  });
+
+  describe("hrv7dBaseline: additional edge cases", () => {
+    it("computes baseline with exactly 3 non-null values (minimum valid)", async () => {
+      mocks.mockPrisma.dailyMetrics.findMany.mockResolvedValue([
+        { hrv: 60 },
+        { hrv: 66 },
+        { hrv: 72 },
+      ]);
+      const result = await getTodayBundle();
+      expect(result!.hrv7dBaseline).toBeCloseTo(66, 5);
+    });
+
+    it("computes correct mean for all 7 non-null values", async () => {
+      mocks.mockPrisma.dailyMetrics.findMany.mockResolvedValue([
+        { hrv: 60 },
+        { hrv: 62 },
+        { hrv: 64 },
+        { hrv: 66 },
+        { hrv: 68 },
+        { hrv: 70 },
+        { hrv: 72 },
+      ]);
+      const result = await getTodayBundle();
+      // Mean = (60+62+64+66+68+70+72) / 7 = 462 / 7 = 66
+      expect(result!.hrv7dBaseline).toBeCloseTo(66, 5);
+    });
+
+    it("returns null for exactly 2 non-null HRV values (below minimum)", async () => {
+      mocks.mockPrisma.dailyMetrics.findMany.mockResolvedValue([
+        { hrv: 60 },
+        { hrv: null },
+        { hrv: null },
+        { hrv: null },
+        { hrv: 70 },
+      ]);
+      const result = await getTodayBundle();
+      expect(result!.hrv7dBaseline).toBeNull();
+    });
+  });
+
+  describe("new query parameters", () => {
+    it("queries activity.findFirst ordered by date descending to get most recent activity", async () => {
+      await getTodayBundle();
+      expect(mocks.mockPrisma.activity.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: { date: "desc" },
+          select: { date: true },
+        }),
+      );
+    });
+
+    it("queries dailyMetrics.findMany with take: 7 for HRV baseline", async () => {
+      await getTodayBundle();
+      expect(mocks.mockPrisma.dailyMetrics.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: { hrv: true },
+          orderBy: { date: "desc" },
+          take: 7,
+        }),
+      );
     });
   });
 });
