@@ -517,8 +517,10 @@ def format_event_summary(event: dict[str, Any]) -> str:
         str: Multi-line string with fields `Date`, `ID`, `Type`, `Name`, and `Description`.
     """
 
-    # Update to check for "date" if "start_date_local" is not provided
-    event_date = event.get("start_date_local", event.get("date", "Unknown"))
+    # Fall back to "date" if "start_date_local" is missing or null. `or`-chaining
+    # (rather than `.get(k, default)`) treats explicit `None` values as missing,
+    # matching the API's null-as-unset convention.
+    event_date = event.get("start_date_local") or event.get("date") or "Unknown"
     if event.get("workout"):
         event_type = "Workout"
     elif event.get("race"):

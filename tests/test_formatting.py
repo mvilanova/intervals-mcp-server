@@ -200,6 +200,73 @@ def test_format_event_details():
     assert "Workout Information:" in details
 
 
+def test_format_event_details_uses_start_date_local_fallback():
+    """
+    Test that format_event_details falls back to start_date_local when "date" is absent,
+    matching the behavior of format_event_summary for endpoints that only emit start_date_local.
+    """
+    event = {"id": "e1", "start_date_local": "2024-01-01", "name": "X", "description": ""}
+    details = format_event_details(event)
+    assert "Date: 2024-01-01" in details
+
+
+def test_format_event_details_prefers_start_date_local_over_date():
+    """
+    Test that format_event_details prefers start_date_local over date when both are present,
+    matching the precedence used by format_event_summary so both views render the same date.
+    """
+    event = {
+        "id": "e1",
+        "start_date_local": "2024-02-02",
+        "date": "2024-01-01",
+        "name": "X",
+        "description": "",
+    }
+    details = format_event_details(event)
+    assert "Date: 2024-02-02" in details
+
+
+def test_format_event_details_falls_back_when_start_date_local_is_null():
+    """
+    Test that format_event_details falls back to date when start_date_local is explicitly None
+    (the or-chain must skip null values, not return them).
+    """
+    event = {
+        "id": "e1",
+        "start_date_local": None,
+        "date": "2024-01-01",
+        "name": "X",
+        "description": "",
+    }
+    details = format_event_details(event)
+    assert "Date: 2024-01-01" in details
+
+
+def test_format_event_details_renders_unknown_when_both_dates_missing():
+    """
+    Test that format_event_details renders 'Unknown' when both date fields are absent.
+    """
+    event = {"id": "e1", "name": "X", "description": ""}
+    details = format_event_details(event)
+    assert "Date: Unknown" in details
+
+
+def test_format_event_details_handles_null_calendar():
+    """
+    Test that format_event_details does not crash when "calendar" exists but is None
+    (some API payloads include the key with a null value).
+    """
+    event = {
+        "id": "e1",
+        "date": "2024-01-01",
+        "name": "X",
+        "description": "",
+        "calendar": None,
+    }
+    details = format_event_details(event)
+    assert "Calendar:" not in details
+
+
 def test_format_intervals():
     """
     Test that format_intervals returns a string containing interval analysis and the interval label.
