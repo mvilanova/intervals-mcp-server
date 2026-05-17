@@ -169,17 +169,10 @@ async function loadInput(userId: string, date: Date): Promise<GenInput | null> {
   };
 }
 
-export async function getOrGenerateDailySummary(
+async function generateAndUpsert(
   userId: string,
   date: Date,
 ): Promise<DailySummary | null> {
-  if (!isEnabled()) return null;
-
-  const cached = await prisma.dailySummary.findUnique({
-    where: { userId_date: { userId, date } },
-  });
-  if (cached) return cached;
-
   const input = await loadInput(userId, date);
   if (!input) return null;
 
@@ -191,19 +184,24 @@ export async function getOrGenerateDailySummary(
   });
 }
 
-export async function regenerateDailySummary(
+export async function getOrGenerateDailySummary(
   userId: string,
   date: Date,
 ): Promise<DailySummary | null> {
   if (!isEnabled()) return null;
 
-  const input = await loadInput(userId, date);
-  if (!input) return null;
-
-  const summaryText = await callClaude(input);
-  return prisma.dailySummary.upsert({
+  const cached = await prisma.dailySummary.findUnique({
     where: { userId_date: { userId, date } },
-    update: { summaryText, generatedAt: new Date() },
-    create: { userId, date, summaryText },
   });
+  if (cached) return cached;
+
+  return generateAndUpsert(userId, date);
+}
+
+export async function regenerateDailySummary(
+  userId: string,
+  date: Date,
+): Promise<DailySummary | null> {
+  if (!isEnabled()) return null;
+  return generateAndUpsert(userId, date);
 }
