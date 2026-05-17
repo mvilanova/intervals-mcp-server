@@ -37,6 +37,7 @@ export function isEnabled(): boolean {
 }
 
 type GenInput = {
+  summaryDate: Date;
   user: Pick<User, "targetWeight" | "targetDate" | "baselineRhr">;
   today: DailyMetrics | null;
   yesterday: DailyMetrics | null;
@@ -51,7 +52,7 @@ function fmt(n: number | null | undefined, digits = 1): string {
 }
 
 function buildUserMessage(input: GenInput): string {
-  const { user, today, yesterday, todayActivities, todayMealLogs, latestWeight, weightWeekAgo } = input;
+  const { summaryDate, user, today, yesterday, todayActivities, todayMealLogs, latestWeight, weightWeekAgo } = input;
 
   const ctlDelta =
     today?.ctl != null && yesterday?.ctl != null
@@ -68,9 +69,14 @@ function buildUserMessage(input: GenInput): string {
       ? (latestWeight.weightKg - user.targetWeight).toFixed(1)
       : "—";
 
+  // Anchor on summaryDate (not Date.now()) so regenerating the same day
+  // later — or generating a historical day — produces a stable output.
   const targetDays =
     user.targetDate
-      ? Math.round((user.targetDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      ? Math.round(
+          (user.targetDate.getTime() - summaryDate.getTime()) /
+            (1000 * 60 * 60 * 24),
+        )
       : null;
 
   const meals = todayMealLogs.length
@@ -151,7 +157,16 @@ async function loadInput(userId: string, date: Date): Promise<GenInput | null> {
     ]);
 
   if (!user) return null;
-  return { user, today, yesterday, todayActivities, todayMealLogs, latestWeight, weightWeekAgo };
+  return {
+    summaryDate: date,
+    user,
+    today,
+    yesterday,
+    todayActivities,
+    todayMealLogs,
+    latestWeight,
+    weightWeekAgo,
+  };
 }
 
 export async function getOrGenerateDailySummary(
