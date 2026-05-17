@@ -62,7 +62,7 @@ exclude = [
     "venv",
 ]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 # Select specific errors and warnings
