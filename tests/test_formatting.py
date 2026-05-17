@@ -13,24 +13,16 @@ from intervals_mcp_server.utils.formatting import (
     format_event_details,
     format_intervals,
 )
-from tests.sample_data import INTERVALS_DATA
+from tests.sample_data import INTERVALS_DATA, SAMPLE_ACTIVITY
 
 
 def test_format_activity_summary():
     """
     Test that format_activity_summary returns a string containing the activity name and ID.
     """
-    data = {
-        "name": "Morning Ride",
-        "id": 1,
-        "type": "Ride",
-        "startTime": "2024-01-01T08:00:00Z",
-        "distance": 1000,
-        "duration": 3600,
-    }
-    result = format_activity_summary(data)
+    result = format_activity_summary(SAMPLE_ACTIVITY)
     assert "Activity: Morning Ride" in result
-    assert "ID: 1" in result
+    assert f"ID: {SAMPLE_ACTIVITY['id']}" in result
 
 
 def test_format_workout():

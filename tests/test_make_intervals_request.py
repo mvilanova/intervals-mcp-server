@@ -7,18 +7,11 @@ Mock classes are used to simulate httpx responses and client behavior.
 
 import asyncio
 import logging
-import os
-import pathlib
-import sys
 from json import JSONDecodeError
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
-os.environ.setdefault("API_KEY", "test")
-os.environ.setdefault("ATHLETE_ID", "i1")
-
-from intervals_mcp_server import server  # pylint: disable=wrong-import-position
-from intervals_mcp_server.api import client as api_client  # pylint: disable=wrong-import-position
-from intervals_mcp_server.config import Config  # pylint: disable=wrong-import-position
+from intervals_mcp_server import server
+from intervals_mcp_server.api import client as api_client
+from intervals_mcp_server.config import Config
 
 
 class MockBadJSONResponse:
