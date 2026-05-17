@@ -5,6 +5,7 @@ This module handles all HTTP communication with the Intervals.icu API,
 including request management, error handling, and client lifecycle.
 """
 
+import asyncio
 from json import JSONDecodeError
 import json
 import logging
@@ -19,6 +20,29 @@ from mcp.server.fastmcp import FastMCP  # pylint: disable=import-error
 from intervals_mcp_server.config import get_config
 
 logger = logging.getLogger("intervals_icu_mcp_server")
+
+# Request policy constants
+MAX_RETRIES = 3
+_BASE_DELAY_SECS = 1.0
+_MAX_DELAY_SECS = 30.0
+# 5xx codes and 429 are transient; 4xx permanent errors are not retried.
+_RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({429, 500, 502, 503, 504})
+
+
+def _retry_delay(attempt: int, response: httpx.Response | None = None) -> float:
+    """Return seconds to wait before the next retry.
+
+    Respects Retry-After header for 429 responses (seconds only; HTTP-date
+    values fall back to exponential backoff).
+    """
+    if response is not None and response.status_code == 429:
+        retry_after = response.headers.get("Retry-After", "")
+        try:
+            return min(float(retry_after), _MAX_DELAY_SECS)
+        except ValueError:
+            pass
+    return min(_BASE_DELAY_SECS * (2**attempt), _MAX_DELAY_SECS)
+
 
 # Create a single AsyncClient instance for all requests (lazily initialized)
 # This can be monkeypatched via server.httpx_client for testing
@@ -196,31 +220,57 @@ async def make_intervals_request(
             timeout=30.0,
         )
 
-    try:
-        client = await _get_httpx_client()
-
+    for attempt in range(MAX_RETRIES + 1):
         try:
-            response = await _send_request(client)
-        except RuntimeError as runtime_error:
-            # httpx closes the client when the underlying connection is severed;
-            # recreate the shared client lazily and retry once.
-            if "client has been closed" not in str(runtime_error).lower():
-                raise
-            logger.warning("HTTPX client was closed; creating a new instance for retries.")
-            global httpx_client  # pylint: disable=global-statement  # noqa: PLW0603 - we intentionally manage the shared client here
-            httpx_client = None
             client = await _get_httpx_client()
-            response = await _send_request(client)
 
-        return _parse_response(response, full_url)
-    except httpx.HTTPStatusError as e:
-        return _handle_http_status_error(e)
-    except httpx.RequestError as e:
-        logger.error("Request error: %s", str(e))
-        return {"error": True, "message": f"Request error: {str(e)}"}
-    except httpx.HTTPError as e:
-        logger.error("HTTP client error: %s", str(e))
-        return {"error": True, "message": f"HTTP client error: {str(e)}"}
+            try:
+                response = await _send_request(client)
+            except RuntimeError as runtime_error:
+                # httpx closes the client when the underlying connection is severed;
+                # recreate the shared client lazily and retry once within this attempt.
+                if "client has been closed" not in str(runtime_error).lower():
+                    raise
+                logger.warning("HTTPX client was closed; creating a new instance for retries.")
+                global httpx_client  # pylint: disable=global-statement  # noqa: PLW0603 - we intentionally manage the shared client here
+                httpx_client = None
+                client = await _get_httpx_client()
+                response = await _send_request(client)
+
+            if attempt < MAX_RETRIES and response.status_code in _RETRYABLE_STATUS_CODES:
+                delay = _retry_delay(attempt, response)
+                logger.warning(
+                    "Retryable status %d (attempt %d/%d); retrying in %.1fs",
+                    response.status_code,
+                    attempt + 1,
+                    MAX_RETRIES,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+                continue
+
+            return _parse_response(response, full_url)
+        except httpx.HTTPStatusError as e:
+            return _handle_http_status_error(e)
+        except httpx.RequestError as e:
+            if attempt < MAX_RETRIES:
+                delay = _retry_delay(attempt)
+                logger.warning(
+                    "Network error on attempt %d/%d (%s); retrying in %.1fs",
+                    attempt + 1,
+                    MAX_RETRIES,
+                    type(e).__name__,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+                continue
+            logger.error("Request error: %s", str(e))
+            return {"error": True, "message": f"Request error: {str(e)}"}
+        except httpx.HTTPError as e:
+            logger.error("HTTP client error: %s", str(e))
+            return {"error": True, "message": f"HTTP client error: {str(e)}"}
+
+    return {"error": True, "message": "Max retries exceeded"}  # pragma: no cover
 
 
 def _handle_http_status_error(e: httpx.HTTPStatusError) -> dict[str, Any]:
