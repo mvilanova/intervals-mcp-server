@@ -66,16 +66,41 @@ model DailyMetrics {
 }
 
 model SyncRun {
-  id              String    @id @default(cuid())
-  startedAt       DateTime  @default(now())
+  id              String          @id @default(cuid())
+  startedAt       DateTime        @default(now())
   finishedAt      DateTime?
   mode            String
-  wellnessUpserts Int       @default(0)
-  activityUpserts Int       @default(0)
-  weightUpserts   Int       @default(0)
-  errors          String[]  @default([])
+  wellnessUpserts Int             @default(0)
+  activityUpserts Int             @default(0)
+  weightUpserts   Int             @default(0)
+  errors          String[]        @default([])
+  sources         SyncSourceRun[]
 
   @@index([startedAt])
+}
+
+model SyncSourceRun {
+  id             String    @id @default(cuid())
+  syncRunId      String
+  syncRun        SyncRun   @relation(fields: [syncRunId], references: [id], onDelete: Cascade)
+  source         String
+  status         String
+  requestedFrom  DateTime  @db.Date
+  requestedTo    DateTime  @db.Date
+  fetchedCount   Int?
+  parsedCount    Int?
+  upsertedCount  Int       @default(0)
+  unchangedCount Int       @default(0)
+  skippedCount   Int       @default(0)
+  httpStatus     Int?
+  errorCode      String?
+  errorMessage   String?
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+
+  @@unique([syncRunId, source])
+  @@index([syncRunId])
+  @@index([source, startedAt])
 }
 
 model Activity {

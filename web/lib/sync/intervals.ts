@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/db";
+import { parseUtcDateOnly } from "@/lib/sync/dates";
+import { runSourceSync, SourceRunError, SourceRunOutcome } from "@/lib/sync/sourceRun";
 import {
   ActivityEntry,
   ActivityResponse,
@@ -22,6 +24,12 @@ function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Compute the ISO-formatted oldest and newest date strings for the given sync mode.
+ *
+ * @param mode - "full" for a 30-day window, "recent" for a 3-day window
+ * @returns An object with `oldest` and `newest` as `YYYY-MM-DD` strings (UTC)
+ */
 function dateWindow(mode: "full" | "recent"): { oldest: string; newest: string } {
   const days = mode === "full" ? 30 : 3;
   const now = new Date();
@@ -30,10 +38,21 @@ function dateWindow(mode: "full" | "recent"): { oldest: string; newest: string }
   return { oldest: isoDate(oldest), newest: isoDate(now) };
 }
 
+// Structured error code so the UI and sourceRun helper can distinguish
+// auth failures from schema drift from network timeouts without parsing
+// the message string. Keep this enum aligned with the SyncSourceRun
+// `errorCode` column.
+export type IntervalsErrorCode =
+  | "http_error"
+  | "timeout"
+  | "network_error"
+  | "parse_error";
+
 class IntervalsError extends Error {
   constructor(
     message: string,
     public readonly status?: number,
+    public readonly code?: IntervalsErrorCode,
   ) {
     super(message);
   }
@@ -52,11 +71,41 @@ export class NoUserFoundError extends Error {
 
 const FETCH_TIMEOUT_MS = 30_000;
 
+function sourceRunError(
+  err: unknown,
+  partial: SourceRunOutcome,
+): SourceRunError {
+  const message = err instanceof Error ? err.message : String(err);
+  const status =
+    err instanceof Error && "status" in err
+      ? (err as { status?: number }).status
+      : undefined;
+  const code =
+    err instanceof Error && "code" in err
+      ? (err as { code?: string }).code
+      : undefined;
+  return new SourceRunError(message, { partial, status, code, cause: err });
+}
+
+type IntervalsFetchResult = {
+  status: number;
+  json: unknown;
+};
+
+/**
+ * Fetches a JSON resource from the Intervals.icu API for the given path and query parameters.
+ *
+ * @param path - API path to request (appended to the configured Intervals base URL)
+ * @param apiKey - Intervals API key used to build the `Authorization` header
+ * @param params - Query parameters to include on the request
+ * @returns An object containing the HTTP `status` and the parsed JSON response as `json`
+ * @throws IntervalsError - Thrown with `code: "http_error"` when the response has a non-OK status (includes response `status`); with `code: "timeout"` when the request exceeds the configured timeout; with `code: "parse_error"` when the response body is not valid JSON; with `code: "network_error"` for other network/fetch errors.
+ */
 async function intervalsFetch(
   path: string,
   apiKey: string,
   params: Record<string, string>,
-): Promise<unknown> {
+): Promise<IntervalsFetchResult> {
   const url = new URL(`${BASE_URL}${path}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
@@ -79,14 +128,36 @@ async function intervalsFetch(
       throw new IntervalsError(
         `Intervals.icu ${res.status} ${res.statusText} on ${path}${body ? `: ${body.slice(0, 200)}` : ""}`,
         res.status,
+        "http_error",
       );
     }
-    return await res.json();
+    let json: unknown;
+    try {
+      json = await res.json();
+    } catch (err) {
+      throw new IntervalsError(
+        `Intervals.icu parse error on ${path}: ${err instanceof Error ? err.message : String(err)}`,
+        res.status,
+        "parse_error",
+      );
+    }
+    return { status: res.status, json };
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       throw new IntervalsError(
         `Intervals.icu request timeout after ${FETCH_TIMEOUT_MS}ms on ${path}`,
         408,
+        "timeout",
+      );
+    }
+    // Wrap raw fetch/network errors so the source-run helper can record
+    // them with a recognizable code instead of a generic "Error" status.
+    if (err instanceof IntervalsError) throw err;
+    if (err instanceof Error) {
+      throw new IntervalsError(
+        `Intervals.icu network error on ${path}: ${err.message}`,
+        undefined,
+        "network_error",
       );
     }
     throw err;
@@ -125,124 +196,279 @@ function sleepHoursFrom(entry: WellnessEntry): number | null {
   return null;
 }
 
+/**
+ * Upserts wellness entries into the user's daily metrics and reports counts.
+ *
+ * Entries that do not contain a parsable date are skipped and not written.
+ *
+ * @param userId - The target user's ID for the upserts
+ * @param entries - Array of wellness entries to upsert into daily metrics
+ * @returns An object with `upserted` equal to the number of rows created or updated and `skipped` equal to the number of entries ignored due to missing dates
+ */
 async function upsertWellness(
   userId: string,
   entries: WellnessEntry[],
-): Promise<number> {
-  let count = 0;
-  for (const entry of entries) {
-    const dateStr = wellnessDate(entry);
-    if (!dateStr) continue;
-    const date = new Date(dateStr);
+): Promise<{ upserted: number; skipped: number }> {
+  let upserted = 0;
+  let skipped = 0;
+  // Counted at the top of each iteration so the catch block can report
+  // parsedCount as "rows actually reached" rather than the full input
+  // length — otherwise unreached entries get folded into `unchanged` via
+  // `parsed - upserted - skipped` and silently overstate the count.
+  let processed = 0;
+  try {
+    for (const entry of entries) {
+      processed++;
+      const dateStr = wellnessDate(entry);
+      if (!dateStr) {
+        skipped++;
+        continue;
+      }
+      const date = parseUtcDateOnly(dateStr);
+      if (!date) {
+        skipped++;
+        continue;
+      }
 
-    const data = {
-      ctl: entry.ctl ?? null,
-      atl: entry.atl ?? null,
-      rampRate: entry.rampRate ?? null,
-      rhr: entry.restingHR != null ? Math.round(entry.restingHR) : null,
-      hrv: entry.hrv ?? null,
-      sleepHours: sleepHoursFrom(entry),
-      sleepScore: entry.sleepScore != null ? Math.round(entry.sleepScore) : null,
-      steps: entry.steps != null ? Math.round(entry.steps) : null,
-      kcalConsumed:
-        entry.kcalConsumed != null ? Math.round(entry.kcalConsumed) : null,
-      carbsGrams: entry.carbohydrates ?? null,
-      proteinGrams: entry.protein ?? null,
-      fatGrams: entry.fatTotal ?? null,
-    };
+      const data = {
+        ctl: entry.ctl ?? null,
+        atl: entry.atl ?? null,
+        rampRate: entry.rampRate ?? null,
+        rhr: entry.restingHR != null ? Math.round(entry.restingHR) : null,
+        hrv: entry.hrv ?? null,
+        sleepHours: sleepHoursFrom(entry),
+        sleepScore: entry.sleepScore != null ? Math.round(entry.sleepScore) : null,
+        steps: entry.steps != null ? Math.round(entry.steps) : null,
+        kcalConsumed:
+          entry.kcalConsumed != null ? Math.round(entry.kcalConsumed) : null,
+        carbsGrams: entry.carbohydrates ?? null,
+        proteinGrams: entry.protein ?? null,
+        fatGrams: entry.fatTotal ?? null,
+      };
 
-    await prisma.dailyMetrics.upsert({
-      where: { userId_date: { userId, date } },
-      update: data,
-      create: { userId, date, ...data },
+      const existing = await prisma.dailyMetrics.findUnique({
+        where: { userId_date: { userId, date } },
+      });
+
+      if (!existing) {
+        await prisma.dailyMetrics.create({ data: { userId, date, ...data } });
+        upserted++;
+        continue;
+      }
+
+      const changed = Object.entries(data).some(
+        ([key, value]) => existing[key as keyof typeof data] !== value,
+      );
+      if (changed) {
+        await prisma.dailyMetrics.update({
+          where: { userId_date: { userId, date } },
+          data,
+        });
+        upserted++;
+      }
+    }
+  } catch (err) {
+    throw sourceRunError(err, {
+      fetchedCount: entries.length,
+      parsedCount: processed,
+      upsertedCount: upserted,
+      skippedCount: skipped,
     });
-    count++;
   }
-  return count;
+  return { upserted, skipped };
 }
 
+// Returns the count of wellness entries that *carry* a weight reading,
+// alongside how many of those we upserted vs. skipped (because a manual
+// entry already exists). The `weight` source uses `withWeight` as its
+// `parsedCount` so the UI shows "fetched: 5, written: 2, unchanged: 3"
+/**
+ * Upserts weight records derived from Intervals wellness entries into the database.
+ *
+ * For each wellness entry that includes a weight, attempts an atomic update of an existing
+ * "from intervals" weight row for the same user/date; if none exists, attempts to create
+ * a new "from intervals" row. Manual weight entries (rows whose notes are not "from intervals")
+ * are never overwritten; concurrent manual inserts are detected via the unique constraint and
+ * cause the entry to be skipped.
+ *
+ * @param userId - ID of the user to upsert weight records for
+ * @param entries - Normalized wellness entries from which weight values are read
+ * @returns An object with:
+ *  - `withWeight`: number of wellness entries that contained a weight value
+ *  - `upserted`: number of database rows successfully updated or created from those weights
+ *  - `skipped`: number of entries skipped due to missing/unparseable dates. Manual-entry
+ *     conflicts (P2002) are intentionally NOT counted here — they flow into `unchanged`
+ *     via the `parsed - upserted - skipped` accounting so the UI labels them correctly.
+ */
 async function upsertWeightFromWellness(
   userId: string,
   entries: WellnessEntry[],
-): Promise<number> {
-  let count = 0;
-  for (const entry of entries) {
-    if (entry.weight == null) continue;
-    const dateStr = wellnessDate(entry);
-    if (!dateStr) continue;
-    const date = new Date(dateStr);
-
-    // Atomic update: only touch rows already marked "from intervals".
-    // Manual weight entries (notes != "from intervals") are never overwritten,
-    // and the where-filter on updateMany makes the check + write atomic.
-    const updated = await prisma.weightLog.updateMany({
-      where: { userId, date, notes: "from intervals" },
-      data: { weightKg: entry.weight },
-    });
-
-    if (updated.count > 0) {
-      count++;
-      continue;
-    }
-
-    // No from-intervals row existed. Try to create one. The unique constraint
-    // on (userId, date) means this fails if a manual entry was inserted
-    // concurrently — in that case we skip, preserving the manual entry.
-    try {
-      await prisma.weightLog.create({
-        data: {
-          userId,
-          date,
-          weightKg: entry.weight,
-          notes: "from intervals",
-        },
-      });
-      count++;
-    } catch (err) {
-      if (
-        err instanceof Error &&
-        "code" in err &&
-        (err as { code?: string }).code === "P2002"
-      ) {
-        // Manual entry beat us to it; that's the desired behaviour.
+): Promise<{ withWeight: number; upserted: number; skipped: number }> {
+  const totalWithWeight = entries.filter((entry) => entry.weight != null).length;
+  let withWeight = 0;
+  let upserted = 0;
+  let skipped = 0;
+  let processed = 0;
+  try {
+    for (const entry of entries) {
+      if (entry.weight == null) continue;
+      processed++;
+      // Count every weight-carrying entry as "fetched" before any guard so
+      // parsedCount in the source run row matches the math invariant
+      // `unchanged = parsed - upserted - skipped`. Otherwise an invalid
+      // date would produce `fetched: 0, skipped: 1` — impossible totals.
+      withWeight++;
+      const dateStr = wellnessDate(entry);
+      if (!dateStr) {
+        skipped++;
         continue;
       }
-      throw err;
+      const date = parseUtcDateOnly(dateStr);
+      if (!date) {
+        skipped++;
+        continue;
+      }
+
+      const existing = await prisma.weightLog.findUnique({
+        where: { userId_date: { userId, date } },
+      });
+
+      if (!existing) {
+        try {
+          await prisma.weightLog.create({
+            data: {
+              userId,
+              date,
+              weightKg: entry.weight,
+              notes: "from intervals",
+            },
+          });
+          upserted++;
+        } catch (err) {
+          if (
+            err instanceof Error &&
+            "code" in err &&
+            (err as { code?: string }).code === "P2002"
+          ) {
+            continue;
+          }
+          throw err;
+        }
+        continue;
+      }
+
+      if (existing.notes !== "from intervals") {
+        continue;
+      }
+
+      if (existing.weightKg !== entry.weight) {
+        await prisma.weightLog.update({
+          where: { userId_date: { userId, date } },
+          data: { weightKg: entry.weight },
+        });
+        upserted++;
+      }
     }
+  } catch (err) {
+    // `withWeight` already counts only weight-carrying entries that
+    // have been reached in the loop, so it doubles as the processed
+    // counter here — no separate variable needed.
+    throw sourceRunError(err, {
+      fetchedCount: totalWithWeight,
+      parsedCount: processed,
+      upsertedCount: upserted,
+      skippedCount: skipped,
+    });
   }
-  return count;
+  return { withWeight, upserted, skipped };
 }
 
+/**
+ * Upserts Intervals.icu activity entries into the database for the given user.
+ *
+ * @param userId - The database user id to associate activities with
+ * @param entries - Activity entries parsed from the Intervals.icu API
+ * @returns An object with `upserted` set to the number of rows created or updated, and `skipped` set to the number of entries omitted because a valid date could not be determined
+ */
 async function upsertActivities(
   userId: string,
   entries: ActivityEntry[],
-): Promise<number> {
-  let count = 0;
-  for (const entry of entries) {
-    const intervalsId = String(entry.id);
-    const dateStr = activityDate(entry);
-    if (!dateStr) continue;
-    const date = new Date(dateStr);
+): Promise<{ upserted: number; skipped: number }> {
+  let upserted = 0;
+  let skipped = 0;
+  let processed = 0;
+  try {
+    for (const entry of entries) {
+      processed++;
+      const intervalsId = String(entry.id);
+      const dateStr = activityDate(entry);
+      if (!dateStr) {
+        skipped++;
+        continue;
+      }
+      const date = parseUtcDateOnly(dateStr);
+      if (!date) {
+        skipped++;
+        continue;
+      }
 
-    const movingSec = entry.moving_time ?? entry.duration ?? entry.elapsed_time;
-    const data = {
-      date,
-      type: entry.type ?? "Unknown",
-      durationMin: movingSec != null ? movingSec / 60 : null,
-      tss: entry.icu_training_load ?? entry.trainingLoad ?? null,
-      distanceKm: entry.distance != null ? entry.distance / 1000 : null,
-    };
+      const data = {
+        date,
+        type: entry.type ?? "Unknown",
+        durationMin: entry.moving_time ?? entry.duration ?? entry.elapsed_time,
+        tss: entry.icu_training_load ?? entry.trainingLoad ?? null,
+        distanceKm: entry.distance != null ? entry.distance / 1000 : null,
+      };
+      if (data.durationMin != null) data.durationMin /= 60;
 
-    await prisma.activity.upsert({
-      where: { userId_intervalsId: { userId, intervalsId } },
-      update: data,
-      create: { userId, intervalsId, ...data },
+      const existing = await prisma.activity.findUnique({
+        where: { userId_intervalsId: { userId, intervalsId } },
+      });
+
+      if (!existing) {
+        await prisma.activity.create({
+          data: { userId, intervalsId, ...data },
+        });
+        upserted++;
+        continue;
+      }
+
+      const changed =
+        existing.date.getTime() !== date.getTime() ||
+        existing.type !== data.type ||
+        existing.durationMin !== data.durationMin ||
+        existing.tss !== data.tss ||
+        existing.distanceKm !== data.distanceKm;
+
+      if (changed) {
+        await prisma.activity.update({
+          where: { userId_intervalsId: { userId, intervalsId } },
+          data,
+        });
+        upserted++;
+      }
+    }
+  } catch (err) {
+    throw sourceRunError(err, {
+      fetchedCount: entries.length,
+      parsedCount: processed,
+      upsertedCount: upserted,
+      skippedCount: skipped,
     });
-    count++;
   }
-  return count;
+  return { upserted, skipped };
 }
 
+/**
+ * Syncs wellness, weight, and activity data from Intervals.icu into the Prisma database for the specified time window.
+ *
+ * @param opts.mode - "full" syncs the last 30 days; "recent" syncs the last 3 days.
+ * @param opts.userId - Optional user id to sync into; when omitted the earliest-created user is used.
+ * @returns A SyncResult containing per-source upsert counts, `startedAt`/`finishedAt` timestamps, and any recorded errors.
+ * @throws Error - If INTERVALS_API_KEY or INTERVALS_ATHLETE_ID are not set in the environment.
+ * @throws NoUserFoundError - If no user exists to sync into.
+ * @throws Error - If another sync is already in progress (or if a retry after reclaiming a stale lock still detects a concurrent run).
+ */
 export async function syncIntervals(opts: {
   mode: "full" | "recent";
   userId?: string;
@@ -312,52 +538,145 @@ export async function syncIntervals(opts: {
 
   const { oldest, newest } = dateWindow(opts.mode);
   const errors: string[] = [];
-  let wellnessUpserts = 0;
-  let activityUpserts = 0;
-  let weightUpserts = 0;
 
-  try {
-    const wellnessRaw = await intervalsFetch(
-      `/athlete/${athleteId}/wellness`,
-      apiKey,
-      { oldest, newest },
-    );
-    const wellness = normalizeWellness(wellnessRaw);
-    wellnessUpserts = await upsertWellness(user.id, wellness);
-    weightUpserts = await upsertWeightFromWellness(user.id, wellness);
-  } catch (err) {
-    errors.push(`wellness: ${err instanceof Error ? err.message : String(err)}`);
+  // Wellness owns the API call; weight piggybacks on its payload. The
+  // fetch lives inside the wellness `run` callback so the SyncSourceRun
+  // row is created BEFORE the 30s HTTP call starts — otherwise a crash
+  // mid-fetch leaves no per-source evidence and /admin/sync can't show
+  // wellness/weight as in-flight.
+  //
+  // `wellnessPayloadError` is set ONLY when fetch or parse fails — i.e.
+  // when weight genuinely has nothing to work with. A failure later in
+  // upsertWellness (DB write error) does NOT propagate to weight: the
+  // payload is fine, only the wellness DB write failed, so weight can
+  // still run independently. This preserves the per-source isolation
+  // contract. Storing the original error instance (not a recoded copy)
+  // keeps IntervalsError.code/status intact on the weight row.
+  let wellness: WellnessEntry[] | null = null;
+  let wellnessHttpStatus: number | undefined;
+  let wellnessPayloadError: Error | null = null;
+
+  const wellnessResult = await runSourceSync({
+    syncRunId: run.id,
+    source: "wellness",
+    requestedFrom: oldest,
+    requestedTo: newest,
+    run: async () => {
+      let wellnessRes: { status: number; json: unknown };
+      try {
+        wellnessRes = await intervalsFetch(
+          `/athlete/${athleteId}/wellness`,
+          apiKey,
+          { oldest, newest },
+        );
+      } catch (err) {
+        wellnessPayloadError =
+          err instanceof Error ? err : new Error(String(err));
+        throw err;
+      }
+      wellnessHttpStatus = wellnessRes.status;
+      try {
+        wellness = normalizeWellness(wellnessRes.json);
+      } catch (err) {
+        const wrapped = new IntervalsError(
+          `wellness parse error: ${err instanceof Error ? err.message : String(err)}`,
+          wellnessRes.status,
+          "parse_error",
+        );
+        wellnessPayloadError = wrapped;
+        throw wrapped;
+      }
+      // Past this point, weight has the payload it needs. An upsert
+      // failure here only affects the wellness row, not weight.
+      const { upserted, skipped } = await upsertWellness(user.id, wellness);
+      return {
+        fetchedCount: wellness.length,
+        parsedCount: wellness.length,
+        upsertedCount: upserted,
+        skippedCount: skipped,
+        httpStatus: wellnessHttpStatus,
+      };
+    },
+  });
+  if (wellnessResult.errorMessage) {
+    errors.push(`wellness: ${wellnessResult.errorMessage}`);
   }
 
-  try {
-    const activitiesRaw = await intervalsFetch(
-      `/athlete/${athleteId}/activities`,
-      apiKey,
-      { oldest, newest },
-    );
-    const activities = ActivityResponse.parse(activitiesRaw);
-    activityUpserts = await upsertActivities(user.id, activities);
-  } catch (err) {
-    errors.push(
-      `activities: ${err instanceof Error ? err.message : String(err)}`,
-    );
+  const weightResult = await runSourceSync({
+    syncRunId: run.id,
+    source: "weight",
+    requestedFrom: oldest,
+    requestedTo: newest,
+    run: async () => {
+      if (wellnessPayloadError) throw wellnessPayloadError;
+      if (!wellness) throw new Error("wellness payload unavailable");
+      const { withWeight, upserted, skipped } = await upsertWeightFromWellness(
+        user.id,
+        wellness,
+      );
+      return {
+        fetchedCount: withWeight,
+        parsedCount: withWeight,
+        upsertedCount: upserted,
+        skippedCount: skipped,
+        httpStatus: wellnessHttpStatus,
+      };
+    },
+  });
+  if (weightResult.errorMessage) {
+    errors.push(`weight: ${weightResult.errorMessage}`);
+  }
+
+  const activitiesResult = await runSourceSync({
+    syncRunId: run.id,
+    source: "activities",
+    requestedFrom: oldest,
+    requestedTo: newest,
+    run: async () => {
+      const activitiesRes = await intervalsFetch(
+        `/athlete/${athleteId}/activities`,
+        apiKey,
+        { oldest, newest },
+      );
+      let activities: ActivityEntry[];
+      try {
+        activities = ActivityResponse.parse(activitiesRes.json);
+      } catch (err) {
+        throw new IntervalsError(
+          `activities parse error: ${err instanceof Error ? err.message : String(err)}`,
+          activitiesRes.status,
+          "parse_error",
+        );
+      }
+      const { upserted, skipped } = await upsertActivities(user.id, activities);
+      return {
+        fetchedCount: activities.length,
+        parsedCount: activities.length,
+        upsertedCount: upserted,
+        skippedCount: skipped,
+        httpStatus: activitiesRes.status,
+      };
+    },
+  });
+  if (activitiesResult.errorMessage) {
+    errors.push(`activities: ${activitiesResult.errorMessage}`);
   }
 
   const finished = await prisma.syncRun.update({
     where: { id: run.id },
     data: {
       finishedAt: new Date(),
-      wellnessUpserts,
-      activityUpserts,
-      weightUpserts,
+      wellnessUpserts: wellnessResult.upsertedCount,
+      activityUpserts: activitiesResult.upsertedCount,
+      weightUpserts: weightResult.upsertedCount,
       errors,
     },
   });
 
   return {
-    wellnessUpserts,
-    activityUpserts,
-    weightUpserts,
+    wellnessUpserts: wellnessResult.upsertedCount,
+    activityUpserts: activitiesResult.upsertedCount,
+    weightUpserts: weightResult.upsertedCount,
     startedAt: finished.startedAt,
     finishedAt: finished.finishedAt!,
     errors,
