@@ -1,24 +1,261 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ──────────────────────────────────────────────────────────────────────────
+   Fonts — Calibre (body) + ColumbiaSansW (display).
+   Files live under web/public/fonts/ and are ported from roots.design.
+   ────────────────────────────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: "Calibre";
+  src: url("/fonts/calibre-light.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
 }
 
+@font-face {
+  font-family: "Calibre";
+  src: url("/fonts/calibre-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Calibre";
+  src: url("/fonts/calibre-web-regular-italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Calibre";
+  src: url("/fonts/calibre-medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Calibre";
+  src: url("/fonts/calibre-web-semibold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Calibre";
+  src: url("/fonts/calibre-web-semibold-italic.woff2") format("woff2");
+  font-weight: 600;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Calibre";
+  src: url("/fonts/calibre-web-bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "ColumbiaSansW";
+  src: url("/fonts/columbiasansw-light.woff") format("woff");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Design tokens — shadcn/ui "new-york", baseColor: slate.
+   Ported 1:1 from roots.design (src/index.css). Dark mode is class-gated
+   via `.dark` on <html> — not prefers-color-scheme — to match the source.
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --background: hsl(0 0% 100%);
+  --foreground: hsl(222.2 84% 4.9%);
+
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(222.2 84% 4.9%);
+
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(222.2 84% 4.9%);
+
+  --primary: hsl(222.2 47.4% 11.2%);
+  --primary-foreground: hsl(210 40% 98%);
+
+  --secondary: hsl(210 40% 96.1%);
+  --secondary-foreground: hsl(222.2 47.4% 11.2%);
+
+  --muted: hsl(210 40% 96.1%);
+  --muted-foreground: hsl(215.4 16.3% 46.9%);
+
+  --accent: hsl(210 40% 96.1%);
+  --accent-foreground: hsl(222.2 47.4% 11.2%);
+
+  --destructive: hsl(0 84.2% 60.2%);
+  --destructive-foreground: hsl(210 40% 98%);
+
+  --border: hsl(214.3 31.8% 91.4%);
+  --input: hsl(214.3 31.8% 91.4%);
+  --ring: hsl(222.2 84% 4.9%);
+
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: hsl(222.2 84% 4.9%);
+  --foreground: hsl(210 40% 98%);
+
+  --card: hsl(222.2 84% 4.9%);
+  --card-foreground: hsl(210 40% 98%);
+
+  --popover: hsl(222.2 84% 4.9%);
+  --popover-foreground: hsl(210 40% 98%);
+
+  --primary: hsl(210 40% 98%);
+  --primary-foreground: hsl(222.2 47.4% 11.2%);
+
+  --secondary: hsl(217.2 32.6% 17.5%);
+  --secondary-foreground: hsl(210 40% 98%);
+
+  --muted: hsl(217.2 32.6% 17.5%);
+  --muted-foreground: hsl(215 20.2% 65.1%);
+
+  --accent: hsl(217.2 32.6% 17.5%);
+  --accent-foreground: hsl(210 40% 98%);
+
+  --destructive: hsl(0 62.8% 30.6%);
+  --destructive-foreground: hsl(210 40% 98%);
+
+  --border: hsl(217.2 32.6% 17.5%);
+  --input: hsl(217.2 32.6% 17.5%);
+  --ring: hsl(212.7 26.8% 83.9%);
+}
+
+/* Expose the tokens as Tailwind v4 utilities (bg-background, text-foreground,
+   border-border, font-sans, font-display, rounded-lg, …). */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --font-sans: "Calibre", ui-sans-serif, system-ui, sans-serif;
+  --font-display:
+    "ColumbiaSansW", "Calibre", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ──────────────────────────────────────────────────────────────────────────
+   Body — warm-peach blended gradient background (the roots.design signature),
+   plus typographic smoothing and the default Calibre stack.
+   ────────────────────────────────────────────────────────────────────────── */
+
+body {
+  color: var(--foreground);
+  background-color: var(--background);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Warm signature gradient — light mode only. In dark mode the body
+   falls through to the --background HSL token above; the warm cream
+   gradient would render light text on a light surface otherwise. */
+:root:not(.dark) body {
+  background:
+    radial-gradient(
+      ellipse 800px 600px at 80% 20%,
+      rgba(234, 88, 12, 0.12) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse 700px 700px at 20% 80%,
+      rgba(244, 114, 182, 0.1) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse 900px 500px at 50% 50%,
+      rgba(251, 191, 36, 0.08) 0%,
+      transparent 60%
+    ),
+    linear-gradient(135deg, #fdf8f3 0%, #f5efe7 100%);
+}
+
+/* Parallax only on desktop — fixed attachment causes jank/glitches on
+   iOS Safari and other mobile browsers. */
+@media (min-width: 768px) {
+  :root:not(.dark) body {
+    background-attachment: fixed;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ──────────────────────────────────────────────────────────────────────────
+   Signature utilities ported from roots.design.
+   ────────────────────────────────────────────────────────────────────────── */
+
+@utility shadow-luxury {
+  box-shadow: 0 20px 50px -12px rgb(0 0 0 / 0.15);
+}
+
+@utility shadow-3xl {
+  box-shadow: 0 35px 60px -15px rgb(0 0 0 / 0.3);
+}
+
+@utility transition-luxury {
+  transition: all 700ms ease-out;
+}
+
+@utility text-gradient-luxury {
+  background-image: linear-gradient(
+    to right,
+    var(--color-gray-900),
+    var(--color-gray-700),
+    var(--color-gray-900)
+  );
+  background-clip: text;
+  color: transparent;
+}
+
+@utility text-gradient-warm {
+  background-image: linear-gradient(
+    to right,
+    var(--color-amber-900),
+    var(--color-stone-800),
+    var(--color-gray-900)
+  );
+  background-clip: text;
+  color: transparent;
 }

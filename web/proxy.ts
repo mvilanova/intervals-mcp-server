@@ -1,6 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
 
+/**
+ * Protects routes by allowing public paths, validating session cookies, and redirecting unauthenticated requests to the login page.
+ *
+ * Examines the request path and cookie session to decide whether to continue the request, redirect to `/login` (clearing query parameters), or return a 503 when server secrets are missing.
+ *
+ * @param req - The incoming Next.js request to inspect
+ * @returns A `NextResponse` that either continues processing (`NextResponse.next()`), redirects the client to `/login`, or is a 503 response with the message "Server misconfigured: DASHBOARD_PIN and SESSION_SECRET must be set."
+ */
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -32,5 +40,5 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|fonts/).*)"],
 };
