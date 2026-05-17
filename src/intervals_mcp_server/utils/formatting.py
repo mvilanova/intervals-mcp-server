@@ -26,10 +26,23 @@ def _format_iso_datetime(value: Any) -> Any:
     return value
 
 
+def _first_present(d: dict[str, Any], *keys: str, default: Any = "N/A") -> Any:
+    """Return the value of the first key present in ``d``, else ``default``.
+
+    Mirrors `d.get(k1, d.get(k2, ...))` chained calls exactly: a key whose
+    value is explicitly ``None`` still counts as present and stops the chain.
+    For None-aware fallbacks (e.g. RPE) the caller handles them inline.
+    """
+    for k in keys:
+        if k in d:
+            return d[k]
+    return default
+
+
 def format_activity_summary(activity: dict[str, Any]) -> str:
     """Format an activity into a readable string."""
     start_time = _format_iso_datetime(
-        activity.get("startTime", activity.get("start_date", "Unknown"))
+        _first_present(activity, "startTime", "start_date", default="Unknown")
     )
 
     rpe = activity.get("perceived_exertion", None)
@@ -49,15 +62,15 @@ Type: {activity.get("type", "Unknown")}
 Date: {start_time}
 Description: {activity.get("description", "N/A")}
 Distance: {activity.get("distance", 0)} meters
-Duration: {activity.get("duration", activity.get("elapsed_time", 0))} seconds
+Duration: {_first_present(activity, "duration", "elapsed_time", default=0)} seconds
 Moving Time: {activity.get("moving_time", "N/A")} seconds
-Elevation Gain: {activity.get("elevationGain", activity.get("total_elevation_gain", 0))} meters
+Elevation Gain: {_first_present(activity, "elevationGain", "total_elevation_gain", default=0)} meters
 Elevation Loss: {activity.get("total_elevation_loss", "N/A")} meters
 
 Power Data:
-Average Power: {activity.get("avgPower", activity.get("icu_average_watts", activity.get("average_watts", "N/A")))} watts
+Average Power: {_first_present(activity, "avgPower", "icu_average_watts", "average_watts")} watts
 Weighted Avg Power: {activity.get("icu_weighted_avg_watts", "N/A")} watts
-Training Load: {activity.get("trainingLoad", activity.get("icu_training_load", "N/A"))}
+Training Load: {_first_present(activity, "trainingLoad", "icu_training_load")}
 FTP: {activity.get("icu_ftp", "N/A")} watts
 Kilojoules: {activity.get("icu_joules", "N/A")}
 Intensity: {activity.get("icu_intensity", "N/A")}
@@ -65,7 +78,7 @@ Power:HR Ratio: {activity.get("icu_power_hr", "N/A")}
 Variability Index: {activity.get("icu_variability_index", "N/A")}
 
 Heart Rate Data:
-Average Heart Rate: {activity.get("avgHr", activity.get("average_heartrate", "N/A"))} bpm
+Average Heart Rate: {_first_present(activity, "avgHr", "average_heartrate")} bpm
 Max Heart Rate: {activity.get("max_heartrate", "N/A")} bpm
 LTHR: {activity.get("lthr", "N/A")} bpm
 Resting HR: {activity.get("icu_resting_hr", "N/A")} bpm
@@ -363,46 +376,39 @@ Description: {event_desc}"""
 
 def format_event_details(event: dict[str, Any]) -> str:
     """Format detailed event information into a readable string."""
-
-    event_details = f"""Event Details:
+    parts: list[str] = [
+        f"""Event Details:
 
 ID: {event.get("id", "N/A")}
 Date: {event.get("date", "Unknown")}
 Name: {event.get("name", "Unnamed")}
 Description: {event.get("description", "No description")}"""
+    ]
 
-    # Check if it's a workout-based event
-    if "workout" in event and event["workout"]:
-        workout = event["workout"]
-        event_details += f"""
+    workout = event.get("workout")
+    if workout:
+        workout_lines = [
+            "Workout Information:",
+            f"Workout ID: {workout.get('id', 'N/A')}",
+            f"Sport: {workout.get('sport', 'Unknown')}",
+            f"Duration: {workout.get('duration', 0)} seconds",
+            f"TSS: {workout.get('tss', 'N/A')}",
+        ]
+        if isinstance(workout.get("intervals"), list):
+            workout_lines.append(f"Intervals: {len(workout['intervals'])}")
+        parts.append("\n".join(workout_lines))
 
-Workout Information:
-Workout ID: {workout.get("id", "N/A")}
-Sport: {workout.get("sport", "Unknown")}
-Duration: {workout.get("duration", 0)} seconds
-TSS: {workout.get("tss", "N/A")}"""
-
-        # Include interval count if available
-        if "intervals" in workout and isinstance(workout["intervals"], list):
-            event_details += f"""
-Intervals: {len(workout["intervals"])}"""
-
-    # Check if it's a race
     if event.get("race"):
-        event_details += f"""
+        parts.append(
+            "Race Information:\n"
+            f"Priority: {event.get('priority', 'N/A')}\n"
+            f"Result: {event.get('result', 'N/A')}"
+        )
 
-Race Information:
-Priority: {event.get("priority", "N/A")}
-Result: {event.get("result", "N/A")}"""
-
-    # Include calendar information
     if "calendar" in event:
-        cal = event["calendar"]
-        event_details += f"""
+        parts.append(f"Calendar: {event['calendar'].get('name', 'N/A')}")
 
-Calendar: {cal.get("name", "N/A")}"""
-
-    return event_details
+    return "\n\n".join(parts)
 
 
 def format_activity_message(message: dict[str, Any]) -> str:
@@ -436,29 +442,9 @@ def format_custom_item_details(item: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_intervals(intervals_data: dict[str, Any]) -> str:
-    """Format intervals data into a readable string with all available fields.
-
-    Args:
-        intervals_data: The intervals data from the Intervals.icu API
-
-    Returns:
-        A formatted string representation of the intervals data
-    """
-    # Format basic intervals information
-    result = f"""Intervals Analysis:
-
-ID: {intervals_data.get("id", "N/A")}
-Analyzed: {intervals_data.get("analyzed", "N/A")}
-
-"""
-
-    # Format individual intervals
-    if "icu_intervals" in intervals_data and intervals_data["icu_intervals"]:
-        result += "Individual Intervals:\n\n"
-
-        for i, interval in enumerate(intervals_data["icu_intervals"], 1):
-            result += f"""[{i}] {interval.get("label", f"Interval {i}")} ({interval.get("type", "Unknown")})
+def _format_one_interval(i: int, interval: dict[str, Any]) -> str:
+    """Render a single icu_intervals entry. Trailing blank line included."""
+    return f"""[{i}] {interval.get("label", f"Interval {i}")} ({interval.get("type", "Unknown")})
 Duration: {interval.get("elapsed_time", 0)} seconds (moving: {interval.get("moving_time", 0)} seconds)
 Distance: {interval.get("distance", 0)} meters
 Start-End Indices: {interval.get("start_index", 0)}-{interval.get("end_index", 0)}
@@ -502,12 +488,10 @@ Elevation & Environment:
 
 """
 
-    # Format interval groups
-    if "icu_groups" in intervals_data and intervals_data["icu_groups"]:
-        result += "Interval Groups:\n\n"
 
-        for i, group in enumerate(intervals_data["icu_groups"], 1):
-            result += f"""Group: {group.get("id", f"Group {i}")} (Contains {group.get("count", 0)} intervals)
+def _format_one_group(i: int, group: dict[str, Any]) -> str:
+    """Render a single icu_groups entry. Trailing blank line included."""
+    return f"""Group: {group.get("id", f"Group {i}")} (Contains {group.get("count", 0)} intervals)
 Duration: {group.get("elapsed_time", 0)} seconds (moving: {group.get("moving_time", 0)} seconds)
 Distance: {group.get("distance", 0)} meters
 Start-End Indices: {group.get("start_index", 0)}-N/A
@@ -519,5 +503,25 @@ Speed: Avg {group.get("average_speed", 0)}, Max {group.get("max_speed", 0)} m/s
 Cadence: Avg {group.get("average_cadence", 0)}, Max {group.get("max_cadence", 0)} rpm
 
 """
+
+
+def format_intervals(intervals_data: dict[str, Any]) -> str:
+    """Render Intervals.icu intervals + groups payload as a single readable string."""
+    result = f"""Intervals Analysis:
+
+ID: {intervals_data.get("id", "N/A")}
+Analyzed: {intervals_data.get("analyzed", "N/A")}
+
+"""
+
+    if intervals_data.get("icu_intervals"):
+        result += "Individual Intervals:\n\n"
+        for i, interval in enumerate(intervals_data["icu_intervals"], 1):
+            result += _format_one_interval(i, interval)
+
+    if intervals_data.get("icu_groups"):
+        result += "Interval Groups:\n\n"
+        for i, group in enumerate(intervals_data["icu_groups"], 1):
+            result += _format_one_group(i, group)
 
     return result
