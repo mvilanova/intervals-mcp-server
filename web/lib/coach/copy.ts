@@ -1,4 +1,4 @@
-import type { RecommendationCategory } from "./rules";
+import type { RecommendationCategory, DataQuality } from "./rules";
 
 export const COACH_TITLES: Record<RecommendationCategory, string> = {
   "recovery": "Take a full recovery day.",
@@ -47,3 +47,19 @@ export const COACH_WATCH_NOTES: Record<RecommendationCategory, string> = {
   "steady": "Watch ramp rate if load has been building this week.",
   "missing-data": "Sync your devices to get a clearer picture.",
 };
+
+export const BADGE_LABELS: Record<RecommendationCategory, string> = {
+  "recovery": "recovery",
+  "controlled-recovery": "controlled recovery",
+  "caution": "caution",
+  "steady": "steady",
+  "missing-data": "needs data",
+};
+
+export const QUALITY_LABEL: Record<DataQuality, string> = {
+  sufficient: "All key data present",
+  partial: "Partial data — lower confidence",
+  insufficient: "Insufficient data",
+};
+
+export const DATA_LABEL = "Data:";

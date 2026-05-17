@@ -8,7 +8,7 @@ import { SyncStatusPill } from "./_components/SyncStatusPill";
 import { WeightForm } from "./_components/WeightForm";
 import { MealGrid } from "./_components/MealGrid";
 import { DailySummaryCard } from "./_components/DailySummaryCard";
-import { TodayCoachCard } from "./_components/TodayCoachCard";
+import { TodayHero } from "./_components/TodayHero";
 import { Card, CardContent, CardHeader, CardTitle } from "./_components/ui/card";
 
 export const dynamic = "force-dynamic";
@@ -51,14 +51,8 @@ export default async function Home() {
         <SyncStatusPill status={bundle.syncStatus} />
       </header>
 
-      <div className="md:col-span-12 empty:hidden">
-        <Suspense fallback={<SummarySkeleton />}>
-          <DailySummaryCard userId={bundle.user.id} date={bundle.todayDate} />
-        </Suspense>
-      </div>
-
       <div className="md:col-span-12">
-        <TodayCoachCard bundle={bundle} />
+        <TodayHero bundle={bundle} />
       </div>
 
       <div className="md:col-span-7 space-y-4">
@@ -88,6 +82,12 @@ export default async function Home() {
         />
 
         <ActivityCard activities={bundle.todayActivities} />
+      </div>
+
+      <div className="md:col-span-12 empty:hidden">
+        <Suspense fallback={<SummarySkeleton />}>
+          <DailySummaryCard userId={bundle.user.id} date={bundle.todayDate} />
+        </Suspense>
       </div>
     </main>
   );

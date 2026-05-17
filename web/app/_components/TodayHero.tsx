@@ -1,7 +1,8 @@
 import type { TodayBundle } from "@/lib/queries/today";
 import { buildCoachInput, computeCoachDecision } from "@/lib/coach/rules";
-import type { RecommendationCategory } from "@/lib/coach/rules";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import type { RecommendationCategory, DataQuality } from "@/lib/coach/rules";
+import { BADGE_LABELS, DATA_LABEL, QUALITY_LABEL } from "@/lib/coach/copy";
+import { Card, CardContent } from "./ui/card";
 import { cn } from "@/lib/utils";
 
 const BADGE_STYLES: Record<RecommendationCategory, string> = {
@@ -12,52 +13,51 @@ const BADGE_STYLES: Record<RecommendationCategory, string> = {
   "missing-data": "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
 };
 
-const BADGE_LABELS: Record<RecommendationCategory, string> = {
-  "recovery": "recovery",
-  "controlled-recovery": "controlled recovery",
-  "caution": "caution",
-  "steady": "steady",
-  "missing-data": "needs data",
+const HERO_BORDER: Record<RecommendationCategory, string> = {
+  "recovery": "border-l-rose-500",
+  "controlled-recovery": "border-l-amber-500",
+  "caution": "border-l-yellow-500",
+  "steady": "border-l-emerald-500",
+  "missing-data": "border-l-slate-400",
+};
+
+const QUALITY_STYLES: Record<DataQuality, string> = {
+  sufficient: "text-emerald-600 dark:text-emerald-400",
+  partial: "text-amber-600 dark:text-amber-400",
+  insufficient: "text-slate-500 dark:text-slate-400",
 };
 
 type Props = {
   bundle: TodayBundle;
 };
 
-export function TodayCoachCard({ bundle }: Props) {
+export function TodayHero({ bundle }: Props) {
   const input = buildCoachInput(bundle);
   const decision = computeCoachDecision(input);
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-3">
-          <CardTitle>Today&apos;s recommendation</CardTitle>
+    <Card className={cn("border-l-4", HERO_BORDER[decision.category])}>
+      <CardContent className="pt-6 space-y-5">
+        {/* Category badge + title */}
+        <div className="space-y-2">
           <span
             className={cn(
-              "shrink-0 text-xs font-medium px-2 py-0.5 rounded-full",
+              "inline-block text-xs font-medium px-2.5 py-0.5 rounded-full",
               BADGE_STYLES[decision.category],
             )}
           >
             {BADGE_LABELS[decision.category]}
           </span>
+          <h2 className="text-2xl font-semibold leading-snug">{decision.title}</h2>
         </div>
-        {decision.dataQuality === "partial" && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Some metrics are missing — confidence is lower than usual.
-          </p>
-        )}
-      </CardHeader>
 
-      <CardContent className="space-y-4">
-        <p className="text-lg font-semibold">{decision.title}</p>
-
+        {/* Why */}
         {decision.why.length > 0 && (
           <div>
-            <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+            <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
               Why
             </h3>
-            <ul className="space-y-0.5">
+            <ul className="space-y-1">
               {decision.why.map((reason, index) => (
                 <li key={`${reason}-${index}`} className="text-sm flex gap-2">
                   <span className="text-gray-400 dark:text-gray-500 shrink-0">•</span>
@@ -68,11 +68,12 @@ export function TodayCoachCard({ bundle }: Props) {
           </div>
         )}
 
+        {/* Action checklist */}
         <div>
-          <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
-            Do
+          <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+            What to do
           </h3>
-          <ul className="space-y-1">
+          <ul className="space-y-1.5">
             {decision.doItems.map((item, index) => (
               <li key={`${item}-${index}`} className="text-sm flex gap-2">
                 <span className="text-gray-400 dark:text-gray-500 shrink-0 mt-0.5">—</span>
@@ -82,11 +83,20 @@ export function TodayCoachCard({ bundle }: Props) {
           </ul>
         </div>
 
-        <div className="border-t pt-3">
+        {/* Watch for */}
+        <div className="border-t pt-4">
           <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
-            Watch
+            Watch for
           </h3>
           <p className="text-sm text-gray-600 dark:text-gray-300">{decision.watch}</p>
+        </div>
+
+        {/* Data confidence slot — accepts richer score from issue #31 without rework */}
+        <div className="flex items-center gap-1.5 text-xs">
+          <span className="text-gray-400 dark:text-gray-500">{DATA_LABEL}</span>
+          <span className={QUALITY_STYLES[decision.dataQuality]}>
+            {QUALITY_LABEL[decision.dataQuality]}
+          </span>
         </div>
       </CardContent>
     </Card>
