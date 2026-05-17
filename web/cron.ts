@@ -51,9 +51,10 @@ function sleep(ms: number): Promise<void> {
 
 async function main() {
   console.log(`[cron] starting, period=${HOURS}h`);
-  // Bootstrap sync — if this fails the process exits non-zero via the outer
-  // .catch() so the container restarts (or fails the deploy).
-  await runOnce("full", { rethrow: true });
+  // Bootstrap sync is best-effort: a fresh deploy may not have a seeded
+  // user yet, and the web app should still come up so the operator can log in
+  // or seed data without the cron container restart-looping.
+  await runOnce("full");
 
   // Sequential awaited delays: a slow sync can never overlap the next tick.
   // Race the sleep against shutdownPromise so SIGTERM/SIGINT can break out

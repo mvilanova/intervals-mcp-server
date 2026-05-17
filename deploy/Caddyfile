@@ -1,7 +1,7 @@
-# Replace dashboard.yourdomain.com with your real domain before first deploy.
+# Domain configured for app.lauureal.xyz.
 # Caddy provisions a Let's Encrypt cert automatically on first request.
 
-dashboard.yourdomain.com {
+app.lauureal.xyz {
     reverse_proxy web:3000
     encode gzip
 }

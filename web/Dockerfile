@@ -36,15 +36,15 @@ EXPOSE 3000
 
 CMD ["node", "server.js"]
 
-# Separate image for the migrate sidecar — copies only the Prisma CLI and
-# its engines from the builder. Built with `--target migrator` in compose.
+# Separate image for the migrate sidecar. Prisma's CLI loads helper
+# assets from node_modules/.bin at runtime, so copy the full installed
+# dependency tree instead of a hand-picked subset that can miss internals.
+# Built with `--target migrator` in compose.
 FROM node:22-alpine AS migrator
 WORKDIR /app
 RUN apk add --no-cache openssl
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+COPY --from=builder /app/node_modules ./node_modules
 ENV PATH="/app/node_modules/.bin:${PATH}"
 
 CMD ["prisma", "migrate", "deploy"]
