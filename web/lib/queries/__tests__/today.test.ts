@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
     weightLog: {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
+      findMany: vi.fn(),
     },
     syncRun: { findFirst: vi.fn() },
   };
@@ -41,6 +42,7 @@ function setupDefaultMocks() {
   mocks.mockPrisma.mealLog.findMany.mockResolvedValue([]);
   mocks.mockPrisma.weightLog.findUnique.mockResolvedValue(null);
   mocks.mockPrisma.weightLog.findFirst.mockResolvedValue(null);
+  mocks.mockPrisma.weightLog.findMany.mockResolvedValue([]);
   mocks.mockPrisma.syncRun.findFirst.mockResolvedValue(null);
 }
 
@@ -336,15 +338,16 @@ describe("getTodayBundle", () => {
       expect(mocks.mockPrisma.dailyMetrics.findUnique).toHaveBeenCalledTimes(2);
     });
 
-    it("queries all 10 data sources in parallel", async () => {
+    it("queries all 12 data sources in parallel", async () => {
       await getTodayBundle();
       expect(mocks.mockPrisma.dailyMetrics.findUnique).toHaveBeenCalledTimes(2);
-      expect(mocks.mockPrisma.dailyMetrics.findMany).toHaveBeenCalledOnce();
+      expect(mocks.mockPrisma.dailyMetrics.findMany).toHaveBeenCalledTimes(2);
       expect(mocks.mockPrisma.activity.findMany).toHaveBeenCalledOnce();
       expect(mocks.mockPrisma.activity.findFirst).toHaveBeenCalledOnce();
       expect(mocks.mockPrisma.mealLog.findMany).toHaveBeenCalledOnce();
       expect(mocks.mockPrisma.weightLog.findUnique).toHaveBeenCalledOnce();
       expect(mocks.mockPrisma.weightLog.findFirst).toHaveBeenCalledTimes(2);
+      expect(mocks.mockPrisma.weightLog.findMany).toHaveBeenCalledOnce();
       expect(mocks.mockPrisma.syncRun.findFirst).toHaveBeenCalledOnce();
     });
   });
@@ -480,6 +483,81 @@ describe("getTodayBundle", () => {
           take: 7,
         }),
       );
+    });
+
+    it("queries dailyMetrics.findMany with take: 14 for sparklines", async () => {
+      await getTodayBundle();
+      expect(mocks.mockPrisma.dailyMetrics.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            userId: "user-1",
+            date: {
+              gte: new Date("2024-06-02T00:00:00.000Z"),
+              lte: new Date("2024-06-15T00:00:00.000Z"),
+            },
+          },
+          orderBy: { date: "desc" },
+          take: 14,
+        }),
+      );
+    });
+
+    it("queries weightLog.findMany with take: 14 for sparklines", async () => {
+      await getTodayBundle();
+      expect(mocks.mockPrisma.weightLog.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            userId: "user-1",
+            date: {
+              gte: new Date("2024-06-02T00:00:00.000Z"),
+              lte: new Date("2024-06-15T00:00:00.000Z"),
+            },
+          },
+          orderBy: { date: "desc" },
+          take: 14,
+        }),
+      );
+    });
+  });
+
+  describe("sparkline data", () => {
+    it("includes dailyMetrics14d as empty array when no rows", async () => {
+      mocks.mockPrisma.dailyMetrics.findMany.mockResolvedValue([]);
+      const result = await getTodayBundle();
+      expect(result!.dailyMetrics14d).toEqual([]);
+    });
+
+    it("returns dailyMetrics14d in ascending date order (reversed from desc query)", async () => {
+      const rows = [
+        { id: "m3", userId: "user-1", date: new Date("2024-06-15"), ctl: 70, atl: 75, rampRate: 2, rhr: 52, hrv: 48, sleepHours: 7, sleepScore: 80, steps: null, kcalConsumed: null, carbsGrams: null, proteinGrams: null, fatGrams: null },
+        { id: "m2", userId: "user-1", date: new Date("2024-06-14"), ctl: 68, atl: 73, rampRate: 2, rhr: 53, hrv: 46, sleepHours: 7, sleepScore: 78, steps: null, kcalConsumed: null, carbsGrams: null, proteinGrams: null, fatGrams: null },
+        { id: "m1", userId: "user-1", date: new Date("2024-06-13"), ctl: 66, atl: 71, rampRate: 2, rhr: 54, hrv: 44, sleepHours: 6.5, sleepScore: 75, steps: null, kcalConsumed: null, carbsGrams: null, proteinGrams: null, fatGrams: null },
+      ];
+      // Simulate desc query result
+      mocks.mockPrisma.dailyMetrics.findMany.mockResolvedValueOnce([]);
+      mocks.mockPrisma.dailyMetrics.findMany.mockResolvedValueOnce([rows[0], rows[1], rows[2]]);
+      const result = await getTodayBundle();
+      // Should be reversed to ascending
+      expect(result!.dailyMetrics14d[0].date).toEqual(new Date("2024-06-13"));
+      expect(result!.dailyMetrics14d[2].date).toEqual(new Date("2024-06-15"));
+    });
+
+    it("includes weightLogs14d as empty array when no rows", async () => {
+      mocks.mockPrisma.weightLog.findMany.mockResolvedValue([]);
+      const result = await getTodayBundle();
+      expect(result!.weightLogs14d).toEqual([]);
+    });
+
+    it("returns weightLogs14d in ascending date order (reversed from desc query)", async () => {
+      const logs = [
+        { id: "w3", userId: "user-1", date: new Date("2024-06-15"), weightKg: 72.0, notes: null },
+        { id: "w2", userId: "user-1", date: new Date("2024-06-14"), weightKg: 72.3, notes: null },
+        { id: "w1", userId: "user-1", date: new Date("2024-06-13"), weightKg: 72.6, notes: null },
+      ];
+      mocks.mockPrisma.weightLog.findMany.mockResolvedValue([logs[0], logs[1], logs[2]]);
+      const result = await getTodayBundle();
+      expect(result!.weightLogs14d[0].date).toEqual(new Date("2024-06-13"));
+      expect(result!.weightLogs14d[2].date).toEqual(new Date("2024-06-15"));
     });
   });
 });

@@ -184,4 +184,39 @@ describe("TrainingLoadCard", () => {
       expect(screen.queryByText("+2.0")).not.toBeInTheDocument();
     });
   });
+
+  describe("sparklines", () => {
+    it("renders ramp sparkline polyline when dailyMetrics14d has 2+ ramp values", () => {
+      const { container } = render(
+        <TrainingLoadCard
+          today={makeMetrics({ rampRate: 3.0 })}
+          yesterday={null}
+          dailyMetrics14d={[
+            makeMetrics({ rampRate: 2.0 }),
+            makeMetrics({ rampRate: 3.0 }),
+            makeMetrics({ rampRate: 4.0 }),
+          ]}
+        />,
+      );
+      const polylines = container.querySelectorAll("polyline");
+      expect(polylines).toHaveLength(1);
+    });
+
+    it("renders ctl and ramp sparklines but not atl when only those have data", () => {
+      const { container } = render(
+        <TrainingLoadCard
+          today={makeMetrics({ ctl: 55.0, rampRate: 3.0 })}
+          yesterday={null}
+          dailyMetrics14d={[
+            makeMetrics({ ctl: 53.0, rampRate: 2.0 }),
+            makeMetrics({ ctl: 54.0, rampRate: 2.5 }),
+            makeMetrics({ ctl: 55.0, rampRate: 3.0 }),
+          ]}
+        />,
+      );
+      // CTL has data, ramp has data, ATL does not → 2 polylines
+      const polylines = container.querySelectorAll("polyline");
+      expect(polylines.length).toBe(2);
+    });
+  });
 });

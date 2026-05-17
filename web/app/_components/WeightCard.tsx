@@ -1,4 +1,5 @@
 import type { User, WeightLog } from "@prisma/client";
+import { hasSparklineData, Sparkline } from "./Sparkline";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
 type Props = {
@@ -7,6 +8,7 @@ type Props = {
   daysAgo: number | null;
   targetWeight: User["targetWeight"];
   targetDate: User["targetDate"];
+  weightLogs14d?: WeightLog[];
 };
 
 function fmtDelta(d: number): string {
@@ -20,10 +22,12 @@ export function WeightCard({
   daysAgo,
   targetWeight,
   targetDate,
+  weightLogs14d,
 }: Props) {
   const weekDelta =
     latest && weekAgo ? latest.weightKg - weekAgo.weightKg : null;
   const toTarget = latest && targetWeight ? latest.weightKg - targetWeight : null;
+  const weightSpark = weightLogs14d?.map((w) => w.weightKg);
 
   return (
     <Card>
@@ -61,6 +65,16 @@ export function WeightCard({
             {toTarget != null ? ` (${fmtDelta(toTarget)})` : ""}
           </span>
         </div>
+        {hasSparklineData(weightSpark) ? (
+          <div className="text-gray-400 dark:text-gray-500">
+            <Sparkline
+              values={weightSpark}
+              width={120}
+              height={20}
+              refValue={targetWeight ?? null}
+            />
+          </div>
+        ) : null}
         {targetDate ? (
           <div className="text-xs text-gray-500 dark:text-gray-400">
             by {targetDate.toISOString().slice(0, 10)}

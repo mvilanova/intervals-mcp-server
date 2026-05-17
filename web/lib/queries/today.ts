@@ -28,6 +28,8 @@ export type TodayBundle = {
   todayDate: Date;
   hrv7dBaseline: number | null;
   daysSinceLastActivity: number | null;
+  dailyMetrics14d: DailyMetrics[];
+  weightLogs14d: WeightLog[];
 };
 
 const SYNC_STALE_AFTER_MS = 6 * 60 * 60 * 1000;
@@ -66,6 +68,7 @@ export async function getTodayBundle(): Promise<TodayBundle | null> {
   const today = dateOnlyUTC();
   const yesterday = addDays(today, -1);
   const weekAgo = addDays(today, -7);
+  const sparklineStart = addDays(today, -13);
 
   const [
     todayMetrics,
@@ -78,6 +81,8 @@ export async function getTodayBundle(): Promise<TodayBundle | null> {
     latestSync,
     recentMetricsForHrv,
     latestActivity,
+    rawMetrics14d,
+    rawWeightLogs14d,
   ] = await Promise.all([
     prisma.dailyMetrics.findUnique({
       where: { userId_date: { userId: user.id, date: today } },
@@ -121,6 +126,18 @@ export async function getTodayBundle(): Promise<TodayBundle | null> {
       orderBy: { date: "desc" },
       select: { date: true },
     }),
+    // Last 14 calendar days for sparklines (fetched desc, reversed to asc)
+    prisma.dailyMetrics.findMany({
+      where: { userId: user.id, date: { gte: sparklineStart, lte: today } },
+      orderBy: { date: "desc" },
+      take: 14,
+    }),
+    // Last 14 calendar days for sparklines (fetched desc, reversed to asc)
+    prisma.weightLog.findMany({
+      where: { userId: user.id, date: { gte: sparklineStart, lte: today } },
+      orderBy: { date: "desc" },
+      take: 14,
+    }),
   ]);
 
   const nowMs = Date.now();
@@ -147,6 +164,9 @@ export async function getTodayBundle(): Promise<TodayBundle | null> {
     ? Math.max(0, Math.floor((today.getTime() - latestActivity.date.getTime()) / (1000 * 60 * 60 * 24)))
     : null;
 
+  const dailyMetrics14d = rawMetrics14d.slice().reverse();
+  const weightLogs14d = rawWeightLogs14d.slice().reverse();
+
   return {
     user,
     today: todayMetrics,
@@ -162,5 +182,7 @@ export async function getTodayBundle(): Promise<TodayBundle | null> {
     todayDate: today,
     hrv7dBaseline,
     daysSinceLastActivity,
+    dailyMetrics14d,
+    weightLogs14d,
   };
 }

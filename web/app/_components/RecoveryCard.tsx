@@ -1,9 +1,11 @@
 import type { DailyMetrics } from "@prisma/client";
+import { hasSparklineData, Sparkline } from "./Sparkline";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
 type Props = {
   today: DailyMetrics | null;
   baselineRhr: number | null;
+  dailyMetrics14d?: DailyMetrics[];
 };
 
 function rhrDelta(rhr: number | null, baseline: number | null): string | null {
@@ -14,9 +16,12 @@ function rhrDelta(rhr: number | null, baseline: number | null): string | null {
   return `${sign}${d} vs baseline`;
 }
 
-export function RecoveryCard({ today, baselineRhr }: Props) {
+export function RecoveryCard({ today, baselineRhr, dailyMetrics14d }: Props) {
   const sleepHours = today?.sleepHours;
   const sleepScore = today?.sleepScore;
+  const rhrSpark = dailyMetrics14d?.map((m) => m.rhr ?? null);
+  const hrvSpark = dailyMetrics14d?.map((m) => m.hrv ?? null);
+  const sleepSpark = dailyMetrics14d?.map((m) => m.sleepHours ?? null);
 
   return (
     <Card>
@@ -35,12 +40,22 @@ export function RecoveryCard({ today, baselineRhr }: Props) {
                 {rhrDelta(today?.rhr ?? null, baselineRhr)}
               </div>
             ) : null}
+            {hasSparklineData(rhrSpark) ? (
+              <div className="mt-1 text-gray-400 dark:text-gray-500">
+                <Sparkline values={rhrSpark} />
+              </div>
+            ) : null}
           </div>
           <div>
             <div className="text-xs text-gray-500 dark:text-gray-400">HRV</div>
             <div className="text-2xl font-semibold tabular-nums">
               {today?.hrv != null ? today.hrv.toFixed(0) : "—"}
             </div>
+            {hasSparklineData(hrvSpark) ? (
+              <div className="mt-1 text-gray-400 dark:text-gray-500">
+                <Sparkline values={hrvSpark} />
+              </div>
+            ) : null}
           </div>
           <div>
             <div className="text-xs text-gray-500 dark:text-gray-400">Sleep</div>
@@ -50,6 +65,11 @@ export function RecoveryCard({ today, baselineRhr }: Props) {
             {sleepScore != null ? (
               <div className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
                 score {sleepScore}
+              </div>
+            ) : null}
+            {hasSparklineData(sleepSpark) ? (
+              <div className="mt-1 text-gray-400 dark:text-gray-500">
+                <Sparkline values={sleepSpark} />
               </div>
             ) : null}
           </div>

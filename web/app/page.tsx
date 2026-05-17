@@ -62,6 +62,7 @@ export default async function Home() {
           daysAgo={bundle.latestWeightDaysAgo}
           targetWeight={bundle.user.targetWeight}
           targetDate={bundle.user.targetDate}
+          weightLogs14d={bundle.weightLogs14d}
         />
 
         <Card>
@@ -74,11 +75,16 @@ export default async function Home() {
       </div>
 
       <div className="md:col-span-5 space-y-4">
-        <TrainingLoadCard today={bundle.today} yesterday={bundle.yesterday} />
+        <TrainingLoadCard
+          today={bundle.today}
+          yesterday={bundle.yesterday}
+          dailyMetrics14d={bundle.dailyMetrics14d}
+        />
 
         <RecoveryCard
           today={bundle.today}
           baselineRhr={bundle.user.baselineRhr}
+          dailyMetrics14d={bundle.dailyMetrics14d}
         />
 
         <ActivityCard activities={bundle.todayActivities} />

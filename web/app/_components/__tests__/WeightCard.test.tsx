@@ -259,4 +259,44 @@ describe("WeightCard", () => {
       expect(screen.queryByText(/^by /)).not.toBeInTheDocument();
     });
   });
+
+  describe("target-weight reference line in sparkline", () => {
+    it("renders a dashed reference line when targetWeight and weightLogs14d are provided", () => {
+      const { container } = render(
+        <WeightCard
+          latest={makeWeightLog(72.0)}
+          weekAgo={null}
+          daysAgo={0}
+          targetWeight={70.0}
+          targetDate={null}
+          weightLogs14d={[
+            makeWeightLog(71.0, { id: "wl-1" }),
+            makeWeightLog(71.5, { id: "wl-2" }),
+            makeWeightLog(72.0, { id: "wl-3" }),
+          ]}
+        />,
+      );
+      const line = container.querySelector("line");
+      expect(line).toBeInTheDocument();
+      expect(line).toHaveAttribute("stroke-dasharray", "2 2");
+    });
+
+    it("does not render a reference line when targetWeight is null", () => {
+      const { container } = render(
+        <WeightCard
+          latest={makeWeightLog(72.0)}
+          weekAgo={null}
+          daysAgo={0}
+          targetWeight={null}
+          targetDate={null}
+          weightLogs14d={[
+            makeWeightLog(71.0, { id: "wl-1" }),
+            makeWeightLog(71.5, { id: "wl-2" }),
+            makeWeightLog(72.0, { id: "wl-3" }),
+          ]}
+        />,
+      );
+      expect(container.querySelector("line")).not.toBeInTheDocument();
+    });
+  });
 });

@@ -180,4 +180,48 @@ describe("RecoveryCard", () => {
       expect(dashes).toHaveLength(3);
     });
   });
+
+  describe("sparklines", () => {
+    it("renders sleep sparkline polyline when dailyMetrics14d has 2+ sleepHours values", () => {
+      const { container } = render(
+        <RecoveryCard
+          today={makeMetrics({ sleepHours: 7.5 })}
+          baselineRhr={null}
+          dailyMetrics14d={[
+            makeMetrics({ sleepHours: 6.5 }),
+            makeMetrics({ sleepHours: 7.0 }),
+            makeMetrics({ sleepHours: 7.5 }),
+          ]}
+        />,
+      );
+      const polylines = container.querySelectorAll("polyline");
+      expect(polylines).toHaveLength(1);
+    });
+
+    it("renders rhr, hrv and sleep sparklines when all have data", () => {
+      const { container } = render(
+        <RecoveryCard
+          today={makeMetrics({ rhr: 52, hrv: 65, sleepHours: 7.5 })}
+          baselineRhr={null}
+          dailyMetrics14d={[
+            makeMetrics({ rhr: 50, hrv: 60, sleepHours: 6.5 }),
+            makeMetrics({ rhr: 51, hrv: 62, sleepHours: 7.0 }),
+            makeMetrics({ rhr: 52, hrv: 65, sleepHours: 7.5 }),
+          ]}
+        />,
+      );
+      const polylines = container.querySelectorAll("polyline");
+      expect(polylines.length).toBe(3);
+    });
+
+    it("does not render sparklines when dailyMetrics14d is absent", () => {
+      const { container } = render(
+        <RecoveryCard
+          today={makeMetrics({ rhr: 52, hrv: 65, sleepHours: 7.5 })}
+          baselineRhr={null}
+        />,
+      );
+      expect(container.querySelectorAll("polyline")).toHaveLength(0);
+    });
+  });
 });
