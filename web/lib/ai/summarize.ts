@@ -169,6 +169,16 @@ async function loadInput(userId: string, date: Date): Promise<GenInput | null> {
   };
 }
 
+// Cache key + Prisma `@db.Date` both demand a canonical UTC-midnight day
+// value. Callers today already pass that, but normalizing at the service
+// boundary keeps a future caller (e.g. "regenerate for last Tuesday")
+// from fragmenting the cache or upserting a second row for the same day.
+function normalizeUtcDay(date: Date): Date {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
+}
+
 async function generateAndUpsert(
   userId: string,
   date: Date,
@@ -184,18 +194,36 @@ async function generateAndUpsert(
   });
 }
 
+// In-process deduplication of concurrent cache misses. Without this, two
+// near-simultaneous first-view requests for the same day (e.g. phone +
+// laptop opening the dashboard at 8am) would both miss the cache, both
+// call Claude, and race on the upsert — double spend, non-deterministic
+// "winner". A single-container deploy needs nothing fancier than a Map;
+// regenerateDailySummary intentionally skips this since Refresh is an
+// explicit user action where redundant calls are not surprising.
+const inFlight = new Map<string, Promise<DailySummary | null>>();
+
 export async function getOrGenerateDailySummary(
   userId: string,
   date: Date,
 ): Promise<DailySummary | null> {
   if (!isEnabled()) return null;
+  const summaryDate = normalizeUtcDay(date);
 
   const cached = await prisma.dailySummary.findUnique({
-    where: { userId_date: { userId, date } },
+    where: { userId_date: { userId, date: summaryDate } },
   });
   if (cached) return cached;
 
-  return generateAndUpsert(userId, date);
+  const key = `${userId}:${summaryDate.toISOString()}`;
+  const pending = inFlight.get(key);
+  if (pending) return pending;
+
+  const next = generateAndUpsert(userId, summaryDate).finally(() => {
+    inFlight.delete(key);
+  });
+  inFlight.set(key, next);
+  return next;
 }
 
 export async function regenerateDailySummary(
@@ -203,5 +231,5 @@ export async function regenerateDailySummary(
   date: Date,
 ): Promise<DailySummary | null> {
   if (!isEnabled()) return null;
-  return generateAndUpsert(userId, date);
+  return generateAndUpsert(userId, normalizeUtcDay(date));
 }
