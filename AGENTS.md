@@ -29,6 +29,19 @@ All GitHub issues and PRs should align with the product direction. If an issue c
 - Title pull requests using the format `[intervals-mcp-server] <brief description>`.
 - Describe any manual testing steps performed and mention whether `pytest`, `ruff`, and `mypy` passed.
 
+## Merge / Postmerge Operations
+
+Merges require explicit maintainer approval. When a maintainer asks to merge and postmerge a PR, use the project helper as the canonical automation surface instead of rebuilding the checklist by hand:
+
+```bash
+python scripts/getmailean_merge_postmerge.py <PR>                 # inspect only
+python scripts/getmailean_merge_postmerge.py <PR> --merge --postmerge --yes
+```
+
+The helper keeps phase state in `/home/lauureal/projects/getmailean/ops/merge-state/`, cleans canonical worktrees under `/home/lauureal/git/getmAIlean-worktrees/`, updates linked GitHub Issue status labels, checks main-branch CI/CD, checks production `/health`, and writes a handoff only when the risk tier requires one.
+
+Do not duplicate this workflow in ad hoc docs. Keep the helper and the Palmilila `getmailean-merge-postmerge` skill as the SSOT pair for merge/postmerge operations.
+
 ## GitHub Issue Workflow for Agents
 
 GitHub Issues are the coordination surface for this repository. Before starting work, check the open issues and only pick issues that are not already claimed.
