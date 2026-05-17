@@ -33,7 +33,7 @@ SNAPSHOTS: list[tuple[str, object]] = [
 def main() -> None:
     """
     Regenerate formatted snapshot fixture files from the registered JSON inputs.
-    
+
     For each (name, formatter) in SNAPSHOTS, read the JSON file tests/ressources/{name}.json, produce formatted output by calling the formatter with the parsed payload, overwrite tests/ressources/{name}_formatted.txt with the result, and print the relative path of the written file. Side effects: writes files and prints progress.
     """
     for name, fn in SNAPSHOTS:

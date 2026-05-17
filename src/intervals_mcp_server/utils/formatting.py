@@ -13,12 +13,12 @@ from typing import Any
 def _format_iso_datetime(value: Any) -> Any:
     """
     Reformat an ISO-8601 datetime string to "YYYY-MM-DD HH:MM:SS".
-    
+
     If `value` is a string longer than 10 characters, attempts to parse it as ISO-8601
     (replacing a trailing "Z" with "+00:00") and returns the formatted datetime.
     On parse failure, returns the original input unchanged. Non-strings and
     exactly 10-character date-only strings are returned unchanged.
-    
+
     Returns:
         The formatted datetime string when parsing succeeds, otherwise the original `value`.
     """
@@ -35,14 +35,14 @@ def _format_iso_datetime(value: Any) -> Any:
 def _first_present(d: dict[str, Any], *keys: str, default: Any = "N/A") -> Any:
     """
     Selects and returns the value for the first key that exists in the given dictionary.
-    
+
     Presence is determined by key membership (i.e., a key whose value is `None` counts as present and will be returned). If none of the provided keys are present in `d`, the `default` is returned.
-    
+
     Parameters:
         d (dict[str, Any]): Dictionary to query.
         *keys (str): Candidate keys checked in order.
         default (Any): Value returned when no keys are present (defaults to "N/A").
-    
+
     Returns:
         Any: The value associated with the first present key, or `default` if none are present.
     """
@@ -55,12 +55,12 @@ def _first_present(d: dict[str, Any], *keys: str, default: Any = "N/A") -> Any:
 def format_activity_summary(activity: dict[str, Any]) -> str:
     """
     Format an activity dictionary into a human-readable multi-section summary string.
-    
+
     Normalizes common fields: selects the first available start time field and formats it for readability; uses `perceived_exertion` with fallback to `icu_rpe` and renders numeric RPE as "X/10"; renders numeric `feel` as "X/5". For many metrics the function reads common alternate key names and falls back to sensible defaults when values are missing.
-    
+
     Parameters:
         activity (dict[str, Any]): Activity payload containing various optional keys (e.g., name, id, start time, power/HR metrics, environment, training metrics, device info).
-    
+
     Returns:
         str: Multi-line formatted summary of the activity suitable for display or logging.
     """
@@ -148,10 +148,10 @@ File Type: {activity.get("file_type", "N/A")}
 def format_workout(workout: dict[str, Any]) -> str:
     """
     Render a workout payload into a human-readable multi-line summary.
-    
+
     Parameters:
         workout (dict[str, Any]): Workout payload containing keys such as `name`, `description`, `sport`, `duration`, `tss`, and `intervals`.
-    
+
     Returns:
         str: Formatted summary including Name, Description, Sport, Duration (seconds), TSS, and the count of Intervals.
     """
@@ -218,10 +218,10 @@ _SLEEP_QUALITY_LABELS: dict[int, str] = {1: "Great", 2: "Good", 3: "Average", 4:
 def _format_training_metrics(entries: dict[str, Any]) -> list[str]:
     """
     Generate formatted lines for training metrics that are present in `entries`.
-    
+
     Parameters:
         entries (dict[str, Any]): Mapping of metric keys to their values; keys are matched against `_TRAINING_METRICS_FIELDS`.
-    
+
     Returns:
         list[str]: A list of strings of the form "- {Label}: {value}" for each metric in `_TRAINING_METRICS_FIELDS` whose corresponding value in `entries` is not None.
     """
@@ -235,12 +235,12 @@ def _format_training_metrics(entries: dict[str, Any]) -> list[str]:
 def _format_sport_info(entries: dict[str, Any]) -> list[str]:
     """
     Format sport information lines from an entries mapping for inclusion in wellness output.
-    
+
     Scans entries.get("sportInfo") (treated as an empty list when missing) and for each dictionary item that contains an `eftp` value produces a line formatted as "- {type}: eFTP = {eftp}". Non-dictionary items and entries without `eftp` are ignored.
-    
+
     Parameters:
         entries (dict[str, Any]): Mapping that may contain a "sportInfo" key with a list of sport entries.
-    
+
     Returns:
         list[str]: A list of formatted sport info lines, one per sport that has an `eftp` value.
     """
@@ -254,12 +254,12 @@ def _format_sport_info(entries: dict[str, Any]) -> list[str]:
 def _format_vital_signs(entries: dict[str, Any]) -> list[str]:
     """
     Format vital sign entries into a list of human-readable lines.
-    
+
     For each configured vital-sign key, emits a line when that key exists in `entries` with a non-None value. When both `systolic` and `diastolic` are present a single combined line "- Blood Pressure: SYSTOLIC/DIA mmHg" is produced; when only one is present an individual line "- {Label}: {value} {unit}" is produced (unit omitted if empty).
-    
+
     Parameters:
         entries (dict[str, Any]): Mapping of vital-sign keys to values.
-    
+
     Returns:
         list[str]: Lines formatted for display, each beginning with "- ".
     """
@@ -291,7 +291,7 @@ def _format_vital_signs(entries: dict[str, Any]) -> list[str]:
 def _format_sleep_recovery(entries: dict[str, Any]) -> list[str]:
     """
     Render sleep and recovery lines from a wellness entry.
-    
+
     Parameters:
         entries (dict[str, Any]): Wellness entry that may contain:
             - "sleepSecs" (int|float): total sleep in seconds (preferred).
@@ -299,7 +299,7 @@ def _format_sleep_recovery(entries: dict[str, Any]) -> list[str]:
             - "sleepQuality" (int): numeric sleep quality mapped via _SLEEP_QUALITY_LABELS when available.
             - "sleepScore" (int|float): device sleep score (0–100).
             - "readiness" (int|float): readiness score (0–10).
-    
+
     Returns:
         list[str]: Formatted lines for sleep and recovery fields. Examples:
             - "  Sleep: 7.50 hours"
@@ -328,16 +328,16 @@ def _format_sleep_recovery(entries: dict[str, Any]) -> list[str]:
 def _format_menstrual_tracking(entries: dict[str, Any]) -> list[str]:
     """
     Render lines for menstrual tracking fields present in a wellness entry.
-    
+
     For each of the keys "menstrualPhase" and "menstrualPhasePredicted" (mapped to
     "Menstrual Phase" and "Predicted Phase" labels), emits a line only when the
     key exists in `entries` with a non-None value. The value is converted to a
     string, capitalized, and prefixed with two spaces and the label.
-    
+
     Parameters:
         entries (dict[str, Any]): Wellness entry dictionary potentially containing
             menstrual tracking keys.
-    
+
     Returns:
         list[str]: A list of formatted lines for present menstrual tracking fields,
             e.g. ["  Menstrual Phase: Luteal", "  Predicted Phase: Follicular"].
@@ -355,10 +355,10 @@ def _format_menstrual_tracking(entries: dict[str, Any]) -> list[str]:
 def _format_subjective_feelings(entries: dict[str, Any]) -> list[str]:
     """
     Render subjective feeling fields from a wellness entry as lines with 10-point scales.
-    
+
     Parameters:
         entries (dict[str, Any]): Mapping of wellness keys to values; keys correspond to those listed in the module's subjective-feelings table.
-    
+
     Returns:
         list[str]: Lines like "  {Label}: {value}/10" for each configured feeling present in `entries`.
     """
@@ -372,11 +372,11 @@ def _format_subjective_feelings(entries: dict[str, Any]) -> list[str]:
 def _format_nutrition_hydration(entries: dict[str, Any]) -> list[str]:
     """
     Render nutrition and hydration lines from a wellness entry.
-    
+
     Parameters:
         entries (dict[str, Any]): Mapping of wellness fields to values; keys checked are those defined in
             the module's `_NUTRITION_FIELDS` and `"hydration"`.
-    
+
     Returns:
         list[str]: Lines for present nutrition fields formatted as "- {Label}: {value}{ unit}" (unit omitted when empty),
             with hydration rendered as "  Hydration Score: {value}/10" when present.
@@ -394,11 +394,11 @@ def _format_nutrition_hydration(entries: dict[str, Any]) -> list[str]:
 def _format_other_fields(entries: dict[str, Any], known_keys: frozenset[str]) -> list[str]:
     """
     Render entries from `entries` that are not present in `known_keys` and whose values are not None.
-    
+
     Parameters:
         entries (dict[str, Any]): Mapping of field names to values to inspect.
         known_keys (frozenset[str]): Keys to exclude from rendering.
-    
+
     Returns:
         list[str]: Lines of the form "- {key}: {rendered}" for each included entry. Dict and list values are serialized with `json.dumps`; other values are rendered as-is.
     """
@@ -458,13 +458,13 @@ _KNOWN_WELLNESS_KEYS: frozenset[str] = frozenset(
 def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = False) -> str:
     """
     Format a wellness entry dictionary into a multi-section human-readable text block.
-    
+
     Produces a top-level "Wellness Data" header and a "Date" line taken from entries['id'] (defaults to 'N/A'). Adds named sections for each wellness category, an "Activity" block when `steps` is present, a "Comments" line when `comments` is truthy, and a "Status" line of "Locked" or "Unlocked" when the `locked` key exists. When `include_all_fields` is True, appends an "Other Fields" section containing keys not covered by the standard wellness keys.
-    
+
     Parameters:
         entries (dict[str, Any]): Wellness entry data.
         include_all_fields (bool): If True, include fields not in _KNOWN_WELLNESS_KEYS under an "Other Fields" section.
-    
+
     Returns:
         str: The assembled multiline wellness text.
     """
@@ -496,7 +496,7 @@ def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = Fa
 def format_event_summary(event: dict[str, Any]) -> str:
     """
     Render a concise multi-line summary of an event.
-    
+
     Parameters:
         event (dict): Event payload. Recognized keys:
             - "start_date_local" or "date": preferred date to display.
@@ -505,7 +505,7 @@ def format_event_summary(event: dict[str, Any]) -> str:
             - "name": event name.
             - "id": event identifier.
             - "description": event description.
-    
+
     Returns:
         str: Multi-line string with fields `Date`, `ID`, `Type`, `Name`, and `Description`.
     """
@@ -585,7 +585,7 @@ Description: {event.get("description", "No description")}"""
 def format_activity_message(message: dict[str, Any]) -> str:
     """
     Generate a readable multiline string representation of an activity message containing author, date, type, and content.
-    
+
     Returns:
         str: Multiline string with lines `Author: ...`, `Date: ...`, `Type: ...`, and `Content: ...`. If `name` or `created` are missing the string uses `"Unknown"`, if `type` is missing it uses `"TEXT"`, and if `content` is missing it uses an empty string.
     """
@@ -600,16 +600,16 @@ Content: {message.get("content", "")}"""
 def format_custom_item_details(item: dict[str, Any]) -> str:
     """
     Format a custom item dictionary into a human-readable details block.
-    
+
     Parameters:
-    	item (dict[str, Any]): Mapping representing a custom item; commonly includes keys
-    		`id`, `name`, `type`, and optionally `description`, `visibility`, `index`,
-    		`hide_script`, and `content` (which may be any JSON-serializable value).
-    
+        item (dict[str, Any]): Mapping representing a custom item; commonly includes keys
+                `id`, `name`, `type`, and optionally `description`, `visibility`, `index`,
+                `hide_script`, and `content` (which may be any JSON-serializable value).
+
     Returns:
-    	details (str): Multi-line string with labeled fields ("Custom Item Details:", "ID:",
-    		"Name:", "Type:", and any present optional fields). Dict/list `content` is
-    		serialized as pretty-printed JSON when present.
+        details (str): Multi-line string with labeled fields ("Custom Item Details:", "ID:",
+                "Name:", "Type:", and any present optional fields). Dict/list `content` is
+                serialized as pretty-printed JSON when present.
     """
     lines = ["Custom Item Details:", ""]
     lines.append(f"ID: {item.get('id', 'N/A')}")
@@ -680,14 +680,14 @@ Elevation & Environment:
 def _format_one_group(i: int, group: dict[str, Any]) -> str:
     """
     Format a single interval group into a human-readable text block.
-    
+
     Parameters:
         i (int): One-based index used as a fallback label when the group's `id` is missing.
         group (dict[str, Any]): Mapping containing group fields (e.g., `id`, `count`, `elapsed_time`,
             `moving_time`, `distance`, `start_index`, `average_watts`, `average_watts_kg`, `max_watts`,
             `weighted_average_watts`, `intensity`, `average_heartrate`, `max_heartrate`,
             `average_speed`, `max_speed`, `average_cadence`, `max_cadence`).
-    
+
     Returns:
         str: A multi-line formatted block describing the group and its summary metrics; the string
         includes a trailing blank line.
@@ -709,10 +709,10 @@ Cadence: Avg {group.get("average_cadence", 0)}, Max {group.get("max_cadence", 0)
 def format_intervals(intervals_data: dict[str, Any]) -> str:
     """
     Render an Intervals.icu intervals payload into a human-readable multi-section string.
-    
+
     Parameters:
         intervals_data (dict[str, Any]): Payload containing at least top-level keys `id` and `analyzed`, and optional `icu_intervals` (list of interval dicts) and `icu_groups` (list of group dicts). Keys not present are treated as `"N/A"`.
-    
+
     Returns:
         formatted (str): A string containing an "Intervals Analysis" header, the payload `ID` and `Analyzed` fields, followed by optional "Individual Intervals" and "Interval Groups" sections generated from `icu_intervals` and `icu_groups` respectively.
     """

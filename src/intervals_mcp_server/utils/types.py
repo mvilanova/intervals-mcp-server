@@ -103,9 +103,9 @@ class TransportAliases(StrEnum):
 def _serialize(val: Any) -> Any:
     """
     Convert a Python value into a JSON-compatible representation.
-    
+
     Converts Enum members to their `.value`, dataclass instances to their `to_dict()` output, and recursively serializes lists and dicts so nested enums/dataclasses are converted. Values that are already JSON-compatible are returned unchanged.
-    
+
     Returns:
         Any: A JSON-serializable representation of `val` (primitive, dict, list, or converted enum/dataclass form).
     """
@@ -125,11 +125,11 @@ def _serialize(val: Any) -> Any:
 def _to_dict(obj: Any, rename: dict[str, str] | None = None) -> dict[str, Any]:
     """
     Convert a dataclass instance to a JSON-serializable dict, omitting fields whose value is None.
-    
+
     Parameters:
         obj (Any): A dataclass instance to serialize.
         rename (dict[str, str] | None): Optional mapping from Python field names to output keys (e.g., snake_case -> camelCase). Keys not present in this mapping are emitted using the original field name.
-    
+
     Returns:
         dict[str, Any]: A dict mapping output keys to serialized values (enums, nested dataclasses, lists, and dict values are converted via the module's serialization rules).
     """
@@ -146,13 +146,13 @@ def _to_dict(obj: Any, rename: dict[str, str] | None = None) -> dict[str, Any]:
 def _coerce(val: Any, hint: Any) -> Any:
     """
     Coerce a JSON-derived value into the Python type described by `hint`.
-    
+
     Parameters:
         val (Any): The JSON-derived value to coerce (may be None).
         hint (Any): A type hint or annotation indicating the desired target type
             (may be a concrete type, dataclass, Enum, `list[...]`, `typing.Union`, or
             PEP 604 union).
-    
+
     Returns:
         Any: The value converted to the hinted type when conversion is applicable:
             - `None` if `val` is `None`.
@@ -205,12 +205,12 @@ def _coerce(val: Any, hint: Any) -> Any:
 def _from_dict(cls: type, data: dict[str, Any], rename: dict[str, str] | None = None) -> Any:
     """
     Create an instance of the given dataclass-like type from a JSON-compatible dictionary by coercing values to the annotated field types.
-    
+
     Parameters:
         cls (type): The target dataclass/type to instantiate.
         data (dict[str, Any]): Mapping of JSON keys to values to populate the instance.
         rename (dict[str, str] | None): Optional mapping from Python field names to JSON keys; when provided, JSON keys will be mapped back to Python field names before coercion.
-    
+
     Returns:
         An instance of `cls` constructed with values from `data` coerced to the corresponding type hints. Keys in `data` that do not correspond to `cls` type hints are ignored.
     """
@@ -227,7 +227,7 @@ def _from_dict(cls: type, data: dict[str, Any], rename: dict[str, str] | None = 
 def float_to_str(value: float) -> str:
     """
     Format a float as a string, omitting the decimal point when the value is a whole number.
-    
+
     Returns:
         The string representation of the value; if the float is a whole number the decimal part is removed (e.g. 2.0 -> "2"), otherwise the standard float string is returned.
     """
@@ -280,7 +280,7 @@ class Value:
     def to_dict(self) -> dict[str, Any]:
         """
         Convert the dataclass instance to a JSON-compatible dictionary for API serialization.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing all fields that are not `None`. Enum values are converted to their raw values, dataclass fields are converted to dictionaries, and lists/dicts are recursively serialized to JSON-compatible types.
         """
@@ -290,10 +290,10 @@ class Value:
     def from_dict(cls, data: dict[str, Any]) -> Value:
         """
         Create a Value instance from a JSON-compatible dictionary.
-        
+
         Parameters:
             data (dict[str, Any]): Dictionary containing keys that match Value's fields; values will be coerced to the annotated types.
-        
+
         Returns:
             Value: A new Value instance populated from `data`.
         """
@@ -302,12 +302,12 @@ class Value:
     def _format_value(self, value: float) -> str:
         """
         Format a numeric value according to this Value's units for display.
-        
+
         Parameters:
-        	value (float): The numeric value to format.
-        
+                value (float): The numeric value to format.
+
         Returns:
-        	formatted (str): The value formatted as a string using the unit-specific template (or plain numeric string if units are not set).
+                formatted (str): The value formatted as a string using the unit-specific template (or plain numeric string if units are not set).
         """
         template = _VALUE_FORMATS.get(self.units, "{v}") if self.units else "{v}"
         return template.format(v=float_to_str(value))
@@ -315,7 +315,7 @@ class Value:
     def _format_units(self) -> str:
         """
         Get the short label for this Value's units.
-        
+
         Returns:
             The unit label string, or an empty string if `units` is `None` or no label is available.
         """
@@ -326,14 +326,14 @@ class Value:
     def __str__(self) -> str:
         """
         Produce a compact human-readable representation of the Value.
-        
+
         The string includes, in order:
         - a range formatted as `start-end` if both `start` and `end` are present,
         - the primary value if present,
         - the unit label if present,
         - the heart-rate target as `hr=<target>` if present.
         All present components are joined with single spaces.
-        
+
         Returns:
             A formatted string describing the value and any available range, units, and HR target.
         """
@@ -385,7 +385,7 @@ class Step:
     def to_dict(self) -> dict[str, Any]:
         """
         Convert the dataclass instance to a JSON-compatible dictionary for API serialization.
-        
+
         Returns:
             dict[str, Any]: A dictionary containing all fields that are not `None`. Enum values are converted to their raw values, dataclass fields are converted to dictionaries, and lists/dicts are recursively serialized to JSON-compatible types.
         """
@@ -395,10 +395,10 @@ class Step:
     def from_dict(cls, data: dict[str, Any]) -> Step:
         """
         Create a Step instance from a dictionary containing serialized Step fields.
-        
+
         Parameters:
             data (dict[str, Any]): Mapping of field names to values representing a Step.
-        
+
         Returns:
             Step: The deserialized Step instance.
         """
@@ -407,12 +407,12 @@ class Step:
     def _format_duration(self) -> str:
         """
         Format self.duration (seconds) into a compact human-readable string.
-        
+
         If `self.duration` is None an empty string is returned. Hours are emitted as
         "{h}h" when duration >= 3600, minutes as "{m}m" when the remaining seconds
         are greater than 100 or exactly 60, and seconds as "{s}s" for any remaining
         seconds > 0. Components are concatenated without separators.
-        
+
         Returns:
             str: The formatted duration string, or an empty string if `duration` is None.
         """
@@ -436,7 +436,7 @@ class Step:
     def _format_distance(self) -> str:
         """
         Format the instance's distance into a compact human-readable string.
-        
+
         Returns:
             A short string representing `distance`: `''` if `distance` is None; otherwise
             `'<n>mtr'` when `distance` is less than 1000 (meters) or `'<n>km'` for
@@ -451,7 +451,7 @@ class Step:
     def __str__(self) -> str:
         """
         Provide a human-readable, formatted string representation of the Step.
-        
+
         Returns:
             A formatted, human-readable string describing the step (may include multiple lines and nested step text).
         """
@@ -460,17 +460,17 @@ class Step:
     def _to_str(self, nested: bool = False) -> str:
         """
         Render this Step as a formatted multi-line string describing its duration/distance, flags, intensity, targets, text, and any nested steps.
-        
+
         If `reps` is set the string is prefixed with "{reps}x " and, when `steps` are present, each nested step is appended on its own line. When not repeated, warmup/cooldown headers are included (unless `nested` is True), and duration or distance is shown with any enabled flags (`freeride`, `maxeffort`, `ramp`, `hidepower`), intensity, and target values appended. Trailing newlines are added for repeated groups and for top-level warmup/cooldown sections.
-        
+
         Parameters:
-        	nested (bool): If True, render this step in a nested context (suppresses warmup/cooldown headers and disallows top-level repeats).
-        
+                nested (bool): If True, render this step in a nested context (suppresses warmup/cooldown headers and disallows top-level repeats).
+
         Returns:
-        	str: The composed, human-readable representation of the step.
-        
+                str: The composed, human-readable representation of the step.
+
         Raises:
-        	ValueError: If `nested` is True while `reps` is set (nested repeated groups are not supported).
+                ValueError: If `nested` is True while `reps` is set (nested repeated groups are not supported).
         """
         val = ""
         if self.reps is not None:
@@ -550,7 +550,7 @@ class WorkoutDoc:
     def to_dict(self) -> dict[str, Any]:
         """
         Serialize the workout document into a JSON-compatible dictionary suitable for the API.
-        
+
         Returns:
             dict[str, Any]: A dictionary using the API's field names (camelCase where applicable); any fields with value `None` are omitted.
         """
@@ -560,10 +560,10 @@ class WorkoutDoc:
     def from_dict(cls, data: dict[str, Any]) -> WorkoutDoc:
         """
         Create a WorkoutDoc from a JSON-style dictionary.
-        
+
         Parameters:
             data (dict[str, Any]): Dictionary of workout fields (typically API/camelCase keys) to be coerced into the typed WorkoutDoc structure, including nested steps and enum values.
-        
+
         Returns:
             WorkoutDoc: An instance populated from the provided dictionary.
         """
@@ -572,9 +572,9 @@ class WorkoutDoc:
     def __str__(self) -> str:
         """
         Return a human-readable workout document consisting of the optional description followed by each step on its own line.
-        
+
         If `description` is present it appears first followed by a newline. Each step in `steps`, if present, is rendered using the step's string representation with a trailing newline. Returns an empty string when neither `description` nor `steps` are set.
-        
+
         Returns:
             str: The concatenated description and step lines.
         """

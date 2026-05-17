@@ -251,11 +251,11 @@ def test_format_event_details_tolerates_null_start_date_local():
 def test_formatter_matches_snapshot(fixture_name, fn):
     """
     Verify a formatter's output matches the stored snapshot for a given fixture.
-    
+
     Parameters:
         fixture_name (str): Base name of the fixture files (JSON input and expected formatted text).
         fn (Callable): Formatter function that accepts the loaded JSON payload and returns the formatted string.
-    
+
     Notes:
         Asserts exact equality between the formatter's output and the snapshot file.
     """

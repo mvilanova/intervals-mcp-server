@@ -99,7 +99,7 @@ def test_serialize_recurses_into_nested_dataclass_in_dict():
 def test_coerce_int_to_float_for_float_hint():
     """
     Ensure integers from JSON are converted to the expected numeric representation for fields annotated as float.
-    
+
     This test verifies that constructing a Value from JSON with an integer `value` yields a Python float (e.g., `95` -> `95.0`) so downstream float-only helpers operate correctly.
     """
     value = Value.from_dict({"value": 95, "units": "%ftp"})
