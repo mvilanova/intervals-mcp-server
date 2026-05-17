@@ -180,6 +180,16 @@ def test_format_event_details():
     assert "Workout Information:" in details
 
 
+def test_format_event_details_uses_start_date_local_fallback():
+    """
+    Test that format_event_details falls back to start_date_local when "date" is absent,
+    matching the behavior of format_event_summary for endpoints that only emit start_date_local.
+    """
+    event = {"id": "e1", "start_date_local": "2024-01-01", "name": "X", "description": ""}
+    details = format_event_details(event)
+    assert "Date: 2024-01-01" in details
+
+
 def test_format_intervals():
     """
     Test that format_intervals returns a string containing interval analysis and the interval label.
