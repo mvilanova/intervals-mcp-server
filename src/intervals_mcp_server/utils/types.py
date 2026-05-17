@@ -231,6 +231,7 @@ def float_to_str(value: float) -> str:
     Returns:
         The string representation of the value; if the float is a whole number the decimal part is removed (e.g. 2.0 -> "2"), otherwise the standard float string is returned.
     """
+    value = float(value)
     return str(int(value)) if value.is_integer() else str(value)
 
 
