@@ -39,8 +39,8 @@ export default async function Home() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl p-4 sm:p-8 space-y-4">
-      <header className="flex items-baseline justify-between gap-3">
+    <main className="mx-auto max-w-5xl p-4 sm:p-8 grid grid-cols-1 md:grid-cols-12 gap-4">
+      <header className="md:col-span-12 flex items-baseline justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Today</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -50,34 +50,40 @@ export default async function Home() {
         <SyncStatusPill status={bundle.syncStatus} />
       </header>
 
-      <Suspense fallback={<SummarySkeleton />}>
-        <DailySummaryCard userId={bundle.user.id} date={bundle.todayDate} />
-      </Suspense>
+      <div className="md:col-span-12 empty:hidden">
+        <Suspense fallback={<SummarySkeleton />}>
+          <DailySummaryCard userId={bundle.user.id} date={bundle.todayDate} />
+        </Suspense>
+      </div>
 
-      <WeightCard
-        latest={bundle.latestWeight}
-        weekAgo={bundle.weightWeekAgo}
-        daysAgo={bundle.latestWeightDaysAgo}
-        targetWeight={bundle.user.targetWeight}
-        targetDate={bundle.user.targetDate}
-      />
+      <div className="md:col-span-7 space-y-4">
+        <WeightCard
+          latest={bundle.latestWeight}
+          weekAgo={bundle.weightWeekAgo}
+          daysAgo={bundle.latestWeightDaysAgo}
+          targetWeight={bundle.user.targetWeight}
+          targetDate={bundle.user.targetDate}
+        />
 
-      <Card>
-        <CardContent className="pt-6">
-          <WeightForm todayWeight={bundle.todayWeight} />
-        </CardContent>
-      </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <WeightForm todayWeight={bundle.todayWeight} />
+          </CardContent>
+        </Card>
 
-      <MealGrid initial={bundle.todayMealLogs} />
+        <MealGrid initial={bundle.todayMealLogs} />
+      </div>
 
-      <TrainingLoadCard today={bundle.today} yesterday={bundle.yesterday} />
+      <div className="md:col-span-5 space-y-4">
+        <TrainingLoadCard today={bundle.today} yesterday={bundle.yesterday} />
 
-      <RecoveryCard
-        today={bundle.today}
-        baselineRhr={bundle.user.baselineRhr}
-      />
+        <RecoveryCard
+          today={bundle.today}
+          baselineRhr={bundle.user.baselineRhr}
+        />
 
-      <ActivityCard activities={bundle.todayActivities} />
+        <ActivityCard activities={bundle.todayActivities} />
+      </div>
     </main>
   );
 }
