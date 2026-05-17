@@ -53,8 +53,8 @@ function sleep(ms: number): Promise<void> {
  * Start the cron loop that bootstraps and schedules periodic syncs until shutdown.
  *
  * Performs an initial "full" sync then repeatedly runs "recent" syncs at the configured interval.
- * Startup errors representing real infrastructure failures are allowed to propagate, but an error
- * whose message contains "No user found" is logged and suppressed so the cron stays up and retries
+ * Startup errors representing real infrastructure failures are allowed to propagate, but a
+ * `NoUserFoundError` from syncIntervals is logged and suppressed so the cron stays up and retries
  * on the next tick. The loop sleeps for the configured period between runs but wakes early when a
  * shutdown signal is received; after shutdown completes the process exits with code 0.
  */
