@@ -396,7 +396,7 @@ Description: {event_desc}"""
 
 def format_event_details(event: dict[str, Any]) -> str:
     """Format detailed event information into a readable string."""
-    event_date = event.get("date", event.get("start_date_local", "Unknown"))
+    event_date = event.get("start_date_local") or event.get("date") or "Unknown"
     parts: list[str] = [
         f"""Event Details:
 
@@ -431,7 +431,7 @@ Priority: {event.get("priority", "N/A")}
 Result: {event.get("result", "N/A")}""")
 
     # Include calendar information
-    if "calendar" in event:
+    if event.get("calendar"):
         cal = event["calendar"]
         parts.append(f"""
 
