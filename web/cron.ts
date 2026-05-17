@@ -49,6 +49,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Start the cron loop that bootstraps and schedules periodic syncs until shutdown.
+ *
+ * Performs an initial "full" sync then repeatedly runs "recent" syncs at the configured interval.
+ * Startup errors representing real infrastructure failures are allowed to propagate, but an error
+ * whose message contains "No user found" is logged and suppressed so the cron stays up and retries
+ * on the next tick. The loop sleeps for the configured period between runs but wakes early when a
+ * shutdown signal is received; after shutdown completes the process exits with code 0.
+ */
 async function main() {
   console.log(`[cron] starting, period=${HOURS}h`);
   // Bootstrap sync: fail-fast on real infrastructure problems (bad
