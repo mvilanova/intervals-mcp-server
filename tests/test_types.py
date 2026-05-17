@@ -112,3 +112,32 @@ def test_coerce_float_passthrough_for_float_hint():
     value = Value.from_dict({"value": 95.5, "units": "%ftp"})
     assert value.value == 95.5
     assert isinstance(value.value, float)
+
+
+# --- Step._format_duration boundary cases ----------------------------------
+
+
+def test_format_duration_exact_hour_renders_as_h():
+    """3600 seconds is one hour, not sixty minutes (`>=` not `>`)."""
+    assert Step(duration=3600)._format_duration() == "1h"
+
+
+def test_format_duration_exact_minute_renders_as_m():
+    """60 seconds is one minute — preserved across the threshold fix."""
+    assert Step(duration=60)._format_duration() == "1m"
+
+
+def test_format_duration_minute_plus_seconds_is_split():
+    """90 seconds should render as `1m30s`, not the previous `90s`."""
+    assert Step(duration=90)._format_duration() == "1m30s"
+
+
+def test_format_duration_hour_minute_seconds_mixed():
+    """Multi-unit durations should compose all three parts."""
+    # 1h 2m 3s = 3723
+    assert Step(duration=3723)._format_duration() == "1h2m3s"
+
+
+def test_format_duration_seconds_only_below_minute():
+    """Durations under a minute keep their `Xs` form."""
+    assert Step(duration=45)._format_duration() == "45s"

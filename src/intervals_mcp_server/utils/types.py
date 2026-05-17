@@ -420,10 +420,13 @@ class Step:
             return ""
         remaining = self.duration
         parts: list[str] = []
-        if remaining > 3600:
+        # `>=` rather than `>` so exact-hour and exact-minute boundaries
+        # render with their natural unit (3600s → "1h", not "60m"; 90s →
+        # "1m30s", not "90s").
+        if remaining >= 3600:
             parts.append(f"{remaining // 3600}h")
             remaining %= 3600
-        if remaining > 100 or remaining == 60:
+        if remaining >= 60:
             parts.append(f"{remaining // 60}m")
             remaining %= 60
         if remaining > 0:

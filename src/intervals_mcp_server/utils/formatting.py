@@ -532,21 +532,26 @@ Description: {event_desc}"""
 def format_event_details(event: dict[str, Any]) -> str:
     """
     Render detailed event information into a human-readable multi-section string.
-    
+
     Includes base event fields (ID, Date, Name, Description). When present, appends a
     "Workout Information" section (workout id, sport, duration, TSS, and intervals
     count when available), a "Race Information" section (priority and result), and
     the calendar name when a `calendar` entry exists.
-    
+
     Returns:
         formatted (str): A formatted string containing the event details and any
         present subsections.
     """
+    # Mirror `format_event_summary`'s fallback: prefer `start_date_local`,
+    # then `date`. `or`-chaining (rather than `.get(k, default)`) also
+    # treats explicit `None` values as missing, which is how the API
+    # represents an unset key.
+    event_date = event.get("start_date_local") or event.get("date") or "Unknown"
     parts: list[str] = [
         f"""Event Details:
 
 ID: {event.get("id", "N/A")}
-Date: {event.get("date", "Unknown")}
+Date: {event_date}
 Name: {event.get("name", "Unnamed")}
 Description: {event.get("description", "No description")}"""
     ]
