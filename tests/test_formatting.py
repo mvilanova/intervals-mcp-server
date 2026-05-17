@@ -5,6 +5,10 @@ These tests verify that the formatting functions produce expected output strings
 """
 
 import json
+from pathlib import Path
+
+import pytest
+
 from intervals_mcp_server.utils.formatting import (
     format_activity_summary,
     format_workout,
@@ -14,6 +18,8 @@ from intervals_mcp_server.utils.formatting import (
     format_intervals,
 )
 from tests.sample_data import INTERVALS_DATA, SAMPLE_ACTIVITY
+
+_RESOURCES = Path(__file__).parent / "ressources"
 
 
 def test_format_activity_summary():
@@ -179,3 +185,23 @@ def test_format_intervals():
     result = format_intervals(INTERVALS_DATA)
     assert "Intervals Analysis:" in result
     assert "Rep 1" in result
+
+
+@pytest.mark.parametrize(
+    "fixture_name, fn",
+    [
+        ("activity_summary_full", format_activity_summary),
+        ("event_details_workout_race", format_event_details),
+        ("intervals_full", format_intervals),
+    ],
+)
+def test_formatter_matches_snapshot(fixture_name, fn):
+    """Pin each formatter's exact output against a stored fixture.
+
+    To intentionally change formatter output, run
+    `uv run python scripts/generate_format_snapshots.py`, inspect the diff,
+    then commit both the formatter change and the regenerated fixture.
+    """
+    payload = json.loads((_RESOURCES / f"{fixture_name}.json").read_text())
+    expected = (_RESOURCES / f"{fixture_name}_formatted.txt").read_text()
+    assert fn(payload) == expected

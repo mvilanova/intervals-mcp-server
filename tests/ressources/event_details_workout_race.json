@@ -1,0 +1,17 @@
+{
+  "id": "e123",
+  "date": "2024-05-15",
+  "name": "Stage 1: Pyrenees Climb",
+  "description": "Cat 1 climb to summit, 18km @ 7.5%",
+  "workout": {
+    "id": "w42",
+    "sport": "Ride",
+    "duration": 3600,
+    "tss": 95,
+    "intervals": [1, 2, 3, 4, 5]
+  },
+  "race": true,
+  "priority": "A",
+  "result": "12th",
+  "calendar": {"name": "TdF Etape Tour 2024"}
+}

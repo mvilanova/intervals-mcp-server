@@ -1,0 +1,62 @@
+Intervals Analysis:
+
+ID: i987
+Analyzed: True
+
+Individual Intervals:
+
+[1] Rep 1 (work)
+Duration: 300 seconds (moving: 300 seconds)
+Distance: 1200 meters
+Start-End Indices: 100-450
+
+Power Metrics:
+  Average Power: 285 watts (3.95 W/kg)
+  Max Power: 340 watts (4.72 W/kg)
+  Weighted Avg Power: 290 watts
+  Intensity: 1.02
+  Training Load: 18
+  Joules: 85500
+  Joules > FTP: 1500
+  Power Zone: 4 (280-320 watts)
+  W' Balance: Start 22000, End 18500
+  L/R Balance: 49
+  Variability: 0.08
+  Torque: Avg 32, Min 18, Max 45
+
+Heart Rate & Metabolic:
+  Heart Rate: Avg 168, Min 155, Max 178 bpm
+  Decoupling: 2.1
+  DFA α1: 0.55
+  Respiration: 32 breaths/min
+  EPOC: 85
+  SmO2: 65% / 0%
+  THb: 12.4 / 0
+
+Speed & Cadence:
+  Speed: Avg 4.0, Min 3.2, Max 4.8 m/s
+  GAP: 4.2 m/s
+  Cadence: Avg 92, Min 85, Max 98 rpm
+  Stride: 0
+
+Elevation & Environment:
+  Elevation Gain: 95 meters
+  Altitude: Min 850, Max 945 meters
+  Gradient: 7.8%
+  Temperature: 16°C (Weather: 18°C, Feels like: 14°C)
+  Wind: Speed 8 km/h, Gust 15 km/h, Direction 270°
+  Headwind: 60%, Tailwind: 20%
+
+Interval Groups:
+
+Group: G1 (Contains 5 intervals)
+Duration: 1800 seconds (moving: 1750 seconds)
+Distance: 7500 meters
+Start-End Indices: 100-N/A
+
+Power: Avg 280 watts (3.9 W/kg), Max 345 watts
+W. Avg Power: 288 watts, Intensity: 1.0
+Heart Rate: Avg 165, Max 178 bpm
+Speed: Avg 4.1, Max 4.9 m/s
+Cadence: Avg 91, Max 98 rpm
+
