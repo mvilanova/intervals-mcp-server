@@ -1,10 +1,35 @@
 "use client";
 
-import { useOptimistic, useState, useTransition } from "react";
+import React, { useOptimistic, useState, useTransition } from "react";
 import type { MealLog } from "@prisma/client";
 import { logMeal } from "../actions/logging";
 import type { MealStatus, MealType } from "../actions/logging";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+
+function CheckIcon() {
+  return (
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <path d="M2 7L5.5 10.5L12 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PartialIcon() {
+  return (
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="2" />
+      <path d="M4.5 7H9.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CrossIcon() {
+  return (
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <path d="M3 3L11 11M11 3L3 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 const MEALS: { type: MealType; label: string }[] = [
   { type: "breakfast", label: "Breakfast" },
@@ -13,21 +38,29 @@ const MEALS: { type: MealType; label: string }[] = [
   { type: "cena", label: "Cena" },
 ];
 
-const STATUSES: { value: MealStatus; label: string; activeClass: string }[] = [
+const STATUSES: {
+  value: MealStatus;
+  label: string;
+  activeClass: string;
+  Icon: () => React.ReactElement;
+}[] = [
   {
     value: "hit",
     label: "Hit",
-    activeClass: "bg-emerald-600 text-white border-emerald-600",
+    activeClass: "bg-emerald-600 text-white",
+    Icon: CheckIcon,
   },
   {
     value: "partial",
     label: "Partial",
-    activeClass: "bg-amber-500 text-white border-amber-500",
+    activeClass: "bg-amber-500 text-white",
+    Icon: PartialIcon,
   },
   {
     value: "missed",
     label: "Missed",
-    activeClass: "bg-red-600 text-white border-red-600",
+    activeClass: "bg-red-600 text-white",
+    Icon: CrossIcon,
   },
 ];
 
@@ -102,14 +135,14 @@ export function MealGrid({ initial }: Props) {
             const isPending = pending.has(type);
             return (
               <div key={type} className="grid grid-cols-[6rem_1fr] items-center gap-2">
-                <div className="text-sm">{label}</div>
+                <div className="text-sm text-muted-foreground">{label}</div>
                 <div
                   role="group"
                   aria-label={`${label} status`}
                   aria-busy={isPending}
-                  className="grid grid-cols-3 gap-1.5"
+                  className="flex rounded-md border border-input divide-x divide-input overflow-hidden"
                 >
-                  {STATUSES.map(({ value, label: btnLabel, activeClass }) => {
+                  {STATUSES.map(({ value, label: btnLabel, activeClass, Icon }) => {
                     const isActive = active === value;
                     return (
                       <button
@@ -118,12 +151,13 @@ export function MealGrid({ initial }: Props) {
                         onClick={() => handleClick(type, value)}
                         disabled={isPending}
                         aria-pressed={isActive}
-                        className={`rounded border px-2 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                        className={`flex-1 inline-flex items-center justify-center gap-1.5 min-h-[44px] px-2 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset disabled:cursor-not-allowed disabled:opacity-60 ${
                           isActive
                             ? activeClass
-                            : "border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300"
+                            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                         }`}
                       >
+                        <Icon />
                         {btnLabel}
                       </button>
                     );

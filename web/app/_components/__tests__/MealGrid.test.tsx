@@ -93,10 +93,167 @@ describe("MealGrid", () => {
       expect(missedButtons[3].className).toContain("bg-red-600");
     });
 
-    it("inactive buttons have border-gray-300 class", () => {
+    it("inactive buttons have aria-pressed false", () => {
       render(<MealGrid initial={[]} />);
       const hitButtons = screen.getAllByText("Hit");
-      expect(hitButtons[0].className).toContain("border-gray-300");
+      expect(hitButtons[0]).toHaveAttribute("aria-pressed", "false");
+      expect(hitButtons[0].className).not.toContain("bg-emerald-600");
+    });
+
+    it("renders grouped status controls with accessible labels", () => {
+      render(<MealGrid initial={[]} />);
+      const breakfastGroup = screen.getByRole("group", { name: "Breakfast status" });
+      expect(breakfastGroup).toBeInTheDocument();
+      const cenaGroup = screen.getByRole("group", { name: "Cena status" });
+      expect(cenaGroup).toBeInTheDocument();
+    });
+
+    it("active button has aria-pressed true, others false", () => {
+      render(<MealGrid initial={[makeMealLog("breakfast", "hit")]} />);
+      const hitButtons = screen.getAllByText("Hit");
+      const partialButtons = screen.getAllByText("Partial");
+      const missedButtons = screen.getAllByText("Missed");
+      expect(hitButtons[0]).toHaveAttribute("aria-pressed", "true");
+      expect(partialButtons[0]).toHaveAttribute("aria-pressed", "false");
+      expect(missedButtons[0]).toHaveAttribute("aria-pressed", "false");
+    });
+  });
+
+  describe("icon rendering", () => {
+    it("each status button contains an svg icon", () => {
+      render(<MealGrid initial={[]} />);
+      const buttons = screen.getAllByRole("button");
+      // 4 meals × 3 statuses = 12 buttons, each should have an SVG child
+      expect(buttons).toHaveLength(12);
+      buttons.forEach((btn) => {
+        expect(btn.querySelector("svg")).not.toBeNull();
+      });
+    });
+
+    it("svg icons are aria-hidden so they are invisible to screen readers", () => {
+      render(<MealGrid initial={[]} />);
+      const buttons = screen.getAllByRole("button");
+      buttons.forEach((btn) => {
+        const svg = btn.querySelector("svg");
+        expect(svg).toHaveAttribute("aria-hidden", "true");
+      });
+    });
+
+    it("hit button svg has correct viewBox", () => {
+      render(<MealGrid initial={[]} />);
+      const hitButtons = screen.getAllByText("Hit");
+      const svg = hitButtons[0].querySelector("svg");
+      expect(svg).toHaveAttribute("viewBox", "0 0 14 14");
+      expect(svg).toHaveAttribute("width", "14");
+      expect(svg).toHaveAttribute("height", "14");
+    });
+
+    it("partial button svg has correct viewBox", () => {
+      render(<MealGrid initial={[]} />);
+      const partialButtons = screen.getAllByText("Partial");
+      const svg = partialButtons[0].querySelector("svg");
+      expect(svg).toHaveAttribute("viewBox", "0 0 14 14");
+    });
+
+    it("missed button svg has correct viewBox", () => {
+      render(<MealGrid initial={[]} />);
+      const missedButtons = screen.getAllByText("Missed");
+      const svg = missedButtons[0].querySelector("svg");
+      expect(svg).toHaveAttribute("viewBox", "0 0 14 14");
+    });
+
+    it("icons remain present after a meal status is activated", async () => {
+      render(<MealGrid initial={[]} />);
+      const hitButtons = screen.getAllByText("Hit");
+      fireEvent.click(hitButtons[0]);
+      await waitFor(() => {
+        expect(mockLogMeal).toHaveBeenCalled();
+      });
+      // SVG should still be in the active button
+      expect(hitButtons[0].querySelector("svg")).not.toBeNull();
+    });
+  });
+
+  describe("button and layout styling", () => {
+    it("active hit button does not have border-emerald-600 class (border removed in PR)", () => {
+      render(<MealGrid initial={[makeMealLog("breakfast", "hit")]} />);
+      const hitButtons = screen.getAllByText("Hit");
+      expect(hitButtons[0].className).not.toContain("border-emerald-600");
+    });
+
+    it("active partial button does not have border-amber-500 class (border removed in PR)", () => {
+      render(<MealGrid initial={[makeMealLog("comida", "partial")]} />);
+      const partialButtons = screen.getAllByText("Partial");
+      expect(partialButtons[1].className).not.toContain("border-amber-500");
+    });
+
+    it("active missed button does not have border-red-600 class (border removed in PR)", () => {
+      render(<MealGrid initial={[makeMealLog("cena", "missed")]} />);
+      const missedButtons = screen.getAllByText("Missed");
+      expect(missedButtons[3].className).not.toContain("border-red-600");
+    });
+
+    it("inactive buttons do not have border-gray-300 class (old inactive style removed)", () => {
+      render(<MealGrid initial={[]} />);
+      const hitButtons = screen.getAllByText("Hit");
+      expect(hitButtons[0].className).not.toContain("border-gray-300");
+    });
+
+    it("inactive buttons have text-muted-foreground class", () => {
+      render(<MealGrid initial={[]} />);
+      const hitButtons = screen.getAllByText("Hit");
+      expect(hitButtons[0].className).toContain("text-muted-foreground");
+    });
+
+    it("buttons have min-h-[44px] for touch accessibility", () => {
+      render(<MealGrid initial={[]} />);
+      const buttons = screen.getAllByRole("button");
+      buttons.forEach((btn) => {
+        expect(btn.className).toContain("min-h-[44px]");
+      });
+    });
+
+    it("status group container uses flex layout, not grid", () => {
+      render(<MealGrid initial={[]} />);
+      const group = screen.getByRole("group", { name: "Breakfast status" });
+      expect(group.className).toContain("flex");
+      expect(group.className).not.toContain("grid-cols-3");
+    });
+
+    it("status group container has rounded-md and border classes", () => {
+      render(<MealGrid initial={[]} />);
+      const group = screen.getByRole("group", { name: "Breakfast status" });
+      expect(group.className).toContain("rounded-md");
+      expect(group.className).toContain("border");
+    });
+
+    it("meal label has text-muted-foreground class", () => {
+      render(<MealGrid initial={[]} />);
+      const label = screen.getByText("Breakfast");
+      expect(label.className).toContain("text-muted-foreground");
+    });
+
+    it("all four meal labels have text-muted-foreground class", () => {
+      render(<MealGrid initial={[]} />);
+      ["Breakfast", "Comida", "Merienda", "Cena"].forEach((meal) => {
+        expect(screen.getByText(meal).className).toContain("text-muted-foreground");
+      });
+    });
+
+    it("buttons have flex-1 class for equal sizing in segmented control", () => {
+      render(<MealGrid initial={[]} />);
+      const buttons = screen.getAllByRole("button");
+      buttons.forEach((btn) => {
+        expect(btn.className).toContain("flex-1");
+      });
+    });
+
+    it("all four meal groups use flex layout", () => {
+      render(<MealGrid initial={[]} />);
+      const groups = screen.getAllByRole("group");
+      groups.forEach((group) => {
+        expect(group.className).toContain("flex");
+      });
     });
   });
 
@@ -104,6 +261,7 @@ describe("MealGrid", () => {
     it("calls logMeal with correct mealType and status on button click", async () => {
       render(<MealGrid initial={[]} />);
       const hitButtons = screen.getAllByText("Hit");
+
       fireEvent.click(hitButtons[0]); // Breakfast Hit
       await waitFor(() => {
         expect(mockLogMeal).toHaveBeenCalledWith("breakfast", "hit");
