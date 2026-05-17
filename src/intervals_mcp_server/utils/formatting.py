@@ -5,41 +5,32 @@ This module contains formatting functions for handling data from the Intervals.i
 """
 
 import json
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
 
-class _KeyTracker(dict):
-    """A dict wrapper that records which keys are accessed."""
+def _format_iso_datetime(value: Any) -> Any:
+    """Reformat an ISO-8601 datetime string as 'YYYY-MM-DD HH:MM:SS'.
 
-    def __init__(self, data: dict[str, Any]) -> None:
-        super().__init__(data)
-        self.accessed: set[str] = set()
-
-    def get(self, key: str, default: Any = None) -> Any:
-        self.accessed.add(key)
-        return super().get(key, default)
-
-    def __getitem__(self, key: str) -> Any:
-        self.accessed.add(key)
-        return super().__getitem__(key)
-
-    def __contains__(self, key: object) -> bool:
-        self.accessed.add(key)
-        return super().__contains__(key)
+    Passes the value through unchanged when it isn't a parseable ISO datetime
+    longer than 10 characters (10-char date-only strings are left as-is).
+    """
+    if isinstance(value, str) and len(value) > 10:
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+        except ValueError:
+            return value
+    return value
 
 
 def format_activity_summary(activity: dict[str, Any]) -> str:
     """Format an activity into a readable string."""
-    start_time = activity.get("startTime", activity.get("start_date", "Unknown"))
-
-    if isinstance(start_time, str) and len(start_time) > 10:
-        # Format datetime if it's a full ISO string
-        try:
-            dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-            start_time = dt.strftime("%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            pass
+    start_time = _format_iso_datetime(
+        activity.get("startTime", activity.get("start_date", "Unknown"))
+    )
 
     rpe = activity.get("perceived_exertion", None)
     if rpe is None:
@@ -130,237 +121,210 @@ Intervals: {len(workout.get("intervals", []))}
 """
 
 
+# Field tables for the wellness formatters. Each tuple is (key, label[, unit]).
+# These tables are the single source of truth for both the rendered output and
+# the `_KNOWN_WELLNESS_KEYS` set below — adding a field updates both at once.
+
+_TRAINING_METRICS_FIELDS: list[tuple[str, str]] = [
+    ("ctl", "Fitness (CTL)"),
+    ("atl", "Fatigue (ATL)"),
+    ("rampRate", "Ramp Rate"),
+    ("ctlLoad", "CTL Load"),
+    ("atlLoad", "ATL Load"),
+]
+
+_VITAL_SIGNS_FIELDS: list[tuple[str, str, str]] = [
+    ("weight", "Weight", "kg"),
+    ("restingHR", "Resting HR", "bpm"),
+    ("hrv", "HRV", ""),
+    ("hrvSDNN", "HRV SDNN", ""),
+    ("avgSleepingHR", "Average Sleeping HR", "bpm"),
+    ("spO2", "SpO2", "%"),
+    ("systolic", "Systolic BP", ""),
+    ("diastolic", "Diastolic BP", ""),
+    ("respiration", "Respiration", "breaths/min"),
+    ("bloodGlucose", "Blood Glucose", "mmol/L"),
+    ("lactate", "Lactate", "mmol/L"),
+    ("vo2max", "VO2 Max", "ml/kg/min"),
+    ("bodyFat", "Body Fat", "%"),
+    ("abdomen", "Abdomen", "cm"),
+    ("baevskySI", "Baevsky Stress Index", ""),
+]
+
+_SUBJECTIVE_FEELINGS_FIELDS: list[tuple[str, str]] = [
+    ("soreness", "Soreness"),
+    ("fatigue", "Fatigue"),
+    ("stress", "Stress"),
+    ("mood", "Mood"),
+    ("motivation", "Motivation"),
+    ("injury", "Injury Level"),
+]
+
+_NUTRITION_FIELDS: list[tuple[str, str, str]] = [
+    ("kcalConsumed", "Calories Consumed", ""),
+    ("carbohydrates", "Carbohydrates", "g"),
+    ("protein", "Protein", "g"),
+    ("fatTotal", "Fat", "g"),
+    ("hydrationVolume", "Hydration Volume", ""),
+]
+
+_SLEEP_QUALITY_LABELS: dict[int, str] = {1: "Great", 2: "Good", 3: "Average", 4: "Poor"}
+
+
 def _format_training_metrics(entries: dict[str, Any]) -> list[str]:
-    """Format training metrics section."""
-    training_metrics = []
-    for k, label in [
-        ("ctl", "Fitness (CTL)"),
-        ("atl", "Fatigue (ATL)"),
-        ("rampRate", "Ramp Rate"),
-        ("ctlLoad", "CTL Load"),
-        ("atlLoad", "ATL Load"),
-    ]:
-        if entries.get(k) is not None:
-            training_metrics.append(f"- {label}: {entries[k]}")
-    return training_metrics
+    return [
+        f"- {label}: {entries[k]}"
+        for k, label in _TRAINING_METRICS_FIELDS
+        if entries.get(k) is not None
+    ]
 
 
 def _format_sport_info(entries: dict[str, Any]) -> list[str]:
-    """Format sport-specific info section."""
-    sport_info_list = []
-    if entries.get("sportInfo"):
-        for sport in entries.get("sportInfo", []):
-            if isinstance(sport, dict) and sport.get("eftp") is not None:
-                sport_info_list.append(f"- {sport.get('type')}: eFTP = {sport['eftp']}")
-    return sport_info_list
+    return [
+        f"- {sport.get('type')}: eFTP = {sport['eftp']}"
+        for sport in entries.get("sportInfo") or []
+        if isinstance(sport, dict) and sport.get("eftp") is not None
+    ]
 
 
 def _format_vital_signs(entries: dict[str, Any]) -> list[str]:
-    """Format vital signs section."""
-    vital_signs = []
-    for k, label, unit in [
-        ("weight", "Weight", "kg"),
-        ("restingHR", "Resting HR", "bpm"),
-        ("hrv", "HRV", ""),
-        ("hrvSDNN", "HRV SDNN", ""),
-        ("avgSleepingHR", "Average Sleeping HR", "bpm"),
-        ("spO2", "SpO2", "%"),
-        ("systolic", "Systolic BP", ""),
-        ("diastolic", "Diastolic BP", ""),
-        ("respiration", "Respiration", "breaths/min"),
-        ("bloodGlucose", "Blood Glucose", "mmol/L"),
-        ("lactate", "Lactate", "mmol/L"),
-        ("vo2max", "VO2 Max", "ml/kg/min"),
-        ("bodyFat", "Body Fat", "%"),
-        ("abdomen", "Abdomen", "cm"),
-        ("baevskySI", "Baevsky Stress Index", ""),
-    ]:
-        if entries.get(k) is not None:
-            value = entries[k]
-            if k == "systolic" and entries.get("diastolic") is not None:
-                vital_signs.append(
-                    f"- Blood Pressure: {entries['systolic']}/{entries['diastolic']} mmHg"
-                )
-            elif k not in ("systolic", "diastolic"):
-                vital_signs.append(f"- {label}: {value}{(' ' + unit) if unit else ''}")
-    return vital_signs
+    lines: list[str] = []
+    for k, label, unit in _VITAL_SIGNS_FIELDS:
+        if entries.get(k) is None:
+            continue
+        if k == "systolic" and entries.get("diastolic") is not None:
+            lines.append(
+                f"- Blood Pressure: {entries['systolic']}/{entries['diastolic']} mmHg"
+            )
+        elif k not in ("systolic", "diastolic"):
+            suffix = f" {unit}" if unit else ""
+            lines.append(f"- {label}: {entries[k]}{suffix}")
+    return lines
 
 
 def _format_sleep_recovery(entries: dict[str, Any]) -> list[str]:
-    """Format sleep and recovery section."""
-    sleep_lines = []
-    sleep_hours = None
+    lines: list[str] = []
     if entries.get("sleepSecs") is not None:
-        sleep_hours = f"{entries['sleepSecs'] / 3600:.2f}"
+        lines.append(f"  Sleep: {entries['sleepSecs'] / 3600:.2f} hours")
     elif entries.get("sleepHours") is not None:
-        sleep_hours = f"{entries['sleepHours']}"
-    if sleep_hours is not None:
-        sleep_lines.append(f"  Sleep: {sleep_hours} hours")
+        lines.append(f"  Sleep: {entries['sleepHours']} hours")
 
-    if entries.get("sleepQuality") is not None:
-        quality_value = entries["sleepQuality"]
-        quality_labels = {1: "Great", 2: "Good", 3: "Average", 4: "Poor"}
-        quality_text = quality_labels.get(quality_value, str(quality_value))
-        sleep_lines.append(f"  Sleep Quality: {quality_value} ({quality_text})")
+    quality = entries.get("sleepQuality")
+    if quality is not None:
+        quality_text = _SLEEP_QUALITY_LABELS.get(quality, str(quality))
+        lines.append(f"  Sleep Quality: {quality} ({quality_text})")
 
     if entries.get("sleepScore") is not None:
-        sleep_lines.append(f"  Device Sleep Score: {entries['sleepScore']}/100")
-
+        lines.append(f"  Device Sleep Score: {entries['sleepScore']}/100")
     if entries.get("readiness") is not None:
-        sleep_lines.append(f"  Readiness: {entries['readiness']}/10")
-
-    return sleep_lines
+        lines.append(f"  Readiness: {entries['readiness']}/10")
+    return lines
 
 
 def _format_menstrual_tracking(entries: dict[str, Any]) -> list[str]:
-    """Format menstrual tracking section."""
-    menstrual_lines = []
-    if entries.get("menstrualPhase") is not None:
-        menstrual_lines.append(f"  Menstrual Phase: {str(entries['menstrualPhase']).capitalize()}")
-    if entries.get("menstrualPhasePredicted") is not None:
-        menstrual_lines.append(
-            f"  Predicted Phase: {str(entries['menstrualPhasePredicted']).capitalize()}"
-        )
-    return menstrual_lines
+    lines: list[str] = []
+    for k, label in (
+        ("menstrualPhase", "Menstrual Phase"),
+        ("menstrualPhasePredicted", "Predicted Phase"),
+    ):
+        if entries.get(k) is not None:
+            lines.append(f"  {label}: {str(entries[k]).capitalize()}")
+    return lines
 
 
 def _format_subjective_feelings(entries: dict[str, Any]) -> list[str]:
-    """Format subjective feelings section."""
-    subjective_lines = []
-    for k, label in [
-        ("soreness", "Soreness"),
-        ("fatigue", "Fatigue"),
-        ("stress", "Stress"),
-        ("mood", "Mood"),
-        ("motivation", "Motivation"),
-        ("injury", "Injury Level"),
-    ]:
-        if entries.get(k) is not None:
-            subjective_lines.append(f"  {label}: {entries[k]}/10")
-    return subjective_lines
+    return [
+        f"  {label}: {entries[k]}/10"
+        for k, label in _SUBJECTIVE_FEELINGS_FIELDS
+        if entries.get(k) is not None
+    ]
 
 
 def _format_nutrition_hydration(entries: dict[str, Any]) -> list[str]:
-    """Format nutrition and hydration section.
-
-    Handles both legacy fields (kcalConsumed, hydrationVolume) and the native
-    macro fields from the Intervals.icu API (carbohydrates, protein,
-    fatTotal). All fields are rendered conditionally — a null/missing value
-    hides the corresponding line for backward compatibility with older
-    wellness records.
-    """
-    nutrition_lines = []
-    for k, label, unit in [
-        ("kcalConsumed", "Calories Consumed", ""),
-        ("carbohydrates", "Carbohydrates", "g"),
-        ("protein", "Protein", "g"),
-        ("fatTotal", "Fat", "g"),
-        ("hydrationVolume", "Hydration Volume", ""),
-    ]:
+    """Render nutrition / hydration lines, skipping any null/missing field."""
+    lines: list[str] = []
+    for k, label, unit in _NUTRITION_FIELDS:
         if entries.get(k) is not None:
             suffix = f" {unit}" if unit else ""
-            nutrition_lines.append(f"- {label}: {entries[k]}{suffix}")
-
+            lines.append(f"- {label}: {entries[k]}{suffix}")
     if entries.get("hydration") is not None:
-        nutrition_lines.append(f"  Hydration Score: {entries['hydration']}/10")
+        lines.append(f"  Hydration Score: {entries['hydration']}/10")
+    return lines
 
-    return nutrition_lines
 
-
-def _format_other_fields(entries: dict[str, Any], known_keys: set[str]) -> list[str]:
-    """Format any fields not already handled by the standard formatting sections."""
-    other_lines = []
+def _format_other_fields(entries: dict[str, Any], known_keys: frozenset[str]) -> list[str]:
+    """Render every entry not already handled by the standard sections."""
+    other_lines: list[str] = []
     for key, value in entries.items():
-        if key not in known_keys and value is not None:
-            if isinstance(value, (dict, list)):
-                other_lines.append(f"- {key}: {json.dumps(value)}")
-            else:
-                other_lines.append(f"- {key}: {value}")
+        if key in known_keys or value is None:
+            continue
+        rendered = json.dumps(value) if isinstance(value, (dict, list)) else value
+        other_lines.append(f"- {key}: {rendered}")
     return other_lines
+
+
+_WELLNESS_SECTIONS: list[tuple[str, Callable[[dict[str, Any]], list[str]]]] = [
+    ("Training Metrics:", _format_training_metrics),
+    ("Sport-Specific Info:", _format_sport_info),
+    ("Vital Signs:", _format_vital_signs),
+    ("Sleep & Recovery:", _format_sleep_recovery),
+    ("Menstrual Tracking:", _format_menstrual_tracking),
+    ("Subjective Feelings:", _format_subjective_feelings),
+    ("Nutrition & Hydration:", _format_nutrition_hydration),
+]
+
+
+# Every wellness key the standard formatters look at. Anything outside this set
+# falls through to "Other Fields" when ``include_all_fields=True``. Keep in
+# sync with the section helpers: missing a key here would double-render it as
+# both a section line and an "Other Fields" line.
+_KNOWN_WELLNESS_KEYS: frozenset[str] = frozenset(
+    {k for k, _ in _TRAINING_METRICS_FIELDS}
+    | {k for k, _, _ in _VITAL_SIGNS_FIELDS}
+    | {k for k, _ in _SUBJECTIVE_FEELINGS_FIELDS}
+    | {k for k, _, _ in _NUTRITION_FIELDS}
+    | {
+        "sportInfo",
+        "sleepSecs",
+        "sleepHours",
+        "sleepQuality",
+        "sleepScore",
+        "readiness",
+        "menstrualPhase",
+        "menstrualPhasePredicted",
+        "hydration",
+        # Top-level fields rendered inline by format_wellness_entry.
+        "id",
+        "steps",
+        "comments",
+        "locked",
+        # Metadata fields that should never surface under "Other Fields".
+        "date",
+        "updated",
+        "tempWeight",
+        "tempRestingHR",
+    }
+)
 
 
 def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = False) -> str:
     """Format wellness entry data into a readable string.
 
-    Formats various wellness metrics including training metrics, vital signs,
-    sleep data, menstrual tracking, subjective feelings, nutrition, and activity.
-
-    Args:
-        entries: Dictionary containing wellness data fields such as:
-            - Training metrics: ctl, atl, rampRate, ctlLoad, atlLoad
-            - Vital signs: weight, restingHR, hrv, hrvSDNN, avgSleepingHR, spO2,
-              systolic, diastolic, respiration, bloodGlucose, lactate, vo2max,
-              bodyFat, abdomen, baevskySI
-            - Sleep: sleepSecs, sleepHours, sleepQuality, sleepScore, readiness
-            - Menstrual: menstrualPhase, menstrualPhasePredicted
-            - Subjective: soreness, fatigue, stress, mood, motivation, injury
-            - Nutrition: kcalConsumed, carbohydrates, protein, fatTotal, hydrationVolume, hydration
-            - Activity: steps
-            - Other: comments, locked, date
-        include_all_fields: If True, any fields not covered by the standard
-            sections are appended under an "Other Fields" heading (default False).
-
-    Returns:
-        A formatted string representation of the wellness entry.
+    See :data:`_KNOWN_WELLNESS_KEYS` for the set of fields handled by the
+    standard sections; everything else is appended under "Other Fields" when
+    ``include_all_fields=True``.
     """
-    if include_all_fields:
-        entries = _KeyTracker(entries)
-        # Mark metadata/internal keys so they don't appear in "Other Fields"
-        entries.get("date")
-        entries.get("updated")
-        entries.get("tempWeight")
-        entries.get("tempRestingHR")
+    lines: list[str] = ["Wellness Data:", f"Date: {entries.get('id', 'N/A')}", ""]
 
-    lines = ["Wellness Data:"]
-    lines.append(f"Date: {entries.get('id', 'N/A')}")
-    lines.append("")
-
-    training_metrics = _format_training_metrics(entries)
-    if training_metrics:
-        lines.append("Training Metrics:")
-        lines.extend(training_metrics)
-        lines.append("")
-
-    sport_info_list = _format_sport_info(entries)
-    if sport_info_list:
-        lines.append("Sport-Specific Info:")
-        lines.extend(sport_info_list)
-        lines.append("")
-
-    vital_signs = _format_vital_signs(entries)
-    if vital_signs:
-        lines.append("Vital Signs:")
-        lines.extend(vital_signs)
-        lines.append("")
-
-    sleep_lines = _format_sleep_recovery(entries)
-    if sleep_lines:
-        lines.append("Sleep & Recovery:")
-        lines.extend(sleep_lines)
-        lines.append("")
-
-    menstrual_lines = _format_menstrual_tracking(entries)
-    if menstrual_lines:
-        lines.append("Menstrual Tracking:")
-        lines.extend(menstrual_lines)
-        lines.append("")
-
-    subjective_lines = _format_subjective_feelings(entries)
-    if subjective_lines:
-        lines.append("Subjective Feelings:")
-        lines.extend(subjective_lines)
-        lines.append("")
-
-    nutrition_lines = _format_nutrition_hydration(entries)
-    if nutrition_lines:
-        lines.append("Nutrition & Hydration:")
-        lines.extend(nutrition_lines)
-        lines.append("")
+    for header, formatter in _WELLNESS_SECTIONS:
+        section_lines = formatter(entries)
+        if section_lines:
+            lines.append(header)
+            lines.extend(section_lines)
+            lines.append("")
 
     if entries.get("steps") is not None:
-        lines.append("Activity:")
-        lines.append(f"- Steps: {entries['steps']}")
-        lines.append("")
+        lines.extend(["Activity:", f"- Steps: {entries['steps']}", ""])
 
     if entries.get("comments"):
         lines.append(f"Comments: {entries['comments']}")
@@ -368,11 +332,9 @@ def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = Fa
         lines.append(f"Status: {'Locked' if entries.get('locked') else 'Unlocked'}")
 
     if include_all_fields:
-        other_lines = _format_other_fields(entries, entries.accessed)
+        other_lines = _format_other_fields(entries, _KNOWN_WELLNESS_KEYS)
         if other_lines:
-            lines.append("")
-            lines.append("Other Fields:")
-            lines.extend(other_lines)
+            lines.extend(["", "Other Fields:", *other_lines])
 
     return "\n".join(lines)
 
@@ -382,7 +344,12 @@ def format_event_summary(event: dict[str, Any]) -> str:
 
     # Update to check for "date" if "start_date_local" is not provided
     event_date = event.get("start_date_local", event.get("date", "Unknown"))
-    event_type = "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
+    if event.get("workout"):
+        event_type = "Workout"
+    elif event.get("race"):
+        event_type = "Race"
+    else:
+        event_type = "Other"
     event_name = event.get("name", "Unnamed")
     event_id = event.get("id", "N/A")
     event_desc = event.get("description", "No description")
@@ -440,13 +407,7 @@ Calendar: {cal.get("name", "N/A")}"""
 
 def format_activity_message(message: dict[str, Any]) -> str:
     """Format an activity message/note into a readable string."""
-    created = message.get("created", "Unknown")
-    if isinstance(created, str) and len(created) > 10:
-        try:
-            dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
-            created = dt.strftime("%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            pass
+    created = _format_iso_datetime(message.get("created", "Unknown"))
 
     return f"""Author: {message.get("name", "Unknown")}
 Date: {created}
