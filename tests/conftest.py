@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import pathlib
 import sys
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -21,7 +22,9 @@ os.environ.setdefault("ATHLETE_ID", "i1")
 
 
 @pytest.fixture
-def patch_request(monkeypatch):
+def patch_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[..., dict[str, Any]]:
     """
     Create a test helper that patches `make_intervals_request` in
     `intervals_mcp_server.api.client` and, when requested, in
