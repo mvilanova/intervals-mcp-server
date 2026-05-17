@@ -136,6 +136,28 @@ def test_format_wellness_entry_macros_null_hidden():
     assert "- Fat:" not in result
 
 
+def test_format_wellness_entry_systolic_only_renders_solo():
+    """
+    If only `systolic` is present, the formatter should render it on its
+    own line rather than dropping it (the combined `Blood Pressure: …`
+    line is only valid when both values are available).
+    """
+    entry = {"id": "2026-04-08", "systolic": 121}
+    result = format_wellness_entry(entry)
+    assert "Blood Pressure:" not in result
+    assert "- Systolic BP: 121" in result
+
+
+def test_format_wellness_entry_diastolic_only_renders_solo():
+    """
+    Symmetric case: `diastolic` alone should still surface in the output.
+    """
+    entry = {"id": "2026-04-08", "diastolic": 79}
+    result = format_wellness_entry(entry)
+    assert "Blood Pressure:" not in result
+    assert "- Diastolic BP: 79" in result
+
+
 def test_format_event_summary():
     """
     Test that format_event_summary returns a string containing the event date and type.

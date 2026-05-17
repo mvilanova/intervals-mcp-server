@@ -203,15 +203,26 @@ def _format_sport_info(entries: dict[str, Any]) -> list[str]:
 def _format_vital_signs(entries: dict[str, Any]) -> list[str]:
     lines: list[str] = []
     for k, label, unit in _VITAL_SIGNS_FIELDS:
-        if entries.get(k) is None:
+        val = entries.get(k)
+        if val is None:
             continue
-        if k == "systolic" and entries.get("diastolic") is not None:
-            lines.append(
-                f"- Blood Pressure: {entries['systolic']}/{entries['diastolic']} mmHg"
-            )
-        elif k not in ("systolic", "diastolic"):
+        if k == "systolic":
+            dia = entries.get("diastolic")
+            if dia is not None:
+                lines.append(f"- Blood Pressure: {val}/{dia} mmHg")
+            else:
+                # Partial reading: render systolic on its own rather than dropping it.
+                suffix = f" {unit}" if unit else ""
+                lines.append(f"- {label}: {val}{suffix}")
+        elif k == "diastolic":
+            # When both are present the combined "Blood Pressure" line was already
+            # emitted at systolic above. Only render solo if systolic is absent.
+            if entries.get("systolic") is None:
+                suffix = f" {unit}" if unit else ""
+                lines.append(f"- {label}: {val}{suffix}")
+        else:
             suffix = f" {unit}" if unit else ""
-            lines.append(f"- {label}: {entries[k]}{suffix}")
+            lines.append(f"- {label}: {val}{suffix}")
     return lines
 
 

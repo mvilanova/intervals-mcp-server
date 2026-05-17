@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields, is_dataclass
 from enum import Enum, StrEnum
+from types import UnionType
 from typing import Any, Union, get_args, get_origin, get_type_hints
 
 
@@ -107,6 +108,10 @@ def _serialize(val: Any) -> Any:
         return val.to_dict()  # type: ignore[attr-defined]
     if isinstance(val, list):
         return [_serialize(v) for v in val]
+    if isinstance(val, dict):
+        # Recurse so nested enums / dataclasses inside dict values (e.g.
+        # WorkoutDoc.sport_settings) survive json.dumps.
+        return {k: _serialize(v) for k, v in val.items()}
     return val
 
 
@@ -128,8 +133,16 @@ def _to_dict(obj: Any, rename: dict[str, str] | None = None) -> dict[str, Any]:
 
 def _coerce(val: Any, hint: Any) -> Any:
     """Coerce a JSON value back into the type indicated by ``hint``."""
+    # Null in JSON → None in Python, regardless of declared type. Without this
+    # guard, an explicit `null` for a `list[X] | None` field would crash the
+    # list comprehension below.
+    if val is None:
+        return None
     origin = get_origin(hint)
-    if origin is Union:
+    # Both `typing.Union[X, None]` and PEP 604 `X | None` need to be matched:
+    # `get_origin(int | None)` returns `types.UnionType`, not `typing.Union`,
+    # so the legacy check alone silently misses every `X | None` field.
+    if origin is Union or origin is UnionType:
         non_none = [a for a in get_args(hint) if a is not type(None)]
         # Single non-None arm (Optional[X]) → recurse. Anything broader passes through.
         if len(non_none) == 1:
