@@ -1,7 +1,8 @@
-# Domain configured for app.lauureal.xyz.
 # Caddy provisions a Let's Encrypt cert automatically on first request.
+# Override the domain by setting SITE_ADDRESS in deploy/.env; defaults to
+# the production host. {$VAR:default} is resolved by Caddy at startup.
 
-app.lauureal.xyz {
+{$SITE_ADDRESS:app.lauureal.xyz} {
     reverse_proxy web:3000
     encode gzip
 }

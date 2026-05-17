@@ -51,10 +51,21 @@ function sleep(ms: number): Promise<void> {
 
 async function main() {
   console.log(`[cron] starting, period=${HOURS}h`);
-  // Bootstrap sync is best-effort: a fresh deploy may not have a seeded
-  // user yet, and the web app should still come up so the operator can log in
-  // or seed data without the cron container restart-looping.
-  await runOnce("full");
+  // Bootstrap sync: fail-fast on real infrastructure problems (bad
+  // DATABASE_URL, invalid INTERVALS_API_KEY, network unreachable) so the
+  // operator notices via the container's restart loop. The single exception
+  // is "no user seeded yet" — that's an expected fresh-deploy state, not a
+  // misconfiguration, so log it and let the cron stay up until a user is
+  // created. The next tick will pick the user up automatically.
+  try {
+    await runOnce("full", { rethrow: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes("No user found")) throw err;
+    console.warn(
+      `[cron] bootstrap skipped (${msg}); will retry on next ${HOURS}h tick`,
+    );
+  }
 
   // Sequential awaited delays: a slow sync can never overlap the next tick.
   // Race the sleep against shutdownPromise so SIGTERM/SIGINT can break out

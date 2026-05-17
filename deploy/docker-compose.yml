@@ -82,6 +82,10 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      # Wired into the Caddyfile's {$SITE_ADDRESS:default} placeholder so a
+      # deployer can override the public hostname via deploy/.env.
+      SITE_ADDRESS: ${SITE_ADDRESS:-app.lauureal.xyz}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
