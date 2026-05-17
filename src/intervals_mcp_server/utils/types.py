@@ -156,6 +156,17 @@ def _coerce(val: Any, hint: Any) -> Any:
             return hint(val)
         if is_dataclass(hint):
             return hint.from_dict(val)  # type: ignore[attr-defined]
+        # `Value.value` / `Step.distance` are annotated `float`, but the API
+        # sends bare integers for round numbers. Without this cast, callers see
+        # an `int` where a `float` is declared — sloppy enough on py312 (where
+        # `int.is_integer()` happens to exist) and a real AttributeError on
+        # older runtimes if this code is ever back-ported. Branch explicitly
+        # so mypy can narrow the constructor call.
+        if isinstance(val, (int, float)):
+            if hint is float:
+                return float(val)
+            if hint is int:
+                return int(val)
     return val
 
 

@@ -91,3 +91,27 @@ def test_serialize_recurses_into_nested_dataclass_in_dict():
     """A dataclass tucked inside a dict value should serialise via its to_dict."""
     serialized = _serialize({"target": Value(value=95.0, units=ValueUnits.PERCENT_FTP)})
     assert serialized == {"target": {"value": 95.0, "units": "%ftp"}}
+
+
+# --- numeric coercion ------------------------------------------------------
+
+
+def test_coerce_int_to_float_for_float_hint():
+    """JSON ints must arrive as ``float`` when the field is declared float.
+
+    The Intervals.icu API sends round-number powers/distances as bare ints
+    (e.g. ``"value": 95``). ``Value.value`` is annotated ``float | None``, so
+    callers expect a float. Returning the raw int would violate the type
+    contract and trip downstream ``float``-only helpers (``float_to_str`` calls
+    ``.is_integer()`` which only exists on ``float`` pre-3.12).
+    """
+    value = Value.from_dict({"value": 95, "units": "%ftp"})
+    assert value.value == 95.0
+    assert isinstance(value.value, float)
+
+
+def test_coerce_float_passthrough_for_float_hint():
+    """Floats stay floats — the int branch must not over-cast."""
+    value = Value.from_dict({"value": 95.5, "units": "%ftp"})
+    assert value.value == 95.5
+    assert isinstance(value.value, float)

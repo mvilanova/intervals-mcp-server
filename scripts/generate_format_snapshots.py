@@ -32,9 +32,9 @@ SNAPSHOTS: list[tuple[str, object]] = [
 
 def main() -> None:
     for name, fn in SNAPSHOTS:
-        payload = json.loads((RESOURCES / f"{name}.json").read_text())
+        payload = json.loads((RESOURCES / f"{name}.json").read_text(encoding="utf-8"))
         output_path = RESOURCES / f"{name}_formatted.txt"
-        output_path.write_text(fn(payload))  # type: ignore[operator]
+        output_path.write_text(fn(payload), encoding="utf-8")  # type: ignore[operator]
         print(f"wrote {output_path.relative_to(RESOURCES.parents[1])}")
 
 

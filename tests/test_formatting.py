@@ -224,6 +224,6 @@ def test_formatter_matches_snapshot(fixture_name, fn):
     `uv run python scripts/generate_format_snapshots.py`, inspect the diff,
     then commit both the formatter change and the regenerated fixture.
     """
-    payload = json.loads((_RESOURCES / f"{fixture_name}.json").read_text())
-    expected = (_RESOURCES / f"{fixture_name}_formatted.txt").read_text()
+    payload = json.loads((_RESOURCES / f"{fixture_name}.json").read_text(encoding="utf-8"))
+    expected = (_RESOURCES / f"{fixture_name}_formatted.txt").read_text(encoding="utf-8")
     assert fn(payload) == expected
