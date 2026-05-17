@@ -22,27 +22,47 @@ os.environ.setdefault("ATHLETE_ID", "i1")
 
 @pytest.fixture
 def patch_request(monkeypatch):
-    """Patch `make_intervals_request` in both `api.client` and a tools module.
-
-    Every test in `test_server.py` needs the same dual monkeypatch: the
-    function is imported into `intervals_mcp_server.api.client` and then
-    re-bound into each `intervals_mcp_server.tools.<module>` namespace.
-    Patching only the source leaves the tool's bound reference stale.
-
-    Usage:
-        captured = patch_request(payload, "activities")
-        result = asyncio.run(get_activities(...))
-        assert captured["kwargs"]["method"] == "POST"
-
-    The returned dict is populated on every call with the most recent
-    positional `args` and keyword `kwargs`; tests that don't care about
-    the call shape can ignore the return value.
+    """
+    Create a test helper that patches `make_intervals_request` in
+    `intervals_mcp_server.api.client` and, when requested, in
+    `intervals_mcp_server.tools.<module>`.
+    
+    The fixture returns a callable `_patch(payload, tool_module=None)` that:
+    - Installs an async replacement which returns the provided `payload` when called.
+    - Records the most recent call's positional arguments under `captured["args"]`
+      and keyword arguments under `captured["kwargs"]`, and returns that `captured` dict.
+    
+    Returns:
+        _patch (callable): Function with signature `_patch(payload, tool_module=None) -> dict[str, Any]`.
     """
 
     def _patch(payload: Any, tool_module: str | None = None) -> dict[str, Any]:
+        """
+        Create and install a fake `make_intervals_request` that records its last call and returns the provided payload.
+        
+        Parameters:
+            payload (Any): The value to return when the fake `make_intervals_request` is invoked.
+            tool_module (str | None): Optional tool module name; when provided, also patches
+                `intervals_mcp_server.tools.<tool_module>.make_intervals_request`.
+        
+        Returns:
+            dict[str, Any]: A `captured` dictionary updated on each invocation with:
+                - `args`: tuple of positional arguments from the last call.
+                - `kwargs`: dict of keyword arguments from the last call.
+        """
         captured: dict[str, Any] = {}
 
         async def fake(*args, **kwargs):
+            """
+            Record the latest call's positional and keyword arguments into the enclosing `captured` dict and return the preset payload.
+            
+            Parameters:
+                *args: Positional arguments passed by the caller; stored in `captured["args"]`.
+                **kwargs: Keyword arguments passed by the caller; stored in `captured["kwargs"]`.
+            
+            Returns:
+                The original `payload` value supplied to the surrounding patch helper.
+            """
             captured["args"] = args
             captured["kwargs"] = kwargs
             return payload

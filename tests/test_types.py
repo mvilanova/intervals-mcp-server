@@ -97,13 +97,10 @@ def test_serialize_recurses_into_nested_dataclass_in_dict():
 
 
 def test_coerce_int_to_float_for_float_hint():
-    """JSON ints must arrive as ``float`` when the field is declared float.
-
-    The Intervals.icu API sends round-number powers/distances as bare ints
-    (e.g. ``"value": 95``). ``Value.value`` is annotated ``float | None``, so
-    callers expect a float. Returning the raw int would violate the type
-    contract and trip downstream ``float``-only helpers (``float_to_str`` calls
-    ``.is_integer()`` which only exists on ``float`` pre-3.12).
+    """
+    Ensure integers from JSON are converted to the expected numeric representation for fields annotated as float.
+    
+    This test verifies that constructing a Value from JSON with an integer `value` yields a Python float (e.g., `95` -> `95.0`) so downstream float-only helpers operate correctly.
     """
     value = Value.from_dict({"value": 95, "units": "%ftp"})
     assert value.value == 95.0

@@ -218,11 +218,15 @@ def test_format_intervals():
     ],
 )
 def test_formatter_matches_snapshot(fixture_name, fn):
-    """Pin each formatter's exact output against a stored fixture.
-
-    To intentionally change formatter output, run
-    `uv run python scripts/generate_format_snapshots.py`, inspect the diff,
-    then commit both the formatter change and the regenerated fixture.
+    """
+    Verify a formatter's output matches the stored snapshot for a given fixture.
+    
+    Parameters:
+        fixture_name (str): Base name of the fixture files (JSON input and expected formatted text).
+        fn (Callable): Formatter function that accepts the loaded JSON payload and returns the formatted string.
+    
+    Notes:
+        Asserts exact equality between the formatter's output and the snapshot file.
     """
     payload = json.loads((_RESOURCES / f"{fixture_name}.json").read_text(encoding="utf-8"))
     expected = (_RESOURCES / f"{fixture_name}_formatted.txt").read_text(encoding="utf-8")
