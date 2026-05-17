@@ -34,7 +34,8 @@ async function loadSummary(userId: string, date: Date): Promise<LoadedSummary> {
       error: null,
       generatedRelative: relativeFromNow(summary.generatedAt, Date.now()),
     };
-  } catch {
+  } catch (err) {
+    console.error("[DailySummaryCard] generation failed:", err);
     return {
       summary: null,
       error: "Couldn't generate summary — try refresh.",

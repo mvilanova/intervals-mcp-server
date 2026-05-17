@@ -102,4 +102,4 @@ See [`./.env.example`](./.env.example) for local dev and [`../deploy/.env.exampl
 - `DASHBOARD_PIN`
 - `SESSION_SECRET` (32+ chars, generated with `openssl rand -hex 32`)
 - `INTERVALS_API_KEY` + `INTERVALS_ATHLETE_ID` — needed for the sync (cron sidecar + `/admin/sync`); the app boots without them but the sync route will refuse to run
-- `ANTHROPIC_API_KEY` — optional. When set, the today view shows a one-paragraph AI summary at the top (cached per-day in the `DailySummary` table, refreshable from the card). Leave blank to hide the card entirely.
+- `ANTHROPIC_API_KEY` — optional, and a privacy decision: when set, each daily summary sends that day's metrics (training load, recovery numbers, weight, meal-log statuses) to Anthropic to generate a one-paragraph readout shown at the top of `/`. The text is cached per-day in the `DailySummary` table and only regenerated when you click Refresh. Leave blank to hide the card entirely and keep all health data local.
