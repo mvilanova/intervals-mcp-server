@@ -38,10 +38,13 @@ async function runOnce(mode: "full" | "recent", { rethrow = false } = {}) {
     );
     for (const err of result.errors) console.error(`[cron] error: ${err}`);
   } catch (err) {
+    // When rethrowing, let the caller decide how to classify (e.g. the
+    // bootstrap path downgrades NoUserFoundError to a warning). Logging
+    // "fatal" here too would produce a misleading contradictory pair.
+    if (rethrow) throw err;
     console.error(
       `[cron] ${startedAt.toISOString()} fatal: ${err instanceof Error ? err.message : String(err)}`,
     );
-    if (rethrow) throw err;
   }
 }
 
