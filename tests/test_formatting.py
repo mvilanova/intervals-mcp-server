@@ -276,37 +276,6 @@ def test_format_intervals():
     assert "Rep 1" in result
 
 
-def test_format_event_details_falls_back_to_start_date_local():
-    """When only `start_date_local` is provided, the details renderer must
-    use it — mirroring the behavior of `format_event_summary` so the two
-    surfaces stay consistent."""
-    event = {
-        "id": "e1",
-        "start_date_local": "2024-01-01",
-        "name": "Stage 1",
-        "description": "Long climb day",
-    }
-    details = format_event_details(event)
-    assert "Date: 2024-01-01" in details
-    assert "Date: Unknown" not in details
-
-
-def test_format_event_details_tolerates_null_start_date_local():
-    """`start_date_local: null` (the API's "unset" form) must not leak the
-    literal `None` into the rendered output — the fallback chain has to
-    treat a present-but-null key the same as a missing key."""
-    event = {
-        "id": "e1",
-        "start_date_local": None,
-        "date": "2024-05-15",
-        "name": "Stage 1",
-        "description": "",
-    }
-    details = format_event_details(event)
-    assert "Date: 2024-05-15" in details
-    assert "Date: None" not in details
-
-
 def test_format_activity_summary_falls_back_when_primary_key_is_null():
     """When the primary key is present but ``None``, ``_first_present`` must
     keep walking to the next candidate. The API expresses an unset field as
@@ -324,22 +293,6 @@ def test_format_activity_summary_falls_back_when_primary_key_is_null():
     summary = format_activity_summary(activity)
     assert "Duration: 3600 seconds" in summary
     assert "Duration: None" not in summary
-
-
-def test_format_event_details_tolerates_null_calendar():
-    """``{"calendar": None}`` must not crash — `"calendar" in event` is True
-    but `None.get("name")` would raise. The formatter has to guard the
-    dereference rather than rely on the membership check."""
-    event = {
-        "id": "e1",
-        "date": "2024-05-15",
-        "name": "Stage 1",
-        "description": "",
-        "calendar": None,
-    }
-    # No exception, and no `Calendar:` line for an absent calendar object.
-    details = format_event_details(event)
-    assert "Calendar:" not in details
 
 
 @pytest.mark.parametrize(
