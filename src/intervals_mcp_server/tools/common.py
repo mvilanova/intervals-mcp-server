@@ -3,6 +3,7 @@
 from typing import Any, TypeGuard
 
 from intervals_mcp_server.config import get_config
+from intervals_mcp_server.models import IntervalsError
 from intervals_mcp_server.utils.validation import resolve_athlete_id
 
 
@@ -31,3 +32,12 @@ def format_tool_error(action: str, result: dict[str, Any]) -> str:
     """
     error_message = result.get("message", "Unknown error")
     return f"Error {action}: {error_message}"
+
+
+def parse_error_result(result: dict[str, Any]) -> IntervalsError:
+    """Convert a make_intervals_request error dict into a typed IntervalsError.
+
+    Callers that need structured access to error fields (e.g. status_code)
+    can use this instead of probing the raw dict directly.
+    """
+    return IntervalsError.from_dict(result)

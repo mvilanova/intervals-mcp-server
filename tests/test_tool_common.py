@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from intervals_mcp_server.models import IntervalsError
 from intervals_mcp_server.tools.common import (
     format_tool_error,
     is_error_result,
+    parse_error_result,
     resolve_tool_context,
 )
 
@@ -48,6 +50,26 @@ class TestFormatToolError:
         result = {"error": True, "message": "bad request"}
         output = format_tool_error("updating custom item", result)
         assert output.startswith("Error updating custom item:")
+
+
+class TestParseErrorResult:
+    def test_full_error_dict(self):
+        err = parse_error_result({"error": True, "status_code": 404, "message": "Not found"})
+        assert isinstance(err, IntervalsError)
+        assert err.status_code == 404
+        assert err.message == "Not found"
+
+    def test_minimal_error_dict_uses_defaults(self):
+        err = parse_error_result({"error": True})
+        assert err.message == "Unknown error"
+        assert err.status_code is None
+
+    def test_typed_access_replaces_dict_probing(self):
+        raw = {"error": True, "status_code": 401, "message": "Unauthorized"}
+        err = parse_error_result(raw)
+        # Access err.message directly instead of raw.get("message", "Unknown error")
+        assert err.message == "Unauthorized"
+        assert err.error is True
 
 
 class TestResolveToolContext:
