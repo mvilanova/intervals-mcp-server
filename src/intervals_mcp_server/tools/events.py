@@ -8,57 +8,14 @@ import json
 from datetime import datetime
 from typing import Any
 
-from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
 from intervals_mcp_server.utils.formatting import format_event_details, format_event_summary
 from intervals_mcp_server.utils.types import WorkoutDoc
-from intervals_mcp_server.utils.validation import validate_date
 from intervals_mcp_server.tools.common import format_tool_error, is_error_result, resolve_tool_context
+import intervals_mcp_server.services.events as events_service
 
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
-
-
-def _resolve_workout_type(name: str | None, workout_type: str | None) -> str:
-    """Determine the workout type based on the name and provided value."""
-    if workout_type:
-        return workout_type
-    name_lower = name.lower() if name else ""
-    mapping = [
-        ("Ride", ["bike", "cycle", "cycling", "ride"]),
-        ("Run", ["run", "running", "jog", "jogging"]),
-        ("Swim", ["swim", "swimming", "pool"]),
-        ("Walk", ["walk", "walking", "hike", "hiking"]),
-        ("Row", ["row", "rowing"]),
-    ]
-    for workout, keywords in mapping:
-        if any(keyword in name_lower for keyword in keywords):
-            return workout
-    return "Ride"  # Default
-
-
-def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-positional-arguments
-    name: str,
-    workout_type: str,
-    start_date: str,
-    workout_doc: WorkoutDoc | None,
-    moving_time: int | None,
-    distance: int | None,
-) -> dict[str, Any]:
-    """Prepare event data dictionary for API request.
-
-    Many arguments are required to match the Intervals.icu API event structure.
-    """
-    resolved_workout_type = _resolve_workout_type(name, workout_type)
-    return {
-        "start_date_local": start_date + "T00:00:00",
-        "category": "WORKOUT",
-        "name": name,
-        "description": str(workout_doc) if workout_doc else None,
-        "type": resolved_workout_type,
-        "moving_time": moving_time,
-        "distance": distance,
-    }
 
 
 def _handle_event_response(
@@ -67,7 +24,6 @@ def _handle_event_response(
     athlete_id: str,
     start_date: str,
 ) -> str:
-    """Handle API response and format appropriate message."""
     if is_error_result(result):
         return format_tool_error(f"{action} event", result)
     if not result:
@@ -75,31 +31,6 @@ def _handle_event_response(
     if isinstance(result, dict):
         return f"Successfully {action} event id: {result.get('id')}"
     return f"Event {action} successfully at {start_date}"
-
-
-async def _delete_events_list(
-    athlete_id: str, api_key: str | None, events: list[dict[str, Any]]
-) -> list[int | str | None]:
-    """Delete a list of events and return IDs of failed deletions.
-
-    Args:
-        athlete_id: The athlete ID.
-        api_key: Optional API key.
-        events: List of event dictionaries to delete.
-
-    Returns:
-        List of event IDs that failed to delete.
-    """
-    failed_events: list[int | str | None] = []
-    for event in events:
-        result = await make_intervals_request(
-            url=f"/athlete/{athlete_id}/events/{event.get('id')}",
-            api_key=api_key,
-            method="DELETE",
-        )
-        if is_error_result(result):
-            failed_events.append(event.get("id"))
-    return failed_events
 
 
 @mcp.tool()
@@ -117,34 +48,24 @@ async def get_events(
         start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
         end_date: End date in YYYY-MM-DD format (optional, defaults to 30 days from today)
     """
-    # Resolve athlete ID
     athlete_id_to_use, api_key, error_msg = resolve_tool_context(athlete_id, api_key)
     if error_msg:
         return error_msg
 
-    # Parse date parameters (events use different defaults)
     if not start_date:
         start_date = get_default_end_date()
     if not end_date:
         end_date = get_default_future_end_date()
 
-    # Call the Intervals.icu API
-    params = {"oldest": start_date, "newest": end_date}
-
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/events", api_key=api_key, params=params
-    )
+    result = await events_service.list_events(athlete_id_to_use, api_key, start_date, end_date)
 
     if is_error_result(result):
         return format_tool_error("fetching events", result)
 
-    # Format the response
     if not result:
         return f"No events found for athlete {athlete_id_to_use} in the specified date range."
 
-    # Ensure result is a list
     events = result if isinstance(result, list) else []
-
     if not events:
         return f"No events found for athlete {athlete_id_to_use} in the specified date range."
 
@@ -152,9 +73,7 @@ async def get_events(
     for event in events:
         if not isinstance(event, dict):
             continue
-
         events_summary += format_event_summary(event) + "\n\n"
-
     return events_summary
 
 
@@ -171,20 +90,15 @@ async def get_event_by_id(
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
-    # Resolve athlete ID
     athlete_id_to_use, api_key, error_msg = resolve_tool_context(athlete_id, api_key)
     if error_msg:
         return error_msg
 
-    # Call the Intervals.icu API
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/event/{event_id}", api_key=api_key
-    )
+    result = await events_service.get_event(event_id, athlete_id_to_use, api_key)
 
     if is_error_result(result):
         return format_tool_error("fetching event details", result)
 
-    # Format the response
     if not result:
         return f"No details found for event {event_id}."
 
@@ -211,36 +125,10 @@ async def delete_event(
         return error_msg
     if not event_id:
         return "Error: No event ID provided."
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key, method="DELETE"
-    )
+    result = await events_service.delete_single_event(event_id, athlete_id_to_use, api_key)
     if is_error_result(result):
         return format_tool_error("deleting event", result)
     return json.dumps(result, indent=2)
-
-
-async def _fetch_events_for_deletion(
-    athlete_id: str, api_key: str | None, start_date: str, end_date: str
-) -> tuple[list[dict[str, Any]], str | None]:
-    """Fetch events for deletion and return them with any error message.
-
-    Args:
-        athlete_id: The athlete ID.
-        api_key: Optional API key.
-        start_date: Start date in YYYY-MM-DD format.
-        end_date: End date in YYYY-MM-DD format.
-
-    Returns:
-        Tuple of (events_list, error_message). error_message is None if successful.
-    """
-    params = {"oldest": validate_date(start_date), "newest": validate_date(end_date)}
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id}/events", api_key=api_key, params=params
-    )
-    if is_error_result(result):
-        return [], format_tool_error("deleting events", result)
-    events = result if isinstance(result, list) else []
-    return events, None
 
 
 @mcp.tool()
@@ -262,14 +150,13 @@ async def delete_events_by_date_range(
     if error_msg:
         return error_msg
 
-    events, error_msg = await _fetch_events_for_deletion(
+    result = await events_service.delete_events_in_range(
         athlete_id_to_use, api_key, start_date, end_date
     )
-    if error_msg:
-        return error_msg
+    if is_error_result(result):
+        return format_tool_error("deleting events", result)
 
-    failed_events = await _delete_events_list(athlete_id_to_use, api_key, events)
-    deleted_count = len(events) - len(failed_events)
+    deleted_count, failed_events = result  # type: ignore[misc]
     return f"Deleted {deleted_count} events. Failed to delete {len(failed_events)} events: {failed_events}"
 
 
@@ -358,43 +245,13 @@ async def add_or_update_event(  # noqa: PLR0913 — MCP tool maps directly to In
         start_date = datetime.now().strftime("%Y-%m-%d")
 
     try:
-        event_data = _prepare_event_data(
+        event_data = events_service.prepare_event_data(
             name, workout_type, start_date, workout_doc, moving_time, distance
         )
-        return await _create_or_update_event_request(
-            athlete_id_to_use, api_key, event_data, start_date, event_id
+        result = await events_service.create_or_update_event(
+            athlete_id_to_use, api_key, event_data, event_id
         )
+        action = "updated" if event_id else "created"
+        return _handle_event_response(result, action, athlete_id_to_use, start_date)
     except ValueError as e:
         return f"Error: {e}"
-
-
-async def _create_or_update_event_request(
-    athlete_id: str,
-    api_key: str | None,
-    event_data: dict[str, Any],
-    start_date: str,
-    event_id: str | None,
-) -> str:
-    """Create or update an event via API request.
-
-    Args:
-        athlete_id: The athlete ID.
-        api_key: Optional API key.
-        event_data: Prepared event data dictionary.
-        start_date: Start date string for response formatting.
-        event_id: Optional event ID for updates.
-
-    Returns:
-        Formatted response string.
-    """
-    url = f"/athlete/{athlete_id}/events"
-    if event_id:
-        url += f"/{event_id}"
-    result = await make_intervals_request(
-        url=url,
-        api_key=api_key,
-        data=event_data,
-        method="PUT" if event_id else "POST",
-    )
-    action = "updated" if event_id else "created"
-    return _handle_event_response(result, action, athlete_id, start_date)

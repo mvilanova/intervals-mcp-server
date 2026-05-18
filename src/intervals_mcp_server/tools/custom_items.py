@@ -7,9 +7,9 @@ This module contains tools for managing athlete custom items (charts, fields, zo
 import json
 from typing import Any
 
-from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.utils.formatting import format_custom_item_details
 from intervals_mcp_server.tools.common import format_tool_error, is_error_result, resolve_tool_context
+import intervals_mcp_server.services.custom_items as custom_items_service
 
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
@@ -30,9 +30,7 @@ async def get_custom_items(
     if error_msg:
         return error_msg
 
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/custom-item", api_key=api_key
-    )
+    result = await custom_items_service.list_custom_items(athlete_id_to_use, api_key)
 
     if is_error_result(result):
         return format_tool_error("fetching custom items", result)
@@ -69,9 +67,7 @@ async def get_custom_item_by_id(
     if error_msg:
         return error_msg
 
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/custom-item/{item_id}", api_key=api_key
-    )
+    result = await custom_items_service.get_custom_item(item_id, athlete_id_to_use, api_key)
 
     if is_error_result(result):
         return format_tool_error("fetching custom item", result)
@@ -122,12 +118,7 @@ async def create_custom_item(
     if visibility is not None:
         data["visibility"] = visibility
 
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/custom-item",
-        api_key=api_key,
-        data=data,
-        method="POST",
-    )
+    result = await custom_items_service.create_custom_item(athlete_id_to_use, api_key, data)
 
     if is_error_result(result):
         return format_tool_error("creating custom item", result)
@@ -184,11 +175,8 @@ async def update_custom_item(
     if visibility is not None:
         data["visibility"] = visibility
 
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/custom-item/{item_id}",
-        api_key=api_key,
-        data=data,
-        method="PUT",
+    result = await custom_items_service.update_custom_item(
+        item_id, athlete_id_to_use, api_key, data
     )
 
     if is_error_result(result):
@@ -217,11 +205,7 @@ async def delete_custom_item(
     if error_msg:
         return error_msg
 
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/custom-item/{item_id}",
-        api_key=api_key,
-        method="DELETE",
-    )
+    result = await custom_items_service.delete_custom_item(item_id, athlete_id_to_use, api_key)
 
     if is_error_result(result):
         return format_tool_error("deleting custom item", result)
