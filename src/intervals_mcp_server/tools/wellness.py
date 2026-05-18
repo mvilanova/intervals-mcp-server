@@ -4,6 +4,7 @@ Wellness-related MCP tools for Intervals.icu.
 This module contains tools for retrieving athlete wellness data.
 """
 
+from intervals_mcp_server.models import WellnessEntry
 from intervals_mcp_server.utils.formatting import format_wellness_entry
 from intervals_mcp_server.utils.validation import resolve_date_params
 from intervals_mcp_server.tools.common import format_tool_error, is_error_result, resolve_tool_context
@@ -53,16 +54,19 @@ async def get_wellness_data(
     if isinstance(result, dict):
         for date_str, data in result.items():
             if isinstance(data, dict):
-                if "date" not in data:
-                    data["date"] = date_str
+                entry = WellnessEntry.from_dict(data)
+                # Inject the loop key as id when the entry lacks one so the
+                # formatter has a usable date label (formatter reads 'id', not 'date').
+                if entry.id is None:
+                    data["id"] = date_str
                 wellness_summary += (
                     format_wellness_entry(data, include_all_fields=include_all_fields) + "\n\n"
                 )
     elif isinstance(result, list):
-        for entry in result:
-            if isinstance(entry, dict):
+        for item in result:
+            if isinstance(item, dict):
                 wellness_summary += (
-                    format_wellness_entry(entry, include_all_fields=include_all_fields) + "\n\n"
+                    format_wellness_entry(item, include_all_fields=include_all_fields) + "\n\n"
                 )
 
     return wellness_summary
