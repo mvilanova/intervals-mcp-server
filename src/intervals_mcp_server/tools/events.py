@@ -305,6 +305,55 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
         workout_type: Workout type (e.g. Ride, Run, Swim, Walk, Row)
         moving_time: Total expected moving time of the workout in seconds (optional)
         distance: Total expected distance of the workout in meters (optional)
+
+    Example:
+        "workout_doc": {
+            "description": "High-intensity workout for increasing VO2 max",
+            "steps": [
+                {"power": {"value": 80, "units": "%ftp"}, "duration": 900, "warmup": true},
+                {"reps": 2, "text": "High-intensity intervals", "steps": [
+                    {"power": {"value": 110, "units": "%ftp"}, "distance": 500, "text": "High-intensity"},
+                    {"power": {"value": 80, "units": "%ftp"}, "duration": 90, "text": "Recovery"}
+                ]},
+                {"power": {"value": 80, "units": "%ftp"}, "duration": 600, "cooldown": true},
+                {"text": ""}
+            ]
+        }
+
+    Step properties:
+        distance: Distance of step in meters
+            {"distance": 5000}
+        duration: Duration of step in seconds
+            {"duration": 1800}
+        power/hr/pace/cadence: Define step intensity
+            Percentage of FTP: {"power": {"value": 80, "units": "%ftp"}}
+            Absolute power: {"power": {"value": 200, "units": "w"}}
+            Heart rate: {"hr": {"value": 75, "units": "%hr"}}
+            Heart rate (LTHR): {"hr": {"value": 85, "units": "%lthr"}}
+            Cadence: {"cadence": {"value": 90, "units": "cadence"}}
+            Pace by ftp: {"pace": {"value": 80, "units": "%pace"}}
+            Pace by zone: {"pace": {"value": 2, "units": "pace_zone"}}
+            Zone by power: {"power": {"value": 2, "units": "power_zone"}}
+            Zone by heart rate: {"hr": {"value": 2, "units": "hr_zone"}}
+        Ranges: Specify ranges for power, heart rate, or cadence:
+            {"power": {"start": 80, "end": 90, "units": "%ftp"}}
+        Ramps: Instead of a range, indicate a gradual change in intensity (useful for ERG workouts):
+            {"ramp": true, "power": {"start": 80, "end": 90, "units": "%ftp"}}
+        Repeats: include the reps property and add nested steps
+            {"reps": 3,
+             "steps": [
+                {"power": {"value": 110, "units": "%ftp"}, "distance": 500, "text": "High-intensity"},
+                {"power": {"value": 80, "units": "%ftp"}, "duration": 90, "text": "Recovery"}
+            ]}
+        Free Ride: Include freeride to indicate a segment without ERG control, optionally with a suggested power range:
+            {"freeride": true, "power": {"value": 80, "units": "%ftp"}}
+        Comments and Labels: Add descriptive text to label steps:
+            {"text": "Warmup"}
+
+    How to use steps:
+    - Set distance or duration as appropriate for step
+    - Use "reps" with nested steps to define repeat intervals (as in example above)
+    - Define one of "power", "hr" or "pace" to define step intensity
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
@@ -314,18 +363,19 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
         start_date = datetime.now().strftime("%Y-%m-%d")
 
     try:
+        validated_date = validate_date(start_date)
         event_data = _prepare_event_data(
-            name, workout_type, start_date, workout_doc, moving_time, distance
+            name, workout_type, validated_date, workout_doc, moving_time, distance
         )
         return await _create_or_update_event_request(
-            athlete_id_to_use, api_key, event_data, start_date, event_id
+            athlete_id_to_use, api_key, event_data, validated_date, event_id
         )
     except ValueError as e:
         return f"Error: {e}"
 
 
 @mcp.tool()
-async def add_note(
+async def add_or_update_note(
     name: str,
     description: str,
     start_date: str | None = None,
@@ -352,17 +402,21 @@ async def add_note(
     if not start_date:
         start_date = datetime.now().strftime("%Y-%m-%d")
 
-    event_data = {
-        "category": "NOTE",
-        "name": name,
-        "description": description,
-        "start_date_local": start_date + "T00:00:00",
-        "color": color
-    }
+    try:
+        validated_date = validate_date(start_date)
+        event_data = {
+            "category": "NOTE",
+            "name": name,
+            "description": description,
+            "start_date_local": validated_date + "T00:00:00",
+            "color": color
+        }
 
-    return await _create_or_update_event_request(
-        athlete_id_to_use, api_key, event_data, start_date, event_id
-    )
+        return await _create_or_update_event_request(
+            athlete_id_to_use, api_key, event_data, validated_date, event_id
+        )
+    except ValueError as e:
+        return f"Error: {e}"
 
 
 async def _create_or_update_event_request(
