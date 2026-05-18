@@ -8,14 +8,11 @@ import json
 from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
-from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import format_custom_item_details
-from intervals_mcp_server.utils.validation import resolve_athlete_id
+from intervals_mcp_server.tools.common import format_tool_error, is_error_result, resolve_tool_context
 
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
-
-config = get_config()
 
 
 @mcp.tool()
@@ -29,7 +26,7 @@ async def get_custom_items(
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    athlete_id_to_use, api_key, error_msg = resolve_tool_context(athlete_id, api_key)
     if error_msg:
         return error_msg
 
@@ -37,8 +34,8 @@ async def get_custom_items(
         url=f"/athlete/{athlete_id_to_use}/custom-item", api_key=api_key
     )
 
-    if isinstance(result, dict) and "error" in result:
-        return f"Error fetching custom items: {result.get('message')}"
+    if is_error_result(result):
+        return format_tool_error("fetching custom items", result)
 
     if not result:
         return f"No custom items found for athlete {athlete_id_to_use}."
@@ -68,7 +65,7 @@ async def get_custom_item_by_id(
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    athlete_id_to_use, api_key, error_msg = resolve_tool_context(athlete_id, api_key)
     if error_msg:
         return error_msg
 
@@ -76,8 +73,8 @@ async def get_custom_item_by_id(
         url=f"/athlete/{athlete_id_to_use}/custom-item/{item_id}", api_key=api_key
     )
 
-    if isinstance(result, dict) and "error" in result:
-        return f"Error fetching custom item: {result.get('message')}"
+    if is_error_result(result):
+        return format_tool_error("fetching custom item", result)
 
     if not result or not isinstance(result, dict):
         return f"No custom item found with ID {item_id}."
@@ -108,7 +105,7 @@ async def create_custom_item(
             - "aggregate" field: must be "MIN", "SUM", "MAX", or "AVERAGE" (NOT "AVG")
         visibility: Visibility setting: PRIVATE, FOLLOWERS, or PUBLIC (optional)
     """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    athlete_id_to_use, api_key, error_msg = resolve_tool_context(athlete_id, api_key)
     if error_msg:
         return error_msg
 
@@ -132,8 +129,8 @@ async def create_custom_item(
         method="POST",
     )
 
-    if isinstance(result, dict) and "error" in result:
-        return f"Error creating custom item: {result.get('message')}"
+    if is_error_result(result):
+        return format_tool_error("creating custom item", result)
 
     if not result or not isinstance(result, dict):
         return "Error: Unexpected response when creating custom item."
@@ -166,7 +163,7 @@ async def update_custom_item(
             - "aggregate" field: must be "MIN", "SUM", "MAX", or "AVERAGE" (NOT "AVG")
         visibility: New visibility setting: PRIVATE, FOLLOWERS, or PUBLIC (optional)
     """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    athlete_id_to_use, api_key, error_msg = resolve_tool_context(athlete_id, api_key)
     if error_msg:
         return error_msg
 
@@ -194,8 +191,8 @@ async def update_custom_item(
         method="PUT",
     )
 
-    if isinstance(result, dict) and "error" in result:
-        return f"Error updating custom item: {result.get('message')}"
+    if is_error_result(result):
+        return format_tool_error("updating custom item", result)
 
     if not result or not isinstance(result, dict):
         return "Error: Unexpected response when updating custom item."
@@ -216,7 +213,7 @@ async def delete_custom_item(
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    athlete_id_to_use, api_key, error_msg = resolve_tool_context(athlete_id, api_key)
     if error_msg:
         return error_msg
 
@@ -226,7 +223,7 @@ async def delete_custom_item(
         method="DELETE",
     )
 
-    if isinstance(result, dict) and "error" in result:
-        return f"Error deleting custom item: {result.get('message')}"
+    if is_error_result(result):
+        return format_tool_error("deleting custom item", result)
 
     return f"Successfully deleted custom item {item_id}."

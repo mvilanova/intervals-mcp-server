@@ -5,14 +5,12 @@ This module contains tools for retrieving athlete wellness data.
 """
 
 from intervals_mcp_server.api.client import make_intervals_request
-from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import format_wellness_entry
-from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
+from intervals_mcp_server.utils.validation import resolve_date_params
+from intervals_mcp_server.tools.common import format_tool_error, is_error_result, resolve_tool_context
 
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
-
-config = get_config()
 
 
 @mcp.tool()
@@ -36,7 +34,7 @@ async def get_wellness_data(
         end_date: End date in YYYY-MM-DD format (optional, defaults to today)
         include_all_fields: If True, include additional and custom fields beyond the standard set (optional, defaults to False)
     """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    athlete_id_to_use, api_key, error_msg = resolve_tool_context(athlete_id, api_key)
     if error_msg:
         return error_msg
 
@@ -48,8 +46,8 @@ async def get_wellness_data(
         url=f"/athlete/{athlete_id_to_use}/wellness", api_key=api_key, params=params
     )
 
-    if isinstance(result, dict) and "error" in result:
-        return f"Error fetching wellness data: {result.get('message')}"
+    if is_error_result(result):
+        return format_tool_error("fetching wellness data", result)
 
     if not result:
         return (

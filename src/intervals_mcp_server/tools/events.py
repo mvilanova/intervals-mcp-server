@@ -9,16 +9,14 @@ from datetime import datetime
 from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
-from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
 from intervals_mcp_server.utils.formatting import format_event_details, format_event_summary
 from intervals_mcp_server.utils.types import WorkoutDoc
-from intervals_mcp_server.utils.validation import resolve_athlete_id, validate_date
+from intervals_mcp_server.utils.validation import validate_date
+from intervals_mcp_server.tools.common import format_tool_error, is_error_result, resolve_tool_context
 
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
-
-config = get_config()
 
 
 def _resolve_workout_type(name: str | None, workout_type: str | None) -> str:
@@ -70,9 +68,8 @@ def _handle_event_response(
     start_date: str,
 ) -> str:
     """Handle API response and format appropriate message."""
-    if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error {action} event: {error_message}"
+    if is_error_result(result):
+        return format_tool_error(f"{action} event", result)
     if not result:
         return f"No events {action} for athlete {athlete_id}."
     if isinstance(result, dict):
@@ -100,7 +97,7 @@ async def _delete_events_list(
             api_key=api_key,
             method="DELETE",
         )
-        if isinstance(result, dict) and "error" in result:
+        if is_error_result(result):
             failed_events.append(event.get("id"))
     return failed_events
 
@@ -121,7 +118,7 @@ async def get_events(
         end_date: End date in YYYY-MM-DD format (optional, defaults to 30 days from today)
     """
     # Resolve athlete ID
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    athlete_id_to_use, api_key, error_msg = resolve_tool_context(athlete_id, api_key)
     if error_msg:
         return error_msg
 
@@ -138,9 +135,8 @@ async def get_events(
         url=f"/athlete/{athlete_id_to_use}/events", api_key=api_key, params=params
     )
 
-    if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error fetching events: {error_message}"
+    if is_error_result(result):
+        return format_tool_error("fetching events", result)
 
     # Format the response
     if not result:
@@ -176,7 +172,7 @@ async def get_event_by_id(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
     # Resolve athlete ID
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    athlete_id_to_use, api_key, error_msg = resolve_tool_context(athlete_id, api_key)
     if error_msg:
         return error_msg
 
@@ -185,9 +181,8 @@ async def get_event_by_id(
         url=f"/athlete/{athlete_id_to_use}/event/{event_id}", api_key=api_key
     )
 
-    if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error fetching event details: {error_message}"
+    if is_error_result(result):
+        return format_tool_error("fetching event details", result)
 
     # Format the response
     if not result:
@@ -211,7 +206,7 @@ async def delete_event(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         event_id: The Intervals.icu event ID
     """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    athlete_id_to_use, api_key, error_msg = resolve_tool_context(athlete_id, api_key)
     if error_msg:
         return error_msg
     if not event_id:
@@ -219,8 +214,8 @@ async def delete_event(
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key, method="DELETE"
     )
-    if isinstance(result, dict) and "error" in result:
-        return f"Error deleting event: {result.get('message')}"
+    if is_error_result(result):
+        return format_tool_error("deleting event", result)
     return json.dumps(result, indent=2)
 
 
@@ -242,8 +237,8 @@ async def _fetch_events_for_deletion(
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id}/events", api_key=api_key, params=params
     )
-    if isinstance(result, dict) and "error" in result:
-        return [], f"Error deleting events: {result.get('message')}"
+    if is_error_result(result):
+        return [], format_tool_error("deleting events", result)
     events = result if isinstance(result, list) else []
     return events, None
 
@@ -263,7 +258,7 @@ async def delete_events_by_date_range(
         start_date: Start date in YYYY-MM-DD format
         end_date: End date in YYYY-MM-DD format
     """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    athlete_id_to_use, api_key, error_msg = resolve_tool_context(athlete_id, api_key)
     if error_msg:
         return error_msg
 
@@ -355,7 +350,7 @@ async def add_or_update_event(  # noqa: PLR0913 — MCP tool maps directly to In
         - Use "reps" with nested steps to define repeat intervals (as in example above)
         - Define one of "power", "hr" or "pace" to define step intensity
     """
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    athlete_id_to_use, api_key, error_msg = resolve_tool_context(athlete_id, api_key)
     if error_msg:
         return error_msg
 
