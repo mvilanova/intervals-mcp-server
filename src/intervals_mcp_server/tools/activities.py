@@ -8,18 +8,16 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
-from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import (
     format_activity_message,
     format_activity_summary,
     format_intervals,
 )
-from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
+from intervals_mcp_server.utils.validation import resolve_date_params
+from intervals_mcp_server.tools.common import format_tool_error, is_error_result, resolve_tool_context
 
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
-
-config = get_config()
 
 
 def _parse_activities_from_result(result: Any) -> list[dict[str, Any]]:
@@ -124,7 +122,7 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
         include_unnamed: Whether to include unnamed activities (optional, defaults to False)
     """
     # Resolve athlete ID and date parameters
-    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    athlete_id_to_use, api_key, error_msg = resolve_tool_context(athlete_id, api_key)
     if error_msg:
         return error_msg
 
@@ -140,9 +138,8 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     )
 
     # Check for error
-    if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error fetching activities: {error_message}"
+    if is_error_result(result):
+        return format_tool_error("fetching activities", result)
 
     if not result:
         return f"No activities found for athlete {athlete_id_to_use} in the specified date range."
@@ -181,9 +178,8 @@ async def get_activity_details(activity_id: str, api_key: str | None = None) -> 
     # Call the Intervals.icu API
     result = await make_intervals_request(url=f"/activity/{activity_id}", api_key=api_key)
 
-    if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error fetching activity details: {error_message}"
+    if is_error_result(result):
+        return format_tool_error("fetching activity details", result)
 
     # Format the response
     if not result:
@@ -225,9 +221,8 @@ async def get_activity_intervals(activity_id: str, api_key: str | None = None) -
     # Call the Intervals.icu API
     result = await make_intervals_request(url=f"/activity/{activity_id}/intervals", api_key=api_key)
 
-    if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error fetching intervals: {error_message}"
+    if is_error_result(result):
+        return format_tool_error("fetching intervals", result)
 
     # Format the response
     if not result:
@@ -276,9 +271,8 @@ async def get_activity_streams(
         params=params,
     )
 
-    if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error fetching activity streams: {error_message}"
+    if is_error_result(result):
+        return format_tool_error("fetching activity streams", result)
 
     # Format the response
     if not result:
@@ -334,9 +328,8 @@ async def get_activity_messages(activity_id: str, api_key: str | None = None) ->
         api_key=api_key,
     )
 
-    if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error fetching activity messages: {error_message}"
+    if is_error_result(result):
+        return format_tool_error("fetching activity messages", result)
 
     if not result:
         return f"No messages found for activity {activity_id}."
@@ -373,9 +366,8 @@ async def add_activity_message(
         data={"content": content},
     )
 
-    if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error adding message to activity: {error_message}"
+    if is_error_result(result):
+        return format_tool_error("adding message to activity", result)
 
     if not result or not isinstance(result, dict):
         return "Error: Unexpected response when adding message."
