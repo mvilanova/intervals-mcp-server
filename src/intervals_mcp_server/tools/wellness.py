@@ -4,10 +4,10 @@ Wellness-related MCP tools for Intervals.icu.
 This module contains tools for retrieving athlete wellness data.
 """
 
-from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.utils.formatting import format_wellness_entry
 from intervals_mcp_server.utils.validation import resolve_date_params
 from intervals_mcp_server.tools.common import format_tool_error, is_error_result, resolve_tool_context
+import intervals_mcp_server.services.wellness as wellness_service
 
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
@@ -40,19 +40,13 @@ async def get_wellness_data(
 
     start_date, end_date = resolve_date_params(start_date, end_date)
 
-    params = {"oldest": start_date, "newest": end_date}
-
-    result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/wellness", api_key=api_key, params=params
-    )
+    result = await wellness_service.get_wellness(athlete_id_to_use, api_key, start_date, end_date)
 
     if is_error_result(result):
         return format_tool_error("fetching wellness data", result)
 
     if not result:
-        return (
-            f"No wellness data found for athlete {athlete_id_to_use} in the specified date range."
-        )
+        return f"No wellness data found for athlete {athlete_id_to_use} in the specified date range."
 
     wellness_summary = "Wellness Data:\n\n"
 
