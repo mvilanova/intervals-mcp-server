@@ -889,6 +889,9 @@ def test_get_activity_details_resolves_gear_name(monkeypatch):
     monkeypatch.setattr(
         "intervals_mcp_server.tools.gear.make_intervals_request", fake_request
     )
+    # get_activity_details does not accept athlete_id; gear resolution falls
+    # back to the configured ATHLETE_ID, which is unset under CI. Provide one.
+    monkeypatch.setattr(gear_module.config, "athlete_id", "1")
 
     result = asyncio.run(get_activity_details(123))
     assert "Activity: Morning Ride" in result
