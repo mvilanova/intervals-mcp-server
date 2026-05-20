@@ -32,6 +32,7 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_activity_intervals,
     get_activity_messages,
     get_activity_streams,
+    update_activity,
     add_or_update_event,
     get_athlete_power_curves,
     get_event_by_id,
@@ -949,3 +950,86 @@ def test_get_activities_resolves_gear_name(monkeypatch):
     assert "Ride 2" in result
     assert "Name: Litening Air" in result
     assert "Name: S-Works Tarmac SL8" in result
+
+
+# ---------------------------------------------------------------------------
+# Update activity (add-or-update PUT)
+# ---------------------------------------------------------------------------
+
+
+def test_update_activity(monkeypatch):
+    """
+    Test update_activity sends a PUT request with the given fields and returns confirmation.
+    """
+    async def fake_put_request(*_args, **kwargs):
+        assert kwargs.get("method") == "PUT"
+        assert kwargs.get("data") == {"name": "Updated Ride", "icu_rpe": 7, "feel": 2}
+        return {"id": "i123", "name": "Updated Ride"}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_put_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_put_request
+    )
+    result = asyncio.run(
+        update_activity(activity_id="i123", name="Updated Ride", icu_rpe=7, feel=2)
+    )
+    assert "Successfully updated activity i123" in result
+    assert "name, icu_rpe, feel" in result
+
+
+def test_update_activity_single_field(monkeypatch):
+    """
+    Test update_activity with a single field only updates that field.
+    """
+    async def fake_put_request(*_args, **kwargs):
+        assert kwargs.get("method") == "PUT"
+        assert kwargs.get("data") == {"icu_rpe": 5}
+        return {"id": "i123"}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_put_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_put_request
+    )
+    result = asyncio.run(update_activity(activity_id="i123", icu_rpe=5))
+    assert "Successfully updated activity i123" in result
+    assert "icu_rpe" in result
+
+
+def test_update_activity_no_fields(monkeypatch):
+    """
+    Test update_activity returns an error when no fields are provided.
+    """
+    result = asyncio.run(update_activity(activity_id="i123"))
+    assert "No fields to update" in result
+
+
+def test_update_activity_error(monkeypatch):
+    """
+    Test update_activity handles API errors gracefully.
+    """
+    async def fake_request(*_args, **_kwargs):
+        return {"error": True, "message": "Activity not found"}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(update_activity(activity_id="i999", name="Nope"))
+    assert "Error updating activity" in result
+    assert "Activity not found" in result
+
+
+def test_update_activity_no_id_in_response(monkeypatch):
+    """
+    Test update_activity warns when response has no ID.
+    """
+    async def fake_request(*_args, **_kwargs):
+        return {"name": "Updated"}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(update_activity(activity_id="i123", name="Updated"))
+    assert "appears to have been updated" in result
+    assert "verify manually" in result
