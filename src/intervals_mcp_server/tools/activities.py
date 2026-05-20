@@ -414,8 +414,8 @@ async def update_activity(  # pylint: disable=too-many-arguments,too-many-positi
         activity_id: The Intervals.icu activity ID
         name: New name/title for the activity (optional)
         description: New description for the activity (optional)
-        icu_rpe: Rating of Perceived Exertion, 1-10 (optional)
-        feel: How the athlete felt, 1-5 where 1=strong 5=weak (optional)
+        icu_rpe: Rating of Perceived Exertion on the CR-10 (Borg) scale: 1=Nothing at all, 2=Very easy, 3=Easy, 4=Comfortable, 5=Slightly challenging, 6=Difficult, 7=Hard, 8=Very hard, 9=Extremely hard, 10=Max effort (optional)
+        feel: How the athlete felt on a 1-5 scale: 1=Strong, 2=Good, 3=Normal, 4=Poor, 5=Weak (optional). As shown in the Intervals.icu UI with smiley faces from very happy to sad/X-eyes.
         trainer: Whether the activity was on a trainer (optional, bool)
         sport_type: Sport type — common values: Ride, Run, Swim, Walk, Row,
                     VirtualRide, MountainBikeRide, GravelRide, Workout (optional).
