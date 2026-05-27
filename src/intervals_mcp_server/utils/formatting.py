@@ -533,7 +533,7 @@ Power Metrics:
   Weighted Avg Power: {interval.get("weighted_average_watts", 0)} watts
   Intensity: {interval.get("intensity", 0)}
   Training Load: {interval.get("training_load", 0)}
-  Work: {interval.get("joules", 0))} J
+  Work: {interval.get("joules", 0)} J
   Work > FTP: {interval.get("joules_above_ftp", 0)} J
   Power Zone: {interval.get("zone", "N/A")} ({interval.get("zone_min_watts", 0)}-{interval.get("zone_max_watts", 0)} watts)
   W' Balance: Start {interval.get("wbal_start", 0)}, End {interval.get("wbal_end", 0)}
