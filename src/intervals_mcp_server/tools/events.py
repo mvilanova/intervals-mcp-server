@@ -12,7 +12,7 @@ from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
 from intervals_mcp_server.utils.formatting import format_event_details, format_event_summary
-from intervals_mcp_server.utils.types import WorkoutDoc
+
 from intervals_mcp_server.utils.validation import resolve_activity_type, resolve_athlete_id, validate_date
 
 # Import mcp instance from shared module for tool registration
@@ -25,7 +25,7 @@ def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-position
     name: str,
     workout_type: str,
     start_date: str,
-    workout_doc: WorkoutDoc | None,
+    workout_doc: dict[str, Any] | None,
     moving_time: int | None,
     distance: int | None,
 ) -> dict[str, Any]:
@@ -268,7 +268,7 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
     api_key: str | None = None,
     event_id: str | None = None,
     start_date: str | None = None,
-    workout_doc: WorkoutDoc | None = None,
+    workout_doc: dict[str, Any] | None = None,
     moving_time: int | None = None,
     distance: int | None = None,
 ) -> str:
