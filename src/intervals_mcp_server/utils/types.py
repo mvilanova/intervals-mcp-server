@@ -433,7 +433,7 @@ class Step:  # pylint: disable=too-many-instance-attributes
             val += f"{self.text} "
         if self.reps is not None and self.steps is not None:
             for step in self.steps:
-                # Using _to_str instead of __str__ because we need the nested=True arg;
+                # Using to_str instead of __str__ because we need the nested/pace_units args;
                 # __str__ can't accept extra parameters.
                 val += "\n" + step.to_str(nested=True, pace_units=pace_units)
             val += "\n"
