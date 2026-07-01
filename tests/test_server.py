@@ -39,6 +39,9 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_events,
     get_gear_list,
     get_wellness_data,
+    update_wellness_data,
+    get_sport_settings,
+    update_sport_settings,
     get_custom_items,
     get_custom_item_by_id,
     create_custom_item,
@@ -1033,3 +1036,147 @@ def test_update_activity_no_id_in_response(monkeypatch):
     result = asyncio.run(update_activity(activity_id="i123", name="Updated"))
     assert "appears to have been updated" in result
     assert "verify manually" in result
+
+
+# ---------------------------------------------------------------------------
+# Sport settings tools
+# ---------------------------------------------------------------------------
+
+
+def test_get_sport_settings(monkeypatch):
+    """Test get_sport_settings returns formatted settings for a matching sport type."""
+    sport_settings_data = [
+        {
+            "types": ["Ride", "VirtualRide"],
+            "ftp": 280,
+            "indoor_ftp": 270,
+            "lthr": 165,
+            "max_hr": 190,
+            "p_max": 850,
+            "w_prime": 20000,
+            "hr_zones": [100, 130, 150, 170, 190],
+            "hr_zone_names": ["Recovery", "Endurance", "Tempo", "Threshold", "VO2max"],
+            "power_zones": [100, 150, 200, 250, 300],
+            "power_zone_names": ["Active Recovery", "Endurance", "Tempo", "Threshold", "VO2max"],
+            "default_gear_id": "b1",
+        }
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return sport_settings_data
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.sport_settings.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_sport_settings(sport_type="Ride", athlete_id="i1"))
+    assert "Sport settings for Ride:" in result
+    assert "FTP (W): 280" in result
+    assert "Indoor FTP (W): 270" in result
+    assert "LTHR (bpm): 165" in result
+    assert "Max HR (bpm): 190" in result
+    assert "HR Zones:" in result
+    assert "Power Zones:" in result
+    assert "Default Gear ID: b1" in result
+
+
+def test_get_sport_settings_no_match(monkeypatch):
+    """Test get_sport_settings returns error when sport type not found."""
+    sport_settings_data = [
+        {"types": ["Ride"], "ftp": 280}
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return sport_settings_data
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.sport_settings.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_sport_settings(sport_type="Run", athlete_id="i1"))
+    assert "No sport settings found for 'Run'" in result
+
+
+def test_update_sport_settings(monkeypatch):
+    """Test update_sport_settings sends PUT with provided fields."""
+    async def fake_put_request(*_args, **kwargs):
+        assert kwargs.get("method") == "PUT"
+        assert kwargs.get("data") == {"ftp": 300, "lthr": 170}
+        return {"types": ["Ride"], "ftp": 300, "lthr": 170}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_put_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.sport_settings.make_intervals_request", fake_put_request
+    )
+    result = asyncio.run(
+        update_sport_settings(sport_type="Ride", ftp=300, lthr=170, athlete_id="i1")
+    )
+    assert "Successfully updated Ride sport settings" in result
+    assert "ftp" in result
+    assert "lthr" in result
+
+
+def test_update_sport_settings_no_fields(monkeypatch):
+    """Test update_sport_settings returns error when no fields provided."""
+    result = asyncio.run(update_sport_settings(sport_type="Ride", athlete_id="i1"))
+    assert "No fields to update" in result
+
+
+def test_update_sport_settings_error(monkeypatch):
+    """Test update_sport_settings handles API errors."""
+    async def fake_request(*_args, **_kwargs):
+        return {"error": True, "message": "Invalid sport type"}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.sport_settings.make_intervals_request", fake_request
+    )
+    result = asyncio.run(
+        update_sport_settings(sport_type="Ride", ftp=300, athlete_id="i1")
+    )
+    assert "Error updating sport settings" in result
+    assert "Invalid sport type" in result
+
+
+# ---------------------------------------------------------------------------
+# Wellness update tool
+# ---------------------------------------------------------------------------
+
+
+def test_update_wellness_data(monkeypatch):
+    """Test update_wellness_data sends PUT with correct bulk payload."""
+    async def fake_put_request(*_args, **kwargs):
+        assert kwargs.get("method") == "PUT"
+        payload = kwargs.get("data")
+        assert len(payload) == 1
+        assert payload[0]["id"] == "2024-06-01"
+        assert payload[0]["weight"] == 77.5
+        assert payload[0]["restingHR"] == 55
+        return {}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_put_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.wellness.make_intervals_request", fake_put_request
+    )
+    result = asyncio.run(
+        update_wellness_data(date="2024-06-01", fields={"weight": 77.5, "restingHR": 55}, athlete_id="i1")
+    )
+    assert "Wellness data updated for 2024-06-01" in result
+    assert "weight=77.5" in result
+    assert "restingHR=55" in result
+
+
+def test_update_wellness_data_error(monkeypatch):
+    """Test update_wellness_data handles API errors."""
+    async def fake_request(*_args, **_kwargs):
+        return {"error": True, "message": "Invalid date"}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.wellness.make_intervals_request", fake_request
+    )
+    result = asyncio.run(
+        update_wellness_data(date="bad-date", fields={"weight": 77.5}, athlete_id="i1")
+    )
+    assert "Error updating wellness data" in result
+    assert "Invalid date" in result

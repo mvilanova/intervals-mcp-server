@@ -1,7 +1,7 @@
 """
 Wellness-related MCP tools for Intervals.icu.
 
-This module contains tools for retrieving athlete wellness data.
+This module contains tools for retrieving and updating athlete wellness data.
 """
 
 from intervals_mcp_server.api.client import make_intervals_request
@@ -69,3 +69,43 @@ async def get_wellness_data(
                 wellness_summary += format_wellness_entry(entry, include_all_fields=include_all_fields) + "\n\n"
 
     return wellness_summary
+
+
+@mcp.tool()
+async def update_wellness_data(
+    date: str,
+    fields: dict,
+    athlete_id: str | None = None,
+    api_key: str | None = None,
+) -> str:
+    """Update wellness data for an athlete on a specific date.
+
+    Uses the Intervals.icu bulk wellness upload endpoint (PUT /athlete/{id}/wellness-bulk).
+    Accepts a date and a dictionary of field name-value pairs to update.
+    Custom fields are referenced by their field code (e.g. "Alcohol", "weight", "restingHR").
+
+    Args:
+        date: The date in YYYY-MM-DD format to update wellness data for.
+        fields: Dictionary of field names to values (e.g. {"weight": 77.5, "Alcohol": 0.0})
+        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+    """
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    if error_msg:
+        return error_msg
+
+    # The bulk wellness endpoint accepts an array of objects, each with an "id" (date) plus fields
+    payload = [{"id": date, **fields}]
+
+    result = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/wellness-bulk",
+        api_key=api_key,
+        method="PUT",
+        data=payload,
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        return f"Error updating wellness data: {result.get('message')}"
+
+    updated_fields = ", ".join(f"{k}={v}" for k, v in fields.items())
+    return f"Wellness data updated for {date}: {updated_fields}"
