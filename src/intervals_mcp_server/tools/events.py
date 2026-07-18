@@ -283,7 +283,7 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
         event_id: The Intervals.icu event ID (optional, will use event_id from .env if not provided)
         start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
         name: Name of the activity
-        workout_doc: steps as a list of Step objects (optional, but necessary to define workout steps)
+        workout_doc: Generic workout document object (optional, but necessary to define workout steps)
         workout_type: Workout type (e.g. Ride, Run, Swim, Walk, Row)
         moving_time: Total expected moving time of the workout in seconds (optional)
         distance: Total expected distance of the workout in meters (optional)
