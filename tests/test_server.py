@@ -329,6 +329,157 @@ def test_add_or_update_event(monkeypatch):
     assert "e123" in result
 
 
+def test_add_or_update_event_sends_workout_doc_as_structured_object(monkeypatch):
+    """add_or_update_event with a WorkoutDoc must serialize it as a structured
+    workout_doc dict (not as str(workout_doc) inside the description field).
+    AGENTS.md mandates the JSON-object form so Intervals.icu stores a real
+    structured workout instead of guessing how to parse the description text.
+    """
+    from intervals_mcp_server.utils.types import (  # pylint: disable=wrong-import-position
+        Step,
+        Value,
+        ValueUnits,
+        WorkoutDoc,
+        WorkoutTarget,
+    )
+
+    doc = WorkoutDoc(
+        description="VO2 max intervals",
+        ftp=250,
+        lthr=170,
+        threshold_pace=4.0,
+        target=WorkoutTarget.POWER,
+        steps=[
+            Step(
+                text="Warmup",
+                duration=600,
+                power=Value(value=0.55, units=ValueUnits.PERCENT_FTP),
+                warmup=True,
+            ),
+            Step(
+                text="Reps",
+                reps=3,
+                steps=[
+                    Step(
+                        duration=180,
+                        power=Value(value=1.30, units=ValueUnits.PERCENT_FTP),
+                    ),
+                    Step(
+                        duration=120,
+                        power=Value(value=0.50, units=ValueUnits.PERCENT_FTP),
+                    ),
+                ],
+            ),
+            Step(
+                text="Cooldown",
+                duration=300,
+                power=Value(value=0.50, units=ValueUnits.PERCENT_FTP),
+                cooldown=True,
+            ),
+        ],
+    )
+
+    captured: dict = {}
+
+    async def fake_post_request(*_args, **kwargs):
+        captured["data"] = kwargs.get("data")
+        captured["method"] = kwargs.get("method")
+        # Simulate the API echoing the structured workout back.
+        return {
+            "id": "e999",
+            "workout_doc": doc.to_dict(),
+            "category": "WORKOUT",
+            "name": "VO2",
+            "type": "Ride",
+        }
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.api.client.make_intervals_request", fake_post_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.events.make_intervals_request", fake_post_request
+    )
+
+    result = asyncio.run(
+        add_or_update_event(
+            athlete_id="i1",
+            start_date="2024-01-15",
+            name="VO2",
+            workout_type="Ride",
+            workout_doc=doc,
+        )
+    )
+
+    body = captured["data"]
+    assert captured["method"] == "POST"
+    # The structured field must be present and be a dict, never a string.
+    assert isinstance(body.get("workout_doc"), dict), (
+        f"workout_doc must be a dict, got {type(body.get('workout_doc'))}: {body.get('workout_doc')!r}"
+    )
+    wd = body["workout_doc"]
+    assert wd["description"] == "VO2 max intervals"
+    assert wd["ftp"] == 250
+    assert wd["lthr"] == 170
+    assert wd["threshold_pace"] == 4.0
+    assert wd["target"] == "POWER"
+    assert isinstance(wd["steps"], list)
+    assert len(wd["steps"]) == 3  # warmup, reps, cooldown
+    # Event-level description must NOT carry the str() output (step text).
+    desc = body.get("description")
+    if desc is not None:
+        assert "Reps" not in desc, (
+            "description must not contain step text — that lives in workout_doc"
+        )
+    assert "Successfully created event id:" in result
+    assert "e999" in result
+
+
+def test_add_or_update_event_warns_when_response_lacks_workout_doc(monkeypatch):
+    """When the API returns the event id but no workout_doc, the MCP must warn.
+    A clean 'Successfully created' message would hide the silent degradation.
+    """
+    from intervals_mcp_server.utils.types import (  # pylint: disable=wrong-import-position
+        Step,
+        WorkoutDoc,
+    )
+
+    doc = WorkoutDoc(
+        description="Z2 endurance",
+        ftp=240,
+        steps=[Step(duration=1800)],
+    )
+
+    async def fake_post_request(*_args, **_kwargs):
+        # API created the event but the structured workout is missing — silent degradation.
+        return {
+            "id": "e888",
+            "category": "WORKOUT",
+            "name": "Z2",
+            "type": "Ride",
+        }
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.api.client.make_intervals_request", fake_post_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.events.make_intervals_request", fake_post_request
+    )
+
+    result = asyncio.run(
+        add_or_update_event(
+            athlete_id="i1",
+            start_date="2024-01-15",
+            name="Z2",
+            workout_type="Ride",
+            workout_doc=doc,
+        )
+    )
+    # Result must surface the missing workout_doc so silent degradation is visible.
+    lower = result.lower()
+    assert "workout_doc" in lower
+    assert "warning" in lower
+
+
 def test_get_activity_messages(monkeypatch):
     """Test get_activity_messages returns formatted messages for an activity."""
     sample_messages = [
