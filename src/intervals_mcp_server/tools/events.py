@@ -230,12 +230,35 @@ async def _fetch_events_for_deletion(
     return events, None
 
 
+def _filter_events_by_category(
+    events: list[dict[str, Any]], category: str | None
+) -> list[dict[str, Any]]:
+    """Restrict events to a single category (case-insensitive).
+
+    When *category* is None the input is returned unchanged so the caller keeps
+    the prior behaviour. Events missing the ``category`` field are excluded
+    when a category filter is supplied — better to skip than to delete an
+    event whose category cannot be confirmed.
+    """
+    if category is None:
+        return events
+    target = category.upper()
+    return [
+        event
+        for event in events
+        if isinstance(event, dict)
+        and isinstance(event.get("category"), str)
+        and event["category"].upper() == target
+    ]
+
+
 @mcp.tool()
 async def delete_events_by_date_range(
     start_date: str,
     end_date: str,
     athlete_id: str | None = None,
     api_key: str | None = None,
+    category: str | None = None,
 ) -> str:
     """Delete events for an athlete from Intervals.icu in the specified date range.
 
@@ -244,6 +267,8 @@ async def delete_events_by_date_range(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         start_date: Start date in YYYY-MM-DD format
         end_date: End date in YYYY-MM-DD format
+        category: Restrict deletion to one event category (e.g. "WORKOUT", "RACE", "NOTE").
+            Case-insensitive. When omitted, every category in the range is deleted.
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
@@ -255,9 +280,14 @@ async def delete_events_by_date_range(
     if error_msg:
         return error_msg
 
-    failed_events = await _delete_events_list(athlete_id_to_use, api_key, events)
-    deleted_count = len(events) - len(failed_events)
-    return f"Deleted {deleted_count} events. Failed to delete {len(failed_events)} events: {failed_events}"
+    scoped_events = _filter_events_by_category(events, category)
+    failed_events = await _delete_events_list(athlete_id_to_use, api_key, scoped_events)
+    deleted_count = len(scoped_events) - len(failed_events)
+    scope_note = f" {category.upper()}" if category else ""
+    return (
+        f"Deleted {deleted_count}{scope_note} events. "
+        f"Failed to delete {len(failed_events)} events: {failed_events}"
+    )
 
 
 @mcp.tool()
