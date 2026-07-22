@@ -33,6 +33,7 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_activity_messages,
     get_activity_streams,
     add_or_update_event,
+    delete_events_by_date_range,
     get_athlete_power_curves,
     get_event_by_id,
     get_events,
@@ -949,3 +950,64 @@ def test_get_activities_resolves_gear_name(monkeypatch):
     assert "Ride 2" in result
     assert "Name: Litening Air" in result
     assert "Name: S-Works Tarmac SL8" in result
+
+
+# ---------------------------------------------------------------------------
+# delete_events_by_date_range
+# ---------------------------------------------------------------------------
+
+
+def test_delete_events_by_date_range_respects_category(monkeypatch):
+    """Deleting a range with category=WORKOUT must only delete workout events.
+
+    Races, notes, and other categories in the same range must be left alone.
+    """
+    events = [
+        {"id": 1, "category": "WORKOUT", "name": "Easy run"},
+        {"id": 2, "category": "RACE", "name": "Goal race"},
+        {"id": 3, "category": "NOTE", "name": "Travel"},
+        {"id": 4, "category": "WORKOUT", "name": "Intervals"},
+    ]
+    deleted_ids: list[str] = []
+
+    async def fake_request(*_args, **kwargs):
+        if kwargs.get("method") == "DELETE":
+            deleted_ids.append(kwargs["url"])
+            return {}
+        return events
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.events.make_intervals_request", fake_request
+    )
+    result = asyncio.run(
+        delete_events_by_date_range(
+            start_date="2024-01-01", end_date="2024-01-07", athlete_id="1", category="WORKOUT"
+        )
+    )
+    assert deleted_ids == ["/athlete/1/events/1", "/athlete/1/events/4"]
+    assert "Deleted 2" in result
+
+
+def test_delete_events_by_date_range_category_no_match_deletes_nothing(monkeypatch):
+    """When no event matches the requested category, nothing must be deleted."""
+    events = [{"id": 1, "category": "RACE", "name": "Goal race"}]
+    deleted_ids: list[str] = []
+
+    async def fake_request(*_args, **kwargs):
+        if kwargs.get("method") == "DELETE":
+            deleted_ids.append(kwargs["url"])
+            return {}
+        return events
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.events.make_intervals_request", fake_request
+    )
+    result = asyncio.run(
+        delete_events_by_date_range(
+            start_date="2024-01-01", end_date="2024-01-07", athlete_id="1", category="WORKOUT"
+        )
+    )
+    assert deleted_ids == []
+    assert "Deleted 0" in result
