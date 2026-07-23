@@ -151,6 +151,34 @@ def test_get_event_by_id(monkeypatch):
     assert "Test Event" in result
 
 
+def test_get_event_by_id_uses_plural_events_path(monkeypatch):
+    """get_event_by_id must request /athlete/{id}/events/{event_id} (plural).
+
+    The Intervals.icu single-event endpoint is the plural form; the singular
+    /event/ path returns 404 for every real id. Matches upstream issue #106.
+    """
+    captured: dict = {}
+
+    async def fake_request(*_args, **kwargs):
+        captured["url"] = kwargs.get("url")
+        return {
+            "id": "e123",
+            "start_date_local": "2024-01-01T08:00:00",
+            "name": "Test Event",
+            "type": "Ride",
+            "category": "WORKOUT",
+        }
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.api.client.make_intervals_request", fake_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.events.make_intervals_request", fake_request
+    )
+    asyncio.run(get_event_by_id("e123", athlete_id="i1"))
+    assert captured["url"] == "/athlete/i1/events/e123"
+
+
 def test_get_wellness_data(monkeypatch):
     """
     Test get_wellness_data returns a formatted string containing wellness data for a given athlete.
