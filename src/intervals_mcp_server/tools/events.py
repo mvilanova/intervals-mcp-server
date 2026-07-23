@@ -34,15 +34,23 @@ def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-position
     Many arguments are required to match the Intervals.icu API event structure.
     """
     resolved_workout_type = resolve_activity_type(name, workout_type)
-    return {
+    event_data: dict[str, Any] = {
         "start_date_local": start_date + "T00:00:00",
         "category": "WORKOUT",
         "name": name,
-        "description": str(workout_doc) if workout_doc else None,
         "type": resolved_workout_type,
         "moving_time": moving_time,
         "distance": distance,
     }
+    if workout_doc is not None:
+        # Send the workout as a structured object so the server stores it as a
+        # real structured workout (steps, ftp, lthr, target, options, …) rather
+        # than guessing how to parse a description string. The plain description
+        # is kept as a calendar-friendly summary when the caller set one.
+        event_data["workout_doc"] = workout_doc.to_dict()
+        if workout_doc.description:
+            event_data["description"] = workout_doc.description
+    return event_data
 
 
 def _handle_event_response(
@@ -50,6 +58,7 @@ def _handle_event_response(
     action: str,
     athlete_id: str,
     start_date: str,
+    expects_workout_doc: bool = False,
 ) -> str:
     """Handle API response and format appropriate message."""
     if isinstance(result, dict) and "error" in result:
@@ -58,7 +67,16 @@ def _handle_event_response(
     if not result:
         return f"No events {action} for athlete {athlete_id}."
     if isinstance(result, dict):
-        return f"Successfully {action} event id: {result.get('id')}"
+        base = f"Successfully {action} event id: {result.get('id')}"
+        if expects_workout_doc and not result.get("workout_doc"):
+            # The request carried a structured workout but the server didn't echo
+            # one back — the workout silently degraded to a plain text event.
+            return (
+                f"{base} — WARNING: response has no workout_doc; the structured "
+                "workout may not have been stored. Verify with "
+                f"get_event_by_id and re-GET /api/v1/athlete/{athlete_id}/events/{result.get('id')}."
+            )
+        return base
     return f"Event {action} successfully at {start_date}"
 
 
@@ -164,7 +182,7 @@ async def get_event_by_id(
 
     # Call the Intervals.icu API
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/event/{event_id}", api_key=api_key
+        url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key
     )
 
     if isinstance(result, dict) and "error" in result:
@@ -230,12 +248,35 @@ async def _fetch_events_for_deletion(
     return events, None
 
 
+def _filter_events_by_category(
+    events: list[dict[str, Any]], category: str | None
+) -> list[dict[str, Any]]:
+    """Restrict events to a single category (case-insensitive).
+
+    When *category* is None the input is returned unchanged so the caller keeps
+    the prior behaviour. Events missing the ``category`` field are excluded
+    when a category filter is supplied — better to skip than to delete an
+    event whose category cannot be confirmed.
+    """
+    if category is None:
+        return events
+    target = category.upper()
+    return [
+        event
+        for event in events
+        if isinstance(event, dict)
+        and isinstance(event.get("category"), str)
+        and event["category"].upper() == target
+    ]
+
+
 @mcp.tool()
 async def delete_events_by_date_range(
     start_date: str,
     end_date: str,
     athlete_id: str | None = None,
     api_key: str | None = None,
+    category: str | None = None,
 ) -> str:
     """Delete events for an athlete from Intervals.icu in the specified date range.
 
@@ -244,6 +285,8 @@ async def delete_events_by_date_range(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         start_date: Start date in YYYY-MM-DD format
         end_date: End date in YYYY-MM-DD format
+        category: Restrict deletion to one event category (e.g. "WORKOUT", "RACE", "NOTE").
+            Case-insensitive. When omitted, every category in the range is deleted.
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
@@ -255,9 +298,14 @@ async def delete_events_by_date_range(
     if error_msg:
         return error_msg
 
-    failed_events = await _delete_events_list(athlete_id_to_use, api_key, events)
-    deleted_count = len(events) - len(failed_events)
-    return f"Deleted {deleted_count} events. Failed to delete {len(failed_events)} events: {failed_events}"
+    scoped_events = _filter_events_by_category(events, category)
+    failed_events = await _delete_events_list(athlete_id_to_use, api_key, scoped_events)
+    deleted_count = len(scoped_events) - len(failed_events)
+    scope_note = f" {category.upper()}" if category else ""
+    return (
+        f"Deleted {deleted_count}{scope_note} events. "
+        f"Failed to delete {len(failed_events)} events: {failed_events}"
+    )
 
 
 @mcp.tool()
@@ -430,4 +478,7 @@ async def _create_or_update_event_request(
         method="PUT" if event_id else "POST",
     )
     action = "updated" if event_id else "created"
-    return _handle_event_response(result, action, athlete_id, start_date)
+    expects_workout_doc = isinstance(event_data, dict) and "workout_doc" in event_data
+    return _handle_event_response(
+        result, action, athlete_id, start_date, expects_workout_doc=expects_workout_doc
+    )
