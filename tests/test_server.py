@@ -1080,6 +1080,108 @@ def test_get_activity_details_resolves_gear_name(monkeypatch):
     assert "ID: b1" in result
 
 
+def test_get_activity_details_resolves_gear_for_activity_owner(monkeypatch):
+    """get_activity_details must use the activity's own athlete_id for gear lookup,
+    not the configured ATHLETE_ID. AGENTS.md names the wrong-account foot-gun
+    as a hard rule; P1-6 is the concrete code instance in the activity path.
+    """
+    _reset_gear_cache()
+
+    # The activity belongs to athlete B, but the MCP server is configured
+    # for athlete A. The configured catalog (athlete A) does not contain
+    # gear b2; only athlete B's catalog does.
+    activity = {
+        "name": "Athlete B Ride",
+        "id": 456,
+        "type": "Ride",
+        "startTime": "2024-02-01T08:00:00Z",
+        "distance": 1000,
+        "duration": 3600,
+        "gear_id": "b2",
+        "athlete_id": "i2",
+    }
+    gear_catalog = [
+        {"id": "b1", "type": "Bike", "name": "Athlete A's Bike"},  # configured
+        {"id": "b2", "type": "Bike", "name": "Athlete B's Bike"},  # activity's owner
+    ]
+
+    async def fake_request(url=None, **_kwargs):
+        if url and "/gear" in url:
+            return gear_catalog
+        return activity
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.api.client.make_intervals_request", fake_request
+    )
+    gear_catalogs = {
+        "i1": [{"id": "b1", "type": "Bike", "name": "Athlete A's Bike"}],
+        "i2": [{"id": "b2", "type": "Bike", "name": "Athlete B's Bike"}],
+    }
+
+    async def fake_request(url=None, **_kwargs):
+        if url and "/gear" in url:
+            # URL is /athlete/{athlete_id}/gear — pick the catalog for the
+            # owner so a bug that uses the wrong athlete surfaces here.
+            for athlete_id, catalog in gear_catalogs.items():
+                if f"/athlete/{athlete_id}/gear" in url:
+                    return catalog
+            return []
+        return activity
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.api.client.make_intervals_request", fake_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.gear.make_intervals_request", fake_request
+    )
+    monkeypatch.setenv("ATHLETE_ID", "i1")
+
+    result = asyncio.run(get_activity_details(456))
+    assert "Name: Athlete B's Bike" in result
+    assert "Name: Athlete A's Bike" not in result
+
+
+def test_get_activity_details_falls_back_to_config_when_no_owner_field(monkeypatch):
+    """Activities without an athlete_id field use the configured ATHLETE_ID.
+    Regression guard for the no-athlete-info path.
+    """
+    _reset_gear_cache()
+
+    activity = {
+        "name": "Morning Ride",
+        "id": 123,
+        "type": "Ride",
+        "startTime": "2024-01-01T08:00:00Z",
+        "distance": 1000,
+        "duration": 3600,
+        "gear_id": "b1",
+        # No athlete_id, no athlete object.
+    }
+    gear_catalog = [{"id": "b1", "type": "Bike", "name": "Litening Air"}]
+
+    async def fake_request(url=None, **_kwargs):
+        if url and "/gear" in url:
+            return gear_catalog
+        return activity
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.api.client.make_intervals_request", fake_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.gear.make_intervals_request", fake_request
+    )
+    monkeypatch.setenv("ATHLETE_ID", "i1")
+
+    result = asyncio.run(get_activity_details(123))
+    assert "Name: Litening Air" in result
+
+
 def test_get_activities_resolves_gear_name(monkeypatch):
     """
     Test get_activities injects resolved gear names for each activity in the list.
