@@ -197,22 +197,21 @@ def test_format_event_summary_annotates_workout_doc():
     assert "Type: Ride" in summary
     assert "Workout" in summary
 
-
 def test_format_event_details():
     """
-    Test that format_event_details returns a string containing event and workout details.
+    Test that format_event_details returns formatted string containing event and workout details.
     """
     event = {
         "id": "e1",
-        "date": "2024-01-01",
+        "start_date_local": "2024-01-01T08:00:00",
+        "type": "Ride",
         "name": "Event1",
         "description": "desc",
-        "workout": {
-            "id": "w1",
-            "sport": "Ride",
+        "workout_doc": {
+            "description": "VO2 max",
             "duration": 3600,
-            "tss": 50,
-            "intervals": [1, 2],
+            "target": "POWER",
+            "steps": [{}, {}, {}],
         },
         "race": True,
         "priority": "A",
@@ -222,6 +221,52 @@ def test_format_event_details():
     details = format_event_details(event)
     assert "Event Details:" in details
     assert "Workout Information:" in details
+    assert "2024-01-01T08:00:00" in details
+    assert "VO2 max" in details
+    assert "Steps: 3" in details
+
+
+def test_format_event_details_uses_start_date_local():
+    """format_event_details must read start_date_local, not the non-existent 'date' field.
+
+    AGENTS.md mandates start_date_local for any human-facing text.
+    """
+    details = format_event_details(
+        {
+            "id": "e1",
+            "start_date_local": "2024-06-15T19:00:00",
+            "type": "Run",
+            "name": "Easy Run",
+        }
+    )
+    assert "Date: 2024-06-15T19:00:00" in details
+    assert "Date: Unknown" not in details
+
+
+def test_format_event_details_renders_workout_doc_section():
+    """An event with a structured workout_doc must render the Workout
+    Information section. The old code looked up 'workout' (no such field
+    on Intervals.icu responses) and silently dropped the section.
+    """
+    details = format_event_details(
+        {
+            "id": "e1",
+            "start_date_local": "2024-01-01T08:00:00",
+            "type": "Ride",
+            "name": "VO2",
+            "workout_doc": {
+                "description": "5x3min @ 130% FTP",
+                "duration": 4500,
+                "target": "POWER",
+                "steps": [{}, {}],
+            },
+        }
+    )
+    assert "Workout Information:" in details
+    assert "5x3min @ 130% FTP" in details
+    assert "Duration: 4500 seconds" in details
+    assert "Target: POWER" in details
+    assert "Steps: 2" in details
 
 
 def test_format_intervals():
