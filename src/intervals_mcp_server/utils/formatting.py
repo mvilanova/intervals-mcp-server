@@ -407,7 +407,16 @@ def format_event_summary(event: dict[str, Any]) -> str:
 
     # Update to check for "date" if "start_date_local" is not provided
     event_date = event.get("start_date_local", event.get("date", "Unknown"))
-    event_type = "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
+    # Surface the event's sport (event["type"]) as the primary Type, since the
+    # previous implementation ignored it and always printed "Other" for any
+    # ordinary workout. Annotate with race / structured-workout flags when set.
+    sport = event.get("type", "Other")
+    flags: list[str] = []
+    if event.get("race"):
+        flags.append("Race")
+    if event.get("workout_doc"):
+        flags.append("Workout")
+    event_type = f"{sport} ({', '.join(flags)})" if flags else sport
     event_name = event.get("name", "Unnamed")
     event_id = event.get("id", "N/A")
     event_desc = event.get("description", "No description")
