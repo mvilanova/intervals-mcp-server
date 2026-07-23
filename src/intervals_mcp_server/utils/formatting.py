@@ -492,7 +492,15 @@ Calendar: {cal.get("name", "N/A")}"""
 
 def format_activity_message(message: dict[str, Any]) -> str:
     """Format an activity message/note into a readable string."""
-    created = message.get("created", "Unknown")
+    # Prefer created_local (athlete's local time) over UTC 'created'. Same
+    # defect class as P1-2 / format_activity_summary: AGENTS.md mandates local
+    # time for any human-facing text. UTC fallback is the only safe option
+    # when created_local is missing and we have no athlete-tz hook.
+    created = (
+        message.get("created_local")
+        or message.get("created")
+        or "Unknown"
+    )
     if isinstance(created, str) and len(created) > 10:
         try:
             dt = datetime.fromisoformat(created.replace("Z", "+00:00"))

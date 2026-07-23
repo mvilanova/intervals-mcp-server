@@ -67,7 +67,46 @@ def test_format_activity_summary_no_local_falls_back_to_utc():
         }
     )
     assert "Date: 2024-01-01 08:00:00" in result
+    assert "Date: 2024-01-01 08:00:00" in result
 
+
+def test_format_activity_message_prefers_created_local():
+    """format_activity_message must prefer created_local over UTC 'created'.
+
+    Same defect class as P1-2 — UTC timestamps render in the user's local
+    time so the Date line is the wrong wall-clock and can roll to the
+    wrong calendar day for late-evening messages.
+    """
+    from intervals_mcp_server.utils.formatting import format_activity_message  # pylint: disable=wrong-import-position
+
+    result = format_activity_message(
+        {
+            "id": 1,
+            "name": "Niko",
+            "created": "2024-06-15T20:30:00Z",          # UTC: 22:30 CEST
+            "created_local": "2024-06-15T22:30:00",      # local time
+            "type": "NOTE",
+            "content": "Legs felt heavy today",
+        }
+    )
+    assert "Date: 2024-06-15 22:30:00" in result
+    assert "Date: 2024-06-15 20:30:00" not in result
+
+
+def test_format_activity_message_no_local_falls_back_to_utc():
+    """Without created_local, fall back to created (UTC). Regression guard."""
+    from intervals_mcp_server.utils.formatting import format_activity_message  # pylint: disable=wrong-import-position
+
+    result = format_activity_message(
+        {
+            "id": 1,
+            "name": "Coach",
+            "created": "2024-06-15T10:30:00Z",
+            "type": "TEXT",
+            "content": "Good effort",
+        }
+    )
+    assert "Date: 2024-06-15 10:30:00" in result
 def test_format_workout():
     """
     Test that format_workout returns a string containing the workout name and interval count.
