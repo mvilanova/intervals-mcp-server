@@ -32,7 +32,17 @@ class _KeyTracker(dict):
 
 def format_activity_summary(activity: dict[str, Any]) -> str:
     """Format an activity into a readable string."""
-    start_time = activity.get("startTime", activity.get("start_date", "Unknown"))
+    # Prefer start_date_local (athlete's local time) over UTC fields.
+    # AGENTS.md mandates local time for human-facing text: a 7pm local swim
+    # shows up in the MCP as 5pm UTC and a swim after 22:00 CEST rolls to
+    # the previous UTC day. Without an athlete-tz hook, UTC is the only
+    # safe fallback when start_date_local is missing.
+    start_time = (
+        activity.get("start_date_local")
+        or activity.get("startTime")
+        or activity.get("start_date")
+        or "Unknown"
+    )
 
     if isinstance(start_time, str) and len(start_time) > 10:
         # Format datetime if it's a full ISO string

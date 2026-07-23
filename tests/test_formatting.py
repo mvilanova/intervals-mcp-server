@@ -34,6 +34,40 @@ def test_format_activity_summary():
     assert "ID: 1" in result
 
 
+def test_format_activity_summary_prefers_start_date_local():
+    """format_activity_summary must prefer start_date_local over UTC fields.
+
+    AGENTS.md: 'a 7pm local swim shows up in the MCP as 5pm UTC on the
+    same day, and a swim after 22:00 CEST shows up on the previous UTC
+    day. Always cross-check with start_date_local.'
+    """
+    result = format_activity_summary(
+        {
+            "id": 1,
+            "name": "Evening Swim",
+            "type": "Swim",
+            "startTime": "2024-06-30T21:30:00Z",       # UTC: 23:30 CEST
+            "start_date_local": "2024-06-30T23:30:00",  # local time
+            "duration": 1800,
+        }
+    )
+    assert "Date: 2024-06-30 23:30:00" in result
+    assert "Date: 2024-06-30 21:30:00" not in result
+
+
+def test_format_activity_summary_no_local_falls_back_to_utc():
+    """Without start_date_local, fall back to startTime (UTC). Regression guard."""
+    result = format_activity_summary(
+        {
+            "id": 1,
+            "name": "Morning Ride",
+            "type": "Ride",
+            "startTime": "2024-01-01T08:00:00Z",
+            "duration": 3600,
+        }
+    )
+    assert "Date: 2024-01-01 08:00:00" in result
+
 def test_format_workout():
     """
     Test that format_workout returns a string containing the workout name and interval count.
