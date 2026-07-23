@@ -33,6 +33,7 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_activity_messages,
     get_activity_streams,
     add_or_update_event,
+    delete_events_by_date_range,
     get_athlete_power_curves,
     get_event_by_id,
     get_events,
@@ -148,6 +149,34 @@ def test_get_event_by_id(monkeypatch):
     result = asyncio.run(get_event_by_id("e1", athlete_id="1"))
     assert "Event Details:" in result
     assert "Test Event" in result
+
+
+def test_get_event_by_id_uses_plural_events_path(monkeypatch):
+    """get_event_by_id must request /athlete/{id}/events/{event_id} (plural).
+
+    The Intervals.icu single-event endpoint is the plural form; the singular
+    /event/ path returns 404 for every real id. Matches upstream issue #106.
+    """
+    captured: dict = {}
+
+    async def fake_request(*_args, **kwargs):
+        captured["url"] = kwargs.get("url")
+        return {
+            "id": "e123",
+            "start_date_local": "2024-01-01T08:00:00",
+            "name": "Test Event",
+            "type": "Ride",
+            "category": "WORKOUT",
+        }
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.api.client.make_intervals_request", fake_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.events.make_intervals_request", fake_request
+    )
+    asyncio.run(get_event_by_id("e123", athlete_id="i1"))
+    assert captured["url"] == "/athlete/i1/events/e123"
 
 
 def test_get_wellness_data(monkeypatch):
@@ -326,6 +355,157 @@ def test_add_or_update_event(monkeypatch):
     )
     assert "Successfully created event id:" in result
     assert "e123" in result
+
+
+def test_add_or_update_event_sends_workout_doc_as_structured_object(monkeypatch):
+    """add_or_update_event with a WorkoutDoc must serialize it as a structured
+    workout_doc dict (not as str(workout_doc) inside the description field).
+    AGENTS.md mandates the JSON-object form so Intervals.icu stores a real
+    structured workout instead of guessing how to parse the description text.
+    """
+    from intervals_mcp_server.utils.types import (  # pylint: disable=wrong-import-position
+        Step,
+        Value,
+        ValueUnits,
+        WorkoutDoc,
+        WorkoutTarget,
+    )
+
+    doc = WorkoutDoc(
+        description="VO2 max intervals",
+        ftp=250,
+        lthr=170,
+        threshold_pace=4.0,
+        target=WorkoutTarget.POWER,
+        steps=[
+            Step(
+                text="Warmup",
+                duration=600,
+                power=Value(value=0.55, units=ValueUnits.PERCENT_FTP),
+                warmup=True,
+            ),
+            Step(
+                text="Reps",
+                reps=3,
+                steps=[
+                    Step(
+                        duration=180,
+                        power=Value(value=1.30, units=ValueUnits.PERCENT_FTP),
+                    ),
+                    Step(
+                        duration=120,
+                        power=Value(value=0.50, units=ValueUnits.PERCENT_FTP),
+                    ),
+                ],
+            ),
+            Step(
+                text="Cooldown",
+                duration=300,
+                power=Value(value=0.50, units=ValueUnits.PERCENT_FTP),
+                cooldown=True,
+            ),
+        ],
+    )
+
+    captured: dict = {}
+
+    async def fake_post_request(*_args, **kwargs):
+        captured["data"] = kwargs.get("data")
+        captured["method"] = kwargs.get("method")
+        # Simulate the API echoing the structured workout back.
+        return {
+            "id": "e999",
+            "workout_doc": doc.to_dict(),
+            "category": "WORKOUT",
+            "name": "VO2",
+            "type": "Ride",
+        }
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.api.client.make_intervals_request", fake_post_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.events.make_intervals_request", fake_post_request
+    )
+
+    result = asyncio.run(
+        add_or_update_event(
+            athlete_id="i1",
+            start_date="2024-01-15",
+            name="VO2",
+            workout_type="Ride",
+            workout_doc=doc,
+        )
+    )
+
+    body = captured["data"]
+    assert captured["method"] == "POST"
+    # The structured field must be present and be a dict, never a string.
+    assert isinstance(body.get("workout_doc"), dict), (
+        f"workout_doc must be a dict, got {type(body.get('workout_doc'))}: {body.get('workout_doc')!r}"
+    )
+    wd = body["workout_doc"]
+    assert wd["description"] == "VO2 max intervals"
+    assert wd["ftp"] == 250
+    assert wd["lthr"] == 170
+    assert wd["threshold_pace"] == 4.0
+    assert wd["target"] == "POWER"
+    assert isinstance(wd["steps"], list)
+    assert len(wd["steps"]) == 3  # warmup, reps, cooldown
+    # Event-level description must NOT carry the str() output (step text).
+    desc = body.get("description")
+    if desc is not None:
+        assert "Reps" not in desc, (
+            "description must not contain step text — that lives in workout_doc"
+        )
+    assert "Successfully created event id:" in result
+    assert "e999" in result
+
+
+def test_add_or_update_event_warns_when_response_lacks_workout_doc(monkeypatch):
+    """When the API returns the event id but no workout_doc, the MCP must warn.
+    A clean 'Successfully created' message would hide the silent degradation.
+    """
+    from intervals_mcp_server.utils.types import (  # pylint: disable=wrong-import-position
+        Step,
+        WorkoutDoc,
+    )
+
+    doc = WorkoutDoc(
+        description="Z2 endurance",
+        ftp=240,
+        steps=[Step(duration=1800)],
+    )
+
+    async def fake_post_request(*_args, **_kwargs):
+        # API created the event but the structured workout is missing — silent degradation.
+        return {
+            "id": "e888",
+            "category": "WORKOUT",
+            "name": "Z2",
+            "type": "Ride",
+        }
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.api.client.make_intervals_request", fake_post_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.events.make_intervals_request", fake_post_request
+    )
+
+    result = asyncio.run(
+        add_or_update_event(
+            athlete_id="i1",
+            start_date="2024-01-15",
+            name="Z2",
+            workout_type="Ride",
+            workout_doc=doc,
+        )
+    )
+    # Result must surface the missing workout_doc so silent degradation is visible.
+    lower = result.lower()
+    assert "workout_doc" in lower
+    assert "warning" in lower
 
 
 def test_get_activity_messages(monkeypatch):
@@ -949,3 +1129,64 @@ def test_get_activities_resolves_gear_name(monkeypatch):
     assert "Ride 2" in result
     assert "Name: Litening Air" in result
     assert "Name: S-Works Tarmac SL8" in result
+
+
+# ---------------------------------------------------------------------------
+# delete_events_by_date_range
+# ---------------------------------------------------------------------------
+
+
+def test_delete_events_by_date_range_respects_category(monkeypatch):
+    """Deleting a range with category=WORKOUT must only delete workout events.
+
+    Races, notes, and other categories in the same range must be left alone.
+    """
+    events = [
+        {"id": 1, "category": "WORKOUT", "name": "Easy run"},
+        {"id": 2, "category": "RACE", "name": "Goal race"},
+        {"id": 3, "category": "NOTE", "name": "Travel"},
+        {"id": 4, "category": "WORKOUT", "name": "Intervals"},
+    ]
+    deleted_ids: list[str] = []
+
+    async def fake_request(*_args, **kwargs):
+        if kwargs.get("method") == "DELETE":
+            deleted_ids.append(kwargs["url"])
+            return {}
+        return events
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.events.make_intervals_request", fake_request
+    )
+    result = asyncio.run(
+        delete_events_by_date_range(
+            start_date="2024-01-01", end_date="2024-01-07", athlete_id="1", category="WORKOUT"
+        )
+    )
+    assert deleted_ids == ["/athlete/1/events/1", "/athlete/1/events/4"]
+    assert "Deleted 2" in result
+
+
+def test_delete_events_by_date_range_category_no_match_deletes_nothing(monkeypatch):
+    """When no event matches the requested category, nothing must be deleted."""
+    events = [{"id": 1, "category": "RACE", "name": "Goal race"}]
+    deleted_ids: list[str] = []
+
+    async def fake_request(*_args, **kwargs):
+        if kwargs.get("method") == "DELETE":
+            deleted_ids.append(kwargs["url"])
+            return {}
+        return events
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.events.make_intervals_request", fake_request
+    )
+    result = asyncio.run(
+        delete_events_by_date_range(
+            start_date="2024-01-01", end_date="2024-01-07", athlete_id="1", category="WORKOUT"
+        )
+    )
+    assert deleted_ids == []
+    assert "Deleted 0" in result

@@ -407,7 +407,16 @@ def format_event_summary(event: dict[str, Any]) -> str:
 
     # Update to check for "date" if "start_date_local" is not provided
     event_date = event.get("start_date_local", event.get("date", "Unknown"))
-    event_type = "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
+    # Surface the event's sport (event["type"]) as the primary Type, since the
+    # previous implementation ignored it and always printed "Other" for any
+    # ordinary workout. Annotate with race / structured-workout flags when set.
+    sport = event.get("type", "Other")
+    flags: list[str] = []
+    if event.get("race"):
+        flags.append("Race")
+    if event.get("workout_doc"):
+        flags.append("Workout")
+    event_type = f"{sport} ({', '.join(flags)})" if flags else sport
     event_name = event.get("name", "Unnamed")
     event_id = event.get("id", "N/A")
     event_desc = event.get("description", "No description")
@@ -422,28 +431,36 @@ Description: {event_desc}"""
 def format_event_details(event: dict[str, Any]) -> str:
     """Format detailed event information into a readable string."""
 
+    # Intervals.icu event payloads expose the date as start_date_local (and
+    # end_date_local); there is no `date` field. AGENTS.md mandates
+    # start_date_local for any human-facing text.
+    event_date = event.get("start_date_local", event.get("date", "Unknown"))
     event_details = f"""Event Details:
 
 ID: {event.get("id", "N/A")}
-Date: {event.get("date", "Unknown")}
+Date: {event_date}
 Name: {event.get("name", "Unnamed")}
 Description: {event.get("description", "No description")}"""
 
-    # Check if it's a workout-based event
-    if "workout" in event and event["workout"]:
-        workout = event["workout"]
-        event_details += f"""
-
-Workout Information:
-Workout ID: {workout.get("id", "N/A")}
-Sport: {workout.get("sport", "Unknown")}
-Duration: {workout.get("duration", 0)} seconds
-TSS: {workout.get("tss", "N/A")}"""
-
-        # Include interval count if available
-        if "intervals" in workout and isinstance(workout["intervals"], list):
-            event_details += f"""
-Intervals: {len(workout["intervals"])}"""
+    # Structured workout is returned under `workout_doc` (description, duration,
+    # distance, target, steps, zoneTimes, …). The previous code looked up
+    # `workout` — a non-existent key — and silently dropped the section.
+    workout_doc = event.get("workout_doc")
+    if isinstance(workout_doc, dict) and workout_doc:
+        workout_lines = ["", "Workout Information:"]
+        workout_desc = workout_doc.get("description")
+        if workout_desc:
+            workout_lines.append(f"Description: {workout_desc}")
+        if workout_doc.get("duration") is not None:
+            workout_lines.append(f"Duration: {workout_doc['duration']} seconds")
+        if workout_doc.get("distance") is not None:
+            workout_lines.append(f"Distance: {workout_doc['distance']} meters")
+        if workout_doc.get("target"):
+            workout_lines.append(f"Target: {workout_doc['target']}")
+        steps = workout_doc.get("steps")
+        if isinstance(steps, list):
+            workout_lines.append(f"Steps: {len(steps)}")
+        event_details += "\n".join(workout_lines)
 
     # Check if it's a race
     if event.get("race"):
