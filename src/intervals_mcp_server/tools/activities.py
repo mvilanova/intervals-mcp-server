@@ -198,9 +198,20 @@ async def get_activity_details(activity_id: str, api_key: str | None = None) -> 
     activity_data = result[0] if isinstance(result, list) and result else result
     if not isinstance(activity_data, dict):
         return f"Invalid activity format for activity {activity_id}."
-
-    # Resolve gear name (uses configured athlete_id via ATHLETE_ID env var)
-    await resolve_gear_for_activity(activity_data, api_key=api_key)
+    # Resolve gear for the activity's owner when the payload carries one.
+    # The /activity/{id} endpoint is global (no athlete scope), so the
+    # configured ATHLETE_ID may not match the activity's owner; using the
+    # configured athlete's catalog would resolve the gear id to N/A (or a
+    # wrong name on id collision). AGENTS.md names this as the wrong-
+    # account foot-gun's code-level instance.
+    activity_athlete_id = activity_data.get("athlete_id")
+    if activity_athlete_id is None and isinstance(activity_data.get("athlete"), dict):
+        activity_athlete_id = activity_data["athlete"].get("id")
+    await resolve_gear_for_activity(
+        activity_data,
+        athlete_id=activity_athlete_id,
+        api_key=api_key,
+    )
 
     # Return a more detailed view of the activity
     detailed_view = format_activity_summary(activity_data)
