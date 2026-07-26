@@ -1292,3 +1292,60 @@ def test_delete_events_by_date_range_category_no_match_deletes_nothing(monkeypat
     )
     assert deleted_ids == []
     assert "Deleted 0" in result
+
+import logging  # noqa: E402  pylint: disable=wrong-import-position
+
+from intervals_mcp_server import server as server_module  # noqa: E402  pylint: disable=wrong-import-position
+from intervals_mcp_server.config import Config  # noqa: E402  pylint: disable=wrong-import-position
+
+
+def test_log_configured_account_surfaces_athlete_id_and_key_fingerprint(monkeypatch, caplog):
+    """The MCP server must log the configured ATHLETE_ID and a short API_KEY
+    fingerprint at startup so .env drift vs athlete-profile.md is visible.
+
+    AGENTS.md names the wrong-account foot-gun (MCP .env drift from
+    athlete-profile.md) as the silent-failure mode that misroutes reads
+    to a different athlete. Without a startup diagnostic line, the only
+    way to detect it is by external cross-checking, which a calling agent
+    cannot do reliably.
+    """
+    monkeypatch.setenv("ATHLETE_ID", "i141853")
+    monkeypatch.setenv("API_KEY", "5mob1tjmtssjjsq9rvrhsjy4w")
+
+    caplog.set_level(logging.INFO, logger="intervals_icu_mcp_server")
+    server_module._log_configured_account(
+        Config(
+            intervals_api_base_url="https://intervals.icu/api/v1",
+            user_agent="intervalsicu-mcp-server/1.0",
+        )
+    )
+
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("i141853" in m for m in messages), (
+        f"configured ATHLETE_ID missing from startup log: {messages}"
+    )
+    assert any("5mob" in m for m in messages), (
+        f"API_KEY fingerprint missing from startup log: {messages}"
+    )
+
+
+def test_log_configured_account_warns_when_credentials_missing(monkeypatch, caplog):
+    """When ATHLETE_ID or API_KEY is empty at startup, the server must warn
+    loudly so missing-config regressions are caught at boot, not at first
+    request.
+    """
+    monkeypatch.setenv("ATHLETE_ID", "")
+    monkeypatch.setenv("API_KEY", "")
+
+    caplog.set_level(logging.WARNING, logger="intervals_icu_mcp_server")
+    server_module._log_configured_account(
+        Config(
+            intervals_api_base_url="https://intervals.icu/api/v1",
+            user_agent="intervalsicu-mcp-server/1.0",
+        )
+    )
+
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("ATHLETE_ID" in m or "API_KEY" in m for m in messages), (
+        f"missing-credentials warning not emitted: {messages}"
+    )
