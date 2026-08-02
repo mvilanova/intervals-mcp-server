@@ -50,7 +50,7 @@ from intervals_mcp_server.api.client import (
     httpx_client,  # Re-export for backward compatibility with tests
     make_intervals_request,
 )
-from intervals_mcp_server.config import get_config
+from intervals_mcp_server.config import Config, get_config
 from intervals_mcp_server.mcp_instance import mcp
 
 # Import types and validation
@@ -64,6 +64,40 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger("intervals_icu_mcp_server")
+
+
+def _log_configured_account(config: Config) -> None:
+    """Log the configured ATHLETE_ID and a short API_KEY fingerprint at startup.
+
+    AGENTS.md names the wrong-account foot-gun (MCP .env drift from
+    athlete-profile.md) as the silent-failure mode that misroutes reads to
+    a different athlete. Surfacing the configured athlete_id and api_key
+    fingerprint at boot is the first diagnostic line of defense — without
+    it, drift can only be caught by external cross-checking, which a
+    calling agent cannot do reliably.
+    """
+    athlete_id = config.athlete_id
+    api_key = config.api_key
+    if athlete_id and api_key:
+        logger.info(
+            "Configured for athlete %s with API key %s... (len=%d)",
+            athlete_id,
+            api_key[:4],
+            len(api_key),
+        )
+        return
+    missing: list[str] = []
+    if not athlete_id:
+        missing.append("ATHLETE_ID")
+    if not api_key:
+        missing.append("API_KEY")
+    logger.warning(
+        "Intervals.icu MCP server started without %s — pass credentials "
+        "explicitly to each tool, or set the missing env vars to restore "
+        "the fallback path.",
+        " and ".join(missing),
+    )
+
 
 # Get configuration instance
 config = get_config()
@@ -126,6 +160,10 @@ __all__ = [
 if __name__ == "__main__":
     # Validate ATHLETE_ID when server starts (not at import time to allow tests)
     validate_athlete_id(config.athlete_id)
+
+    # Surface the configured account so .env drift vs athlete-profile.md
+    # is visible at boot, not silently misroute requests later.
+    _log_configured_account(config)
 
     # Setup transport and start server
     selected_transport = setup_transport()
