@@ -392,3 +392,74 @@ async def add_activity_message(
     if msg_id is not None:
         return f"Successfully added message (ID: {msg_id}) to activity {activity_id}."
     return f"Message appears to have been added to activity {activity_id}, but no ID was returned. Please verify manually."
+
+
+@mcp.tool()
+async def update_activity(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    activity_id: str,
+    name: str | None = None,
+    description: str | None = None,
+    icu_rpe: int | None = None,
+    feel: int | None = None,
+    trainer: bool | None = None,
+    sport_type: str | None = None,
+    gear_id: int | None = None,
+    api_key: str | None = None,
+) -> str:
+    """Update metadata fields on an existing activity in Intervals.icu
+
+    Only the fields you provide are updated — unspecified fields are left unchanged.
+
+    Args:
+        activity_id: The Intervals.icu activity ID
+        name: New name/title for the activity (optional)
+        description: New description for the activity (optional)
+        icu_rpe: Rating of Perceived Exertion on the CR-10 (Borg) scale: 1=Nothing at all, 2=Very easy, 3=Easy, 4=Comfortable, 5=Slightly challenging, 6=Difficult, 7=Hard, 8=Very hard, 9=Extremely hard, 10=Max effort (optional)
+        feel: How the athlete felt on a 1-5 scale: 1=Strong, 2=Good, 3=Normal, 4=Poor, 5=Weak (optional). As shown in the Intervals.icu UI with smiley faces from very happy to sad/X-eyes.
+        trainer: Whether the activity was on a trainer (optional, bool)
+        sport_type: Sport type — common values: Ride, Run, Swim, Walk, Row,
+                    VirtualRide, MountainBikeRide, GravelRide, Workout (optional).
+                    Invalid types are rejected by the API.
+        gear_id: Gear/bike ID from the athlete's equipment list (optional).
+                 Use `get_gear` to list available gear IDs.
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+    """
+    # Build payload with only the fields the caller explicitly set
+    payload: dict[str, Any] = {}
+    if name is not None:
+        payload["name"] = name
+    if description is not None:
+        payload["description"] = description
+    if icu_rpe is not None:
+        payload["icu_rpe"] = icu_rpe
+    if feel is not None:
+        payload["feel"] = feel
+    if trainer is not None:
+        payload["trainer"] = trainer
+    if sport_type is not None:
+        payload["sport_type"] = sport_type
+    if gear_id is not None:
+        payload["gear_id"] = gear_id
+
+    if not payload:
+        return "Error: No fields to update. Provide at least one of the optional fields."
+
+    result = await make_intervals_request(
+        url=f"/activity/{activity_id}",
+        api_key=api_key,
+        method="PUT",
+        data=payload,
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error updating activity: {error_message}"
+
+    if not result or not isinstance(result, dict):
+        return "Error: Unexpected response when updating activity."
+
+    updated_id = result.get("id")
+    if updated_id is not None:
+        updated_fields = list(payload)
+        return f"Successfully updated activity {activity_id} ({', '.join(updated_fields)})."
+    return f"Activity {activity_id} appears to have been updated, but no ID was returned. Please verify manually."

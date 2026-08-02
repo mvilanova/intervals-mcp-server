@@ -27,6 +27,11 @@ Usage:
         - get_activity_streams
         - get_activity_messages
         - add_activity_message
+        - update_activity
+        - get_sport_settings
+        - update_sport_settings
+        - get_gear_list
+        - update_wellness_data
         - get_events
         - get_event_by_id
         - add_or_update_event
@@ -77,6 +82,7 @@ from intervals_mcp_server.tools.activities import (  # pylint: disable=wrong-imp
     get_activity_intervals,
     get_activity_messages,
     get_activity_streams,
+    update_activity,
 )
 from intervals_mcp_server.tools.events import (  # pylint: disable=wrong-import-position  # noqa: E402
     add_or_update_event,
@@ -86,7 +92,7 @@ from intervals_mcp_server.tools.events import (  # pylint: disable=wrong-import-
     get_events,
 )
 from intervals_mcp_server.tools.gear import get_gear_list  # pylint: disable=wrong-import-position  # noqa: E402
-from intervals_mcp_server.tools.wellness import get_wellness_data  # pylint: disable=wrong-import-position  # noqa: E402
+from intervals_mcp_server.tools.wellness import get_wellness_data, update_wellness_data  # pylint: disable=wrong-import-position  # noqa: E402
 from intervals_mcp_server.tools.power_curves import get_athlete_power_curves  # pylint: disable=wrong-import-position  # noqa: E402
 from intervals_mcp_server.tools.custom_items import (  # pylint: disable=wrong-import-position  # noqa: E402
     create_custom_item,
@@ -95,6 +101,10 @@ from intervals_mcp_server.tools.custom_items import (  # pylint: disable=wrong-i
     get_custom_items,
     update_custom_item,
 )
+from intervals_mcp_server.tools.sport_settings import (  # pylint: disable=wrong-import-position  # noqa: E402
+    get_sport_settings,
+    update_sport_settings,
+)
 
 # Re-export make_intervals_request and httpx_client for backward compatibility
 # pylint: disable=duplicate-code  # This __all__ list is intentionally similar to tools/__init__.py
@@ -102,6 +112,7 @@ __all__ = [
     "make_intervals_request",
     "httpx_client",  # Re-exported for test compatibility
     "add_activity_message",
+    "update_activity",
     "get_activities",
     "get_activity_details",
     "get_activity_intervals",
@@ -113,16 +124,19 @@ __all__ = [
     "delete_events_by_date_range",
     "add_or_update_event",
     "get_wellness_data",
+    "update_wellness_data",
     "get_athlete_power_curves",
+    "get_gear_list",
     "get_custom_items",
     "get_custom_item_by_id",
     "create_custom_item",
     "update_custom_item",
     "delete_custom_item",
+    "get_sport_settings",
+    "update_sport_settings",
 ]
 
 
-# Run the server
 if __name__ == "__main__":
     # Validate ATHLETE_ID when server starts (not at import time to allow tests)
     validate_athlete_id(config.athlete_id)

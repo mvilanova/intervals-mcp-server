@@ -154,7 +154,7 @@ async def make_intervals_request(
     api_key: str | None = None,
     params: dict[str, Any] | None = None,
     method: str = "GET",
-    data: dict[str, Any] | None = None,
+    data: dict[str, Any] | list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | list[dict[str, Any]]:
     """
     Make a request to the Intervals.icu API with proper error handling.
