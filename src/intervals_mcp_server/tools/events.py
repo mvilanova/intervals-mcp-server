@@ -21,6 +21,21 @@ from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 config = get_config()
 
 
+def format_strength_description(title: str, blocks: list[dict]) -> str:
+    """Format strength training blocks as Intervals.icu bullet-point description.
+
+    Intervals.icu renders leading dashes as bullet points in workout descriptions,
+    matching the visual style of cycling workout steps.
+    """
+    lines = [title, ""]
+    for block in blocks:
+        lines.append(block["name"])
+        for exercise in block["exercises"]:
+            lines.append(f"- {exercise}")
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
 def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     name: str,
     workout_type: str,
@@ -28,17 +43,23 @@ def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-position
     workout_doc: WorkoutDoc | None,
     moving_time: int | None,
     distance: int | None,
+    description_override: str | None = None,
 ) -> dict[str, Any]:
     """Prepare event data dictionary for API request.
 
     Many arguments are required to match the Intervals.icu API event structure.
     """
     resolved_workout_type = resolve_activity_type(name, workout_type)
+    description = (
+        description_override
+        if description_override is not None
+        else (str(workout_doc) if workout_doc else None)
+    )
     return {
         "start_date_local": start_date + "T00:00:00",
         "category": "WORKOUT",
         "name": name,
-        "description": str(workout_doc) if workout_doc else None,
+        "description": description,
         "type": resolved_workout_type,
         "moving_time": moving_time,
         "distance": distance,
@@ -271,6 +292,7 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
     workout_doc: WorkoutDoc | None = None,
     moving_time: int | None = None,
     distance: int | None = None,
+    strength_training: list[dict] | None = None,
 ) -> str:
     """Post event for an athlete to Intervals.icu this follows the event api from intervals.icu
     If event_id is provided, the event will be updated instead of created.
@@ -284,9 +306,13 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
         start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
         name: Name of the activity
         workout_doc: steps as a list of Step objects (optional, but necessary to define workout steps)
-        workout_type: Workout type (e.g. Ride, Run, Swim, Walk, Row)
+        workout_type: Workout type (e.g. Ride, Run, Swim, Walk, Row, WeightTraining)
         moving_time: Total expected moving time of the workout in seconds (optional)
         distance: Total expected distance of the workout in meters (optional)
+        strength_training: List of exercise blocks for WeightTraining events (optional).
+                           Each block has "name" (str) and "exercises" (list[str]).
+                           When provided with workout_type="WeightTraining", the description
+                           is auto-formatted with Intervals.icu bullet-point syntax.
 
     Example:
         "workout_doc": {
@@ -346,8 +372,12 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
 
     try:
         validated_date = validate_date(start_date)
+        strength_desc: str | None = None
+        if workout_type == "WeightTraining" and strength_training:
+            strength_desc = format_strength_description(name, strength_training)
         event_data = _prepare_event_data(
-            name, workout_type, validated_date, workout_doc, moving_time, distance
+            name, workout_type, validated_date, workout_doc, moving_time, distance,
+            description_override=strength_desc,
         )
         return await _create_or_update_event_request(
             athlete_id_to_use, api_key, event_data, validated_date, event_id

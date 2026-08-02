@@ -4,6 +4,21 @@ Model Context Protocol (MCP) server for connecting Claude and ChatGPT with the I
 
 If you find the Model Context Protocol (MCP) server useful, please consider supporting its continued development with a donation.
 
+## About this fork
+
+This fork adds a **season planning module** on top of the upstream server: five new MCP tools that let an AI assistant build and manage an Annual Training Plan (ATP) directly on your Intervals.icu calendar (automatic phase selection, weekly TSS targets, recovery weeks, and race event creation). See [`planning.py`](src/intervals_mcp_server/tools/planning.py) for details.
+
+These changes are proposed upstream in [mvilanova/intervals-mcp-server#112](https://github.com/mvilanova/intervals-mcp-server/pull/112), which is still awaiting review from the maintainer. Until it's merged (or if it never is), you can use this fork directly:
+
+```bash
+git clone https://github.com/Jochem-van-Appeldoorn/intervals-mcp-server.git
+cd intervals-mcp-server
+```
+
+Or grab a packaged version from the [Releases page](https://github.com/Jochem-van-Appeldoorn/intervals-mcp-server/releases) without needing git at all.
+
+Everything else below is unchanged from upstream and applies the same way to this fork.
+
 ## Requirements
 
 - Python 3.12 or higher
@@ -265,6 +280,11 @@ Once the server is running and Claude Desktop is configured, you can use the fol
 - `create_custom_item`: Create a new custom item for an athlete
 - `update_custom_item`: Update an existing custom item
 - `delete_custom_item`: Delete a custom item
+- `create_atp_plan`: Build a full Annual Training Plan up to an A-race date, posted to the calendar as phase notes *(this fork only)*
+- `get_atp_plan`: Read back the ATP phase notes for a date range *(this fork only)*
+- `get_atp_week_note`: Get the ATP phase note covering a specific week *(this fork only)*
+- `get_planning_context`: One-shot snapshot (CTL/ATL/TSB/HRV, ATP phase, planned workouts, upcoming races) for planning a given week *(this fork only)*
+- `add_race_event`: Create a race event (A/B/C priority) on the calendar *(this fork only)*
 
 ## Usage with ChatGPT
 
