@@ -9,7 +9,7 @@ These tests verify that the Value dataclass correctly handles:
 
 import pytest
 
-from intervals_mcp_server.utils.types import Value, ValueUnits
+from intervals_mcp_server.utils.types import PaceUnits, Step, Value, ValueUnits
 
 
 def test_str_percent_ftp():
@@ -28,6 +28,7 @@ def test_str_ramp_percent_ftp():
     ("MINS_KM", ValueUnits.MINS_KM),
     ("MINS_MILE", ValueUnits.MINS_MILE),
     ("SECS_100M", ValueUnits.SECS_100M),
+    ("SECS_100Y", ValueUnits.SECS_100Y),
     ("SECS_500M", ValueUnits.SECS_500M),
 ])
 def test_pace_units_deserialise_from_api_string(unit_str, expected_enum):
@@ -36,3 +37,13 @@ def test_pace_units_deserialise_from_api_string(unit_str, expected_enum):
     of these unit strings were missing from the ValueUnits enum."""
     val = Value.from_dict({"value": 5.0, "units": unit_str})
     assert val.units == expected_enum
+
+
+def test_step_distance_rendered_in_yards_for_secs_100y():
+    """A distance-based swim step must render in yards when pace_units is SECS_100Y
+    (e.g. workouts in a 25yd pool).  Without SECS_100Y handling the distance would be
+    formatted in metres/kilometres, so this asserts the yards-specific code path."""
+    step = Step(distance=100.0)
+    assert "100yd" in step.to_str(pace_units=PaceUnits.SECS_100Y)
+    # Sanity check the default path still uses metres so the test pins the SECS_100Y branch.
+    assert "100mtr" in step.to_str()
