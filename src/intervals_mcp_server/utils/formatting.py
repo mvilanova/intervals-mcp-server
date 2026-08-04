@@ -89,7 +89,7 @@ Average Power: {activity.get("avgPower", activity.get("icu_average_watts", activ
 Weighted Avg Power: {activity.get("icu_weighted_avg_watts", "N/A")} watts
 Training Load: {activity.get("trainingLoad", activity.get("icu_training_load", "N/A"))}
 FTP: {activity.get("icu_ftp", "N/A")} watts
-Kilojoules: {activity.get("icu_joules", "N/A")}
+Work: {activity.get("icu_joules", "N/A")} J
 Intensity: {activity.get("icu_intensity", "N/A")}
 Power:HR Ratio: {activity.get("icu_power_hr", "N/A")}
 Variability Index: {activity.get("icu_variability_index", "N/A")}
@@ -276,11 +276,11 @@ def _format_nutrition_hydration(entries: dict[str, Any]) -> list[str]:
     """
     nutrition_lines = []
     for k, label, unit in [
-        ("kcalConsumed", "Calories Consumed", ""),
+        ("kcalConsumed", "Calories Consumed", "kcal"),
         ("carbohydrates", "Carbohydrates", "g"),
         ("protein", "Protein", "g"),
         ("fatTotal", "Fat", "g"),
-        ("hydrationVolume", "Hydration Volume", ""),
+        ("hydrationVolume", "Hydration Volume", "ml"),
     ]:
         if entries.get(k) is not None:
             suffix = f" {unit}" if unit else ""
@@ -533,8 +533,8 @@ Power Metrics:
   Weighted Avg Power: {interval.get("weighted_average_watts", 0)} watts
   Intensity: {interval.get("intensity", 0)}
   Training Load: {interval.get("training_load", 0)}
-  Joules: {interval.get("joules", 0)}
-  Joules > FTP: {interval.get("joules_above_ftp", 0)}
+  Work: {interval.get("joules", 0)} J
+  Work > FTP: {interval.get("joules_above_ftp", 0)} J
   Power Zone: {interval.get("zone", "N/A")} ({interval.get("zone_min_watts", 0)}-{interval.get("zone_max_watts", 0)} watts)
   W' Balance: Start {interval.get("wbal_start", 0)}, End {interval.get("wbal_end", 0)}
   L/R Balance: {interval.get("avg_lr_balance", 0)}
