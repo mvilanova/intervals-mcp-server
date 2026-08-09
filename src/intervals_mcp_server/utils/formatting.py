@@ -30,9 +30,11 @@ class _KeyTracker(dict):
         return super().__contains__(key)
 
 
-def _format_datetime(value: str) -> str:
+def _format_datetime(value: str | None) -> str:
     """Format a full ISO datetime string as 'YYYY-MM-DD HH:MM:SS'."""
-    if isinstance(value, str) and len(value) > 10:
+    if not isinstance(value, str):
+        return "Unknown"
+    if len(value) > 10:
         # Format datetime if it's a full ISO string
         try:
             return datetime.fromisoformat(value.replace("Z", "+00:00")).strftime(
