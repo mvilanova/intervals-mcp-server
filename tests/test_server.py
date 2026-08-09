@@ -104,6 +104,62 @@ def test_get_activity_details(monkeypatch):
     assert "Activity: Morning Ride" in result
 
 
+def test_get_activity_details_local_time(monkeypatch):
+    """
+    Test get_activity_details surfaces the local start time when the API payload
+    provides start_date_local.
+    """
+    sample = {
+        "name": "Evening Run",
+        "id": 123,
+        "type": "Run",
+        "start_date": "2026-08-09T16:59:18Z",
+        "start_date_local": "2026-08-09T18:59:18",
+        "distance": 10000,
+        "duration": 3600,
+    }
+
+    async def fake_request(*_args, **_kwargs):
+        return sample
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_details(123))
+    assert "Date: 2026-08-09 16:59:18" in result
+    assert "Date (Local time): 2026-08-09 18:59:18" in result
+
+
+def test_get_activities_local_time(monkeypatch):
+    """
+    Test get_activities list output includes the local start time for each activity.
+    """
+    sample = [
+        {
+            "name": "Evening Run",
+            "id": 1,
+            "type": "Run",
+            "start_date": "2026-08-09T16:59:18Z",
+            "start_date_local": "2026-08-09T18:59:18",
+            "distance": 10000,
+            "duration": 3600,
+        }
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return sample
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activities(athlete_id="1", limit=1, include_unnamed=True))
+    assert "Activities:" in result
+    assert "Date: 2026-08-09 16:59:18" in result
+    assert "Date (Local time): 2026-08-09 18:59:18" in result
+
+
 def test_get_events(monkeypatch):
     """
     Test get_events returns a formatted string containing event details when given a sample event.

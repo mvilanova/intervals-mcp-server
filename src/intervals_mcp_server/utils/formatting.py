@@ -30,17 +30,30 @@ class _KeyTracker(dict):
         return super().__contains__(key)
 
 
-def format_activity_summary(activity: dict[str, Any]) -> str:
-    """Format an activity into a readable string."""
-    start_time = activity.get("startTime", activity.get("start_date", "Unknown"))
-
-    if isinstance(start_time, str) and len(start_time) > 10:
+def _format_datetime(value: str | None) -> str:
+    """Format a full ISO datetime string as 'YYYY-MM-DD HH:MM:SS'."""
+    if not isinstance(value, str):
+        return "Unknown"
+    if len(value) > 10:
         # Format datetime if it's a full ISO string
         try:
-            dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-            start_time = dt.strftime("%Y-%m-%d %H:%M:%S")
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
         except ValueError:
             pass
+    return value
+
+
+def format_activity_summary(activity: dict[str, Any]) -> str:
+    """Format an activity into a readable string."""
+    start_time = _format_datetime(
+        activity.get("startTime", activity.get("start_date", "Unknown"))
+    )
+
+    start_time_local = (
+        _format_datetime(activity.get("start_date_local", "Unknown")) or "Unknown"
+    )
 
     rpe = activity.get("perceived_exertion", None)
     if rpe is None:
@@ -77,6 +90,7 @@ Activity: {activity.get("name", "Unnamed")}
 ID: {activity.get("id", "N/A")}
 Type: {activity.get("type", "Unknown")}
 Date: {start_time}
+Date (Local time): {start_time_local}
 Description: {activity.get("description", "N/A")}
 Distance: {activity.get("distance", 0)} meters
 Duration: {activity.get("duration", activity.get("elapsed_time", 0))} seconds
