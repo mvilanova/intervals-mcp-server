@@ -34,6 +34,43 @@ def test_format_activity_summary():
     assert "ID: 1" in result
 
 
+def test_format_activity_summary_local_time():
+    """
+    Test that format_activity_summary exposes the local start time from
+    start_date_local while keeping the UTC Date line.
+    """
+    data = {
+        "name": "Evening Run",
+        "id": 1,
+        "type": "Run",
+        "start_date": "2026-08-09T16:59:18Z",
+        "start_date_local": "2026-08-09T18:59:18",
+        "distance": 10000,
+        "duration": 3600,
+    }
+    result = format_activity_summary(data)
+    assert "Date: 2026-08-09 16:59:18" in result
+    assert "Date (Local time): 2026-08-09 18:59:18" in result
+
+
+def test_format_activity_summary_unknown_when_absent():
+    """
+    Test that format_activity_summary renders "Unknown" for the local time line
+    when the API payload does not provide start_date_local.
+    """
+    data = {
+        "name": "Morning Ride",
+        "id": 1,
+        "type": "Ride",
+        "startTime": "2024-01-01T08:00:00Z",
+        "distance": 1000,
+        "duration": 3600,
+    }
+    result = format_activity_summary(data)
+    assert "Date: 2024-01-01 08:00:00" in result
+    assert "Date (Local time): Unknown" in result
+
+
 def test_format_workout():
     """
     Test that format_workout returns a string containing the workout name and interval count.
