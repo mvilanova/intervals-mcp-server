@@ -32,7 +32,11 @@ class _KeyTracker(dict):
 
 def format_activity_summary(activity: dict[str, Any]) -> str:
     """Format an activity into a readable string."""
-    start_time = activity.get("startTime", activity.get("start_date", "Unknown"))
+    # Intervals.icu returns start_date in UTC and start_date_local in the athlete's
+    # timezone: display local, otherwise times are shifted (e.g. -2h in CEST).
+    start_time = activity.get(
+        "start_date_local", activity.get("startTime", activity.get("start_date", "Unknown"))
+    )
 
     if isinstance(start_time, str) and len(start_time) > 10:
         # Format datetime if it's a full ISO string

@@ -34,6 +34,21 @@ def test_format_activity_summary():
     assert "ID: 1" in result
 
 
+def test_format_activity_summary_prefers_local_time():
+    """
+    The displayed date must be the athlete-local start time, not UTC.
+    """
+    data = {
+        "name": "Morning Run",
+        "id": 2,
+        "type": "Run",
+        "start_date": "2026-08-15T05:27:29Z",
+        "start_date_local": "2026-08-15T07:27:29",
+    }
+    result = format_activity_summary(data)
+    assert "Date: 2026-08-15 07:27:29" in result
+
+
 def test_format_workout():
     """
     Test that format_workout returns a string containing the workout name and interval count.
