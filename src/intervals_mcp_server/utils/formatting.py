@@ -412,11 +412,17 @@ def format_event_summary(event: dict[str, Any]) -> str:
     event_id = event.get("id", "N/A")
     event_desc = event.get("description", "No description")
 
-    return f"""Date: {event_date}
+    summary = f"""Date: {event_date}
 ID: {event_id}
 Type: {event_type}
 Name: {event_name}
 Description: {event_desc}"""
+
+    # Only shown when the event carries the flag; it is null on most events.
+    if event.get("indoor") is not None:
+        summary += f"\nIndoor: {event['indoor']}"
+
+    return summary
 
 
 def format_event_details(event: dict[str, Any]) -> str:
@@ -428,6 +434,11 @@ ID: {event.get("id", "N/A")}
 Date: {event.get("date", "Unknown")}
 Name: {event.get("name", "Unnamed")}
 Description: {event.get("description", "No description")}"""
+
+    # Only shown when the event carries the flag; it is null on most events.
+    if event.get("indoor") is not None:
+        event_details += f"""
+Indoor: {event["indoor"]}"""
 
     # Check if it's a workout-based event
     if "workout" in event and event["workout"]:

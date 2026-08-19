@@ -28,13 +28,14 @@ def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-position
     workout_doc: WorkoutDoc | None,
     moving_time: int | None,
     distance: int | None,
+    indoor: bool | None = None,
 ) -> dict[str, Any]:
     """Prepare event data dictionary for API request.
 
     Many arguments are required to match the Intervals.icu API event structure.
     """
     resolved_workout_type = resolve_activity_type(name, workout_type)
-    return {
+    event_data: dict[str, Any] = {
         "start_date_local": start_date + "T00:00:00",
         "category": "WORKOUT",
         "name": name,
@@ -43,6 +44,11 @@ def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-position
         "moving_time": moving_time,
         "distance": distance,
     }
+    # Omit `indoor` entirely when unset so partial updates don't clear an
+    # existing flag on the event.
+    if indoor is not None:
+        event_data["indoor"] = indoor
+    return event_data
 
 
 def _handle_event_response(
@@ -271,6 +277,7 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
     workout_doc: WorkoutDoc | None = None,
     moving_time: int | None = None,
     distance: int | None = None,
+    indoor: bool | None = None,
 ) -> str:
     """Post event for an athlete to Intervals.icu this follows the event api from intervals.icu
     If event_id is provided, the event will be updated instead of created.
@@ -287,6 +294,8 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
         workout_type: Workout type (e.g. Ride, Run, Swim, Walk, Row)
         moving_time: Total expected moving time of the workout in seconds (optional)
         distance: Total expected distance of the workout in meters (optional)
+        indoor: Mark the event as an indoor/trainer session. Optional; omit to leave
+            unchanged when updating an existing event.
 
     Example:
         "workout_doc": {
@@ -347,7 +356,7 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
     try:
         validated_date = validate_date(start_date)
         event_data = _prepare_event_data(
-            name, workout_type, validated_date, workout_doc, moving_time, distance
+            name, workout_type, validated_date, workout_doc, moving_time, distance, indoor
         )
         return await _create_or_update_event_request(
             athlete_id_to_use, api_key, event_data, validated_date, event_id
