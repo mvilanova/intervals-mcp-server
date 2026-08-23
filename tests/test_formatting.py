@@ -138,7 +138,6 @@ def test_format_wellness_entry_macros_null_hidden():
     # anchor the negative assertion on the line-prefix form we would emit.
     assert "- Fat:" not in result
 
-
 def test_format_event_summary():
     """
     Test that format_event_summary returns a string containing the event date and type.
@@ -152,7 +151,51 @@ def test_format_event_summary():
     }
     summary = format_event_summary(event)
     assert "Date: 2024-01-01" in summary
-    assert "Type: Race" in summary
+    assert "Race" in summary
+
+
+def test_format_event_summary_shows_sport():
+    """The Type line must surface the event's sport (event['type']), not 'Other'.
+
+    AGENTS.md: 'get_events always reports Type: Other regardless of the
+    actual type value on the event. So an event with type=Run will look
+    like Type: Other in the MCP response.'
+    """
+    summary = format_event_summary(
+        {"id": "e1", "name": "Easy Run", "type": "Run", "start_date_local": "2024-01-01"}
+    )
+    assert "Type: Run" in summary
+    assert "Type: Other" not in summary
+
+
+def test_format_event_summary_annotates_race_with_sport():
+    """A race event must show the sport and the Race flag, not just 'Race'."""
+    summary = format_event_summary(
+        {
+            "id": "e1",
+            "name": "Spring 10k",
+            "type": "Run",
+            "race": True,
+            "start_date_local": "2024-04-15",
+        }
+    )
+    assert "Type: Run" in summary
+    assert "Race" in summary
+
+
+def test_format_event_summary_annotates_workout_doc():
+    """An event with a structured workout_doc must be flagged as a Workout."""
+    summary = format_event_summary(
+        {
+            "id": "e1",
+            "name": "VO2max",
+            "type": "Ride",
+            "workout_doc": {"steps": []},
+            "start_date_local": "2024-01-15",
+        }
+    )
+    assert "Type: Ride" in summary
+    assert "Workout" in summary
 
 
 def test_format_event_details():
