@@ -21,12 +21,26 @@ except ImportError:
 
 @dataclass
 class Config:
-    """Configuration settings for the Intervals.icu MCP Server."""
+    """Configuration settings for the Intervals.icu MCP Server.
 
-    api_key: str
-    athlete_id: str
+    Note: ``api_key`` and ``athlete_id`` are exposed as @property below so
+    that ``os.environ`` changes (e.g. ``.env`` edits after the server has
+    started) take effect on the next read. The AGENTS.md hard rule
+    "always pass ``athlete_id`` AND ``api_key`` explicitly" exists because
+    of stale fallback drift; this design keeps the fallback in sync with
+    the environment without forcing callers to restart.
+    """
+
     intervals_api_base_url: str
     user_agent: str
+
+    @property
+    def api_key(self) -> str:
+        return os.getenv("API_KEY", "")
+
+    @property
+    def athlete_id(self) -> str:
+        return os.getenv("ATHLETE_ID", "")
 
 
 _config_instance: Config | None = None  # pylint: disable=invalid-name
@@ -37,23 +51,26 @@ def load_config() -> Config:
     Load configuration from environment variables.
 
     Returns:
-        Config: Configuration instance with loaded values.
+        Config: Configuration instance. The ``api_key`` and ``athlete_id``
+        fields are read from ``os.environ`` on every access, so updates to
+        the environment after this function returns take effect on the
+        next read.
 
     Raises:
-        ValueError: If athlete_id is invalid (when non-empty).
+        ValueError: If ``athlete_id`` is invalid at load time (when non-empty).
     """
-    api_key = os.getenv("API_KEY", "")
-    athlete_id = os.getenv("ATHLETE_ID", "")
     intervals_api_base_url = os.getenv("INTERVALS_API_BASE_URL", "https://intervals.icu/api/v1")
     user_agent = "intervalsicu-mcp-server/1.0"
 
-    # Validate athlete_id if provided (empty string is allowed)
+    # Validate athlete_id at load time only. api_key/athlete_id are
+    # env-backed properties, so updates after load are surfaced as
+    # whatever the API eventually returns — a best-effort fallback, not
+    # a primary path (the AGENTS.md hard rule is to pass both explicitly).
+    athlete_id = os.getenv("ATHLETE_ID", "")
     if athlete_id:
         validate_athlete_id(athlete_id)
 
     return Config(
-        api_key=api_key,
-        athlete_id=athlete_id,
         intervals_api_base_url=intervals_api_base_url,
         user_agent=user_agent,
     )
@@ -64,7 +81,8 @@ def get_config() -> Config:
     Get the configuration instance (singleton pattern).
 
     Returns:
-        Config: The configuration instance.
+        Config: The configuration instance. ``api_key`` and ``athlete_id``
+        are read from the environment on every access.
     """
     global _config_instance  # pylint: disable=global-statement  # noqa: PLW0603 - singleton pattern
     if _config_instance is None:
