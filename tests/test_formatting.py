@@ -155,6 +155,22 @@ def test_format_event_summary():
     assert "Type: Race" in summary
 
 
+def test_format_event_summary_uses_activity_type():
+    """Test that an Intervals.icu event displays its sport type."""
+    event = {
+        "start_date_local": "2026-09-09T00:00:00",
+        "id": 134059276,
+        "type": "Run",
+        "category": "WORKOUT",
+        "name": "Tempo 3-2-1",
+        "description": "Controlled tempo",
+    }
+
+    summary = format_event_summary(event)
+
+    assert "Type: Run" in summary
+
+
 def test_format_event_details():
     """
     Test that format_event_details returns a string containing event and workout details.

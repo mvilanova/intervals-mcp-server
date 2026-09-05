@@ -133,20 +133,29 @@ def test_get_event_by_id(monkeypatch):
     """
     event = {
         "id": "e1",
-        "date": "2024-01-01",
+        "start_date_local": "2024-01-01T00:00:00",
+        "type": "Run",
+        "category": "WORKOUT",
         "name": "Test Event",
         "description": "desc",
         "race": True,
     }
 
-    async def fake_request(*_args, **_kwargs):
+    request_args = {}
+
+    async def fake_request(*_args, **kwargs):
+        request_args.update(kwargs)
         return event
 
     # Patch in both api.client and tools modules to ensure it works
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
     monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
     result = asyncio.run(get_event_by_id("e1", athlete_id="1"))
+    assert request_args["url"] == "/athlete/1/events/e1"
     assert "Event Details:" in result
+    assert "Date: 2024-01-01T00:00:00" in result
+    assert "Type: Run" in result
+    assert "Category: WORKOUT" in result
     assert "Test Event" in result
 
 
@@ -311,7 +320,10 @@ def test_add_or_update_event(monkeypatch):
         "type": "Ride",
     }
 
-    async def fake_post_request(*_args, **_kwargs):
+    request_args = {}
+
+    async def fake_post_request(*_args, **kwargs):
+        request_args.update(kwargs)
         return expected_response
 
     # Patch in both api.client and tools modules to ensure it works
@@ -326,6 +338,8 @@ def test_add_or_update_event(monkeypatch):
     )
     assert "Successfully created event id:" in result
     assert "e123" in result
+    assert request_args["data"]["type"] == "Ride"
+    assert "workout_type" not in request_args["data"]
 
 
 def test_get_activity_messages(monkeypatch):

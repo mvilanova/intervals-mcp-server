@@ -407,7 +407,11 @@ def format_event_summary(event: dict[str, Any]) -> str:
 
     # Update to check for "date" if "start_date_local" is not provided
     event_date = event.get("start_date_local", event.get("date", "Unknown"))
-    event_type = "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
+    event_type = event.get("type")
+    if not event_type:
+        event_type = (
+            "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
+        )
     event_name = event.get("name", "Unnamed")
     event_id = event.get("id", "N/A")
     event_desc = event.get("description", "No description")
@@ -422,10 +426,15 @@ Description: {event_desc}"""
 def format_event_details(event: dict[str, Any]) -> str:
     """Format detailed event information into a readable string."""
 
+    event_date = event.get("start_date_local", event.get("date", "Unknown"))
+    event_type = event.get("type", "Unknown")
+    event_category = event.get("category", "Unknown")
     event_details = f"""Event Details:
 
 ID: {event.get("id", "N/A")}
-Date: {event.get("date", "Unknown")}
+Date: {event_date}
+Type: {event_type}
+Category: {event_category}
 Name: {event.get("name", "Unnamed")}
 Description: {event.get("description", "No description")}"""
 
