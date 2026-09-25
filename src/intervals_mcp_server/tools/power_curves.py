@@ -5,13 +5,14 @@ This module contains tools for retrieving athlete power curve data.
 """
 
 import json
+import math
 from datetime import datetime
 from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import format_power_curves
-from intervals_mcp_server.utils.validation import resolve_activity_type, resolve_athlete_id
+from intervals_mcp_server.utils.validation import resolve_athlete_id
 
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
@@ -20,6 +21,89 @@ config = get_config()
 
 # 5s, 15s, 30s, 1min, 2min, 5min, 10min, 20min, 60min
 DEFAULT_DURATIONS: tuple[int, ...] = (5, 15, 30, 60, 120, 300, 600, 1200, 3600)
+DEFAULT_POWER_LAW_TIME_POINTS_MINUTES: tuple[float, ...] = (
+    5,
+    10,
+    20,
+    30,
+    60,
+    120,
+    180,
+    240,
+    300,
+)
+
+
+def _format_power_law_curve(
+    durations_minutes: list[float],
+    powers_watts: list[float],
+    time_points_minutes: list[float] | None = None,
+) -> str:
+    """Fit and format a power-law regression using duration in minutes."""
+    if len(durations_minutes) != len(powers_watts):
+        return "Error: durations_minutes and powers_watts must have the same number of values."
+    if len(durations_minutes) < 3:
+        return "Error: At least three duration and power points are required."
+
+    evaluation_points = time_points_minutes or list(DEFAULT_POWER_LAW_TIME_POINTS_MINUTES)
+    all_values = [*durations_minutes, *powers_watts, *evaluation_points]
+    if any(not math.isfinite(value) or value <= 0 for value in all_values):
+        return "Error: All durations, powers, and time points must be finite positive values."
+
+    log_durations = [math.log(duration) for duration in durations_minutes]
+    log_powers = [math.log(power) for power in powers_watts]
+    point_count = len(log_durations)
+    sum_log_durations = sum(log_durations)
+    sum_log_powers = sum(log_powers)
+    sum_log_duration_powers = sum(
+        duration * power for duration, power in zip(log_durations, log_powers, strict=True)
+    )
+    sum_log_durations_squared = sum(duration * duration for duration in log_durations)
+
+    denominator = (
+        point_count * sum_log_durations_squared - sum_log_durations * sum_log_durations
+    )
+    if math.isclose(denominator, 0.0):
+        return "Error: At least two distinct duration values are required."
+
+    exponent = (
+        point_count * sum_log_duration_powers - sum_log_durations * sum_log_powers
+    ) / denominator
+    coefficient = math.exp((sum_log_powers - exponent * sum_log_durations) / point_count)
+    doubling_power_loss_percent = (1 - math.pow(2, exponent)) * 100
+
+    lines = [
+        "Power-Law Power Curve:",
+        f"power = {coefficient:.4f} * duration_minutes^{exponent:.4f}",
+        f"Power loss when duration doubles: {doubling_power_loss_percent:.2f}%",
+        "",
+        "Modeled values:",
+    ]
+    for duration in evaluation_points:
+        power = coefficient * math.pow(duration, exponent)
+        lines.append(f"  {duration:g} min: {power:.2f}W")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def create_power_law_curve(
+    durations_minutes: list[float],
+    powers_watts: list[float],
+    time_points_minutes: list[float] | None = None,
+) -> str:
+    """Create a power curve by fitting a power-law regression to power-duration points.
+
+    Fits the equation ``power = a * duration_minutes^b`` using least-squares
+    linear regression on the natural logarithms of the supplied points.
+
+    Args:
+        durations_minutes: At least three positive duration values in minutes.
+        powers_watts: Positive power values in watts, one for each duration.
+        time_points_minutes: Positive durations in minutes at which to evaluate the curve.
+            Defaults to [5, 10, 20, 30, 60, 120, 180, 240, 300].
+    """
+    return _format_power_law_curve(durations_minutes, powers_watts, time_points_minutes)
 
 
 def _build_curves_param(
@@ -66,6 +150,102 @@ def _validate_dates(start_date: str | None, end_date: str | None) -> str | None:
         except ValueError:
             return "Error: Dates must be in YYYY-MM-DD format."
     return None
+
+
+@mcp.tool()
+async def create_athlete_power_law_curve(
+    activity_type: str = "Ride",
+    period: str = "this_season",
+    indoor_outdoor: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    time_points_minutes: list[float] | None = None,
+    athlete_id: str | None = None,
+    api_key: str | None = None,
+) -> str:
+    """Create a power-law curve from an athlete's Intervals.icu power-curve data.
+
+    Retrieves the selected power curve from Intervals.icu, converts its durations
+    from seconds to minutes, and fits ``power = a * duration_minutes^b``.
+
+    Args:
+        activity_type: Activity type (e.g. "Ride", "Run", "VirtualRide").
+        period: Curve to fit: "this_season", "last_season", or "custom_range".
+        indoor_outdoor: Filter by location — "indoor" or "outdoor". Omit for no filtering.
+        start_date: Custom-range start date (YYYY-MM-DD). Required for "custom_range".
+        end_date: Custom-range end date (YYYY-MM-DD). Required for "custom_range".
+        time_points_minutes: Durations in minutes at which to evaluate the fitted curve.
+        athlete_id: Intervals.icu athlete ID. Uses ATHLETE_ID if omitted.
+        api_key: Optional API key override. Uses API_KEY if omitted.
+    """
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    if error_msg:
+        return error_msg
+
+    if period not in ("this_season", "last_season", "custom_range"):
+        return "Error: period must be 'this_season', 'last_season', or 'custom_range'."
+    if indoor_outdoor and indoor_outdoor not in ("indoor", "outdoor"):
+        return "Error: indoor_outdoor must be 'indoor', 'outdoor', or omitted."
+
+    date_error = _validate_dates(start_date, end_date)
+    if date_error:
+        return date_error
+    if period == "custom_range" and not start_date:
+        return "Error: start_date and end_date are required when period is 'custom_range'."
+    if period != "custom_range" and start_date:
+        return "Error: start_date and end_date can only be used with period 'custom_range'."
+
+    curve_id = {
+        "this_season": "s0",
+        "last_season": "s1",
+        "custom_range": f"r.{start_date}.{end_date}",
+    }[period]
+    params: dict[str, Any] = {
+        "curves": [curve_id],
+        "type": activity_type,
+        "includeRanks": False,
+    }
+    if indoor_outdoor:
+        params["filters"] = json.dumps(
+            [{"field_id": "indoor", "value": indoor_outdoor, "id": 1}]
+        )
+
+    result = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/power-curves",
+        params=params,
+        api_key=api_key,
+    )
+    if isinstance(result, dict) and "error" in result:
+        return f"Error fetching power curve: {result.get('message', 'Unknown error')}"
+
+    curve_list = result.get("list", []) if isinstance(result, dict) else result
+    if not isinstance(curve_list, list):
+        return f"No power curve data found for athlete {athlete_id_to_use} ({activity_type})."
+    curve = next(
+        (item for item in curve_list if isinstance(item, dict) and item.get("id") == curve_id),
+        None,
+    )
+    if curve is None:
+        return f"No {period} power curve data found for athlete {athlete_id_to_use} ({activity_type})."
+
+    seconds = curve.get("secs", [])
+    powers = curve.get("values", [])
+    if not isinstance(seconds, list) or not isinstance(powers, list):
+        return "Error: Intervals.icu returned invalid power curve data."
+    points = [
+        (seconds_value / 60, power)
+        for seconds_value, power in zip(seconds, powers, strict=False)
+        if isinstance(seconds_value, (int, float))
+        and isinstance(power, (int, float))
+        and seconds_value > 0
+        and power > 0
+    ]
+    if len(points) < 3:
+        return "Error: At least three valid Intervals.icu power-curve points are required."
+
+    durations_minutes = [duration for duration, _ in points]
+    powers_watts = [power for _, power in points]
+    return _format_power_law_curve(durations_minutes, powers_watts, time_points_minutes)
 
 
 def _extract_curve_data(
