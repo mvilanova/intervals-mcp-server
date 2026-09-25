@@ -33,6 +33,8 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_activity_messages,
     get_activity_streams,
     add_or_update_event,
+    create_athlete_power_law_curve,
+    create_power_law_curve,
     get_athlete_power_curves,
     get_event_by_id,
     get_events,
@@ -474,6 +476,59 @@ def test_get_athlete_power_curves(monkeypatch):
     assert "5s:" in result
     assert "W/kg" in result
     assert "i100" in result
+
+
+def test_create_power_law_curve():
+    """Test power-law curve fitting returns the equation and modeled values."""
+    result = asyncio.run(
+        create_power_law_curve(
+            durations_minutes=[5, 10, 20],
+            powers_watts=[400, 200, 100],
+            time_points_minutes=[5, 10, 20],
+        )
+    )
+
+    assert "power = 2000.0000 * duration_minutes^-1.0000" in result
+    assert "Power loss when duration doubles: 50.00%" in result
+    assert "5 min: 400.00W" in result
+    assert "10 min: 200.00W" in result
+    assert "20 min: 100.00W" in result
+
+
+def test_create_power_law_curve_rejects_invalid_points():
+    """Test power-law curve fitting rejects unusable regression inputs."""
+    result = asyncio.run(
+        create_power_law_curve(
+            durations_minutes=[5, 5, 5],
+            powers_watts=[400, 300, 200],
+        )
+    )
+
+    assert result == "Error: At least two distinct duration values are required."
+
+
+def test_create_athlete_power_law_curve(monkeypatch):
+    """Test athlete power-law fitting retrieves and models an Intervals.icu curve."""
+    request_kwargs = {}
+
+    async def fake_request(*_args, **kwargs):
+        request_kwargs.update(kwargs)
+        return POWER_CURVES_DATA
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.power_curves.make_intervals_request", fake_request
+    )
+    result = asyncio.run(
+        create_athlete_power_law_curve(
+            athlete_id="i1",
+            time_points_minutes=[5, 60],
+        )
+    )
+
+    assert request_kwargs["params"]["curves"] == ["s0"]
+    assert "Power-Law Power Curve:" in result
+    assert "5 min:" in result
+    assert "60 min:" in result
 
 
 def test_get_athlete_power_curves_custom_durations(monkeypatch):
