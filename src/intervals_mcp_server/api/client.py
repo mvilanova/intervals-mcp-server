@@ -14,7 +14,7 @@ from http import HTTPStatus
 from typing import Any
 
 import httpx  # pylint: disable=import-error
-from mcp.server.fastmcp import FastMCP  # pylint: disable=import-error
+from mcp.server.mcpserver import MCPServer  # pylint: disable=import-error
 
 from intervals_mcp_server.config import get_config
 
@@ -55,12 +55,12 @@ async def _get_httpx_client() -> httpx.AsyncClient:
 
 
 @asynccontextmanager
-async def setup_api_client(_app: FastMCP):
+async def setup_api_client(_app: MCPServer):
     """
     Context manager to ensure the shared httpx client is closed when the server stops.
 
     Args:
-        _app (FastMCP): The MCP server application instance.
+        _app (MCPServer): The MCP server application instance.
     """
     try:
         yield

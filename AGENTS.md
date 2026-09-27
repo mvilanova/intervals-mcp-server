@@ -1,6 +1,6 @@
 # Contributor Guide
 
-This project is a Python 3.12 backend service built with FastMCP and httpx. All source code lives under `src/intervals_mcp_server` and tests live under `tests`.
+This project is a Python 3.12 backend service built with the MCP Python SDK (`MCPServer`) and httpx. All source code lives under `src/intervals_mcp_server` and tests live under `tests`.
 
 ## Development Environment
 - Use [uv](https://github.com/astral-sh/uv) to create and manage the virtual environment.

@@ -1,10 +1,10 @@
 """
 MCP tools registry for Intervals.icu MCP Server.
 
-This module registers all available MCP tools with the FastMCP server instance.
+This module registers all available MCP tools with the MCPServer instance.
 """
 
-from mcp.server.fastmcp import FastMCP  # pylint: disable=import-error
+from mcp.server.mcpserver import MCPServer  # pylint: disable=import-error
 
 # Import all tools for re-export
 # Note: Tools register themselves via @mcp.tool() decorators when imported
@@ -35,16 +35,16 @@ from intervals_mcp_server.tools.gear import get_gear_list  # noqa: F401
 from intervals_mcp_server.tools.wellness import get_wellness_data  # noqa: F401
 
 
-def register_tools(mcp_instance: FastMCP) -> None:
+def register_tools(mcp_instance: MCPServer) -> None:
     """
-    Register all MCP tools with the FastMCP server instance.
+    Register all MCP tools with the MCPServer instance.
 
     This function imports all tool modules, which causes their @mcp.tool()
     decorators to register the tools. The tools need access to the mcp instance,
     so they will be imported after the mcp instance is created.
 
     Args:
-        mcp_instance (FastMCP): The FastMCP server instance to register tools with.
+        mcp_instance (MCPServer): The MCPServer server instance to register tools with.
     """
     # Tools are registered via decorators when modules are imported above
     # The mcp_instance parameter is kept for future use if needed
