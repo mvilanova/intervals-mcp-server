@@ -13,7 +13,13 @@ from intervals_mcp_server.tools.gear import (
     resolve_gear_for_activity,
     resolve_gear_for_activities,
 )
-from intervals_mcp_server.utils.formatting import format_activity_message, format_activity_summary, format_intervals
+from intervals_mcp_server.utils.formatting import (
+    format_activity_extra_fields,
+    format_activity_message,
+    format_activity_summary,
+    format_intervals,
+    format_zone_times,
+)
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
 
 # Import mcp instance from shared module for tool registration
@@ -128,6 +134,9 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     if error_msg:
         return error_msg
 
+    # A caller-supplied range must never be widened by the backfill below
+    explicit_range = start_date is not None or end_date is not None
+
     start_date, end_date = resolve_date_params(start_date, end_date)
 
     # Fetch more activities if we need to filter out unnamed ones
@@ -157,8 +166,9 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     if not include_unnamed:
         activities = _filter_named_activities(activities)
 
-        # If we don't have enough named activities, try to fetch more
-        if len(activities) < limit:
+        # If we don't have enough named activities, try to fetch more, but only
+        # when the date range was defaulted rather than requested by the caller
+        if len(activities) < limit and not explicit_range:
             more_activities = await _fetch_more_activities(
                 athlete_id_to_use, start_date, api_key, api_limit
             )
@@ -176,12 +186,15 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
 
 
 @mcp.tool()
-async def get_activity_details(activity_id: str, api_key: str | None = None) -> str:
+async def get_activity_details(
+    activity_id: str, api_key: str | None = None, include_all_fields: bool = False
+) -> str:
     """Get detailed information for a specific activity from Intervals.icu
 
     Args:
         activity_id: The Intervals.icu activity ID
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        include_all_fields: Whether to append every remaining raw payload field (optional, defaults to False)
     """
     # Call the Intervals.icu API
     result = await make_intervals_request(url=f"/activity/{activity_id}", api_key=api_key)
@@ -204,17 +217,10 @@ async def get_activity_details(activity_id: str, api_key: str | None = None) -> 
 
     # Return a more detailed view of the activity
     detailed_view = format_activity_summary(activity_data)
+    detailed_view += format_zone_times(activity_data)
 
-    # Add additional details if available
-    if "zones" in activity_data:
-        zones = activity_data["zones"]
-        detailed_view += "\nPower Zones:\n"
-        for zone in zones.get("power", []):
-            detailed_view += f"Zone {zone.get('number')}: {zone.get('secondsInZone')} seconds\n"
-
-        detailed_view += "\nHeart Rate Zones:\n"
-        for zone in zones.get("hr", []):
-            detailed_view += f"Zone {zone.get('number')}: {zone.get('secondsInZone')} seconds\n"
+    if include_all_fields:
+        detailed_view += format_activity_extra_fields(activity_data)
 
     return detailed_view
 

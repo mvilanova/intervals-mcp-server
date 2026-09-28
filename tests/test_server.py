@@ -79,6 +79,93 @@ def test_get_activities(monkeypatch):
     assert "Activities:" in result
 
 
+def test_get_activity_details_includes_time_breakdown_and_zones(monkeypatch):
+    """
+    Test get_activity_details surfaces coasting time and time-in-zone data.
+    """
+    sample = {
+        "name": "Gravel Ride",
+        "id": "i1",
+        "type": "GravelRide",
+        "startTime": "2024-01-01T08:00:00Z",
+        "elapsed_time": 13084,
+        "moving_time": 10831,
+        "coasting_time": 2689,
+        "icu_recording_time": 10968,
+        "icu_lap_count": 3,
+        "recording_stops": [11, 71],
+        "icu_zone_times": [{"id": "Z1", "secs": 3695}, {"id": "SS", "secs": 1484}],
+        "icu_hr_zone_times": [2632, 2037],
+        "icu_hr_zones": [132, 146],
+        "secret_field": "kept out by default",
+    }
+
+    async def fake_request(*_args, **_kwargs):
+        return sample
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    monkeypatch.setattr("intervals_mcp_server.tools.gear.make_intervals_request", fake_request)
+    _reset_gear_cache()
+
+    result = asyncio.run(get_activity_details("i1"))
+    assert "Coasting Time: 2689 seconds" in result
+    assert "Recording Stops: 2" in result
+    assert "Laps: 3" in result
+    assert "SS: 1484 seconds" in result
+    assert "Z2 (up to 146 bpm): 2037 seconds" in result
+    assert "secret_field" not in result
+
+    _reset_gear_cache()
+    full = asyncio.run(get_activity_details("i1", include_all_fields=True))
+    assert "All Other Fields:" in full
+    assert "secret_field" in full
+    _reset_gear_cache()
+
+
+def test_get_activities_explicit_range_is_not_widened(monkeypatch):
+    """
+    Test get_activities does not fetch older activities when the caller pins a date range.
+    """
+    sample = {
+        "name": "Morning Ride",
+        "id": 123,
+        "type": "Ride",
+        "startTime": "2024-01-01T08:00:00Z",
+        "distance": 1000,
+        "duration": 3600,
+    }
+    requested_ranges = []
+
+    async def fake_request(*_args, **kwargs):
+        url = kwargs.get("url", "")
+        if url.endswith("/activities"):
+            params = kwargs.get("params") or {}
+            requested_ranges.append((params.get("oldest"), params.get("newest")))
+            return [sample]
+        return []
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    monkeypatch.setattr("intervals_mcp_server.tools.gear.make_intervals_request", fake_request)
+    _reset_gear_cache()
+    result = asyncio.run(
+        get_activities(
+            athlete_id="1",
+            start_date="2024-01-01",
+            end_date="2024-01-07",
+            limit=10,
+        )
+    )
+    assert requested_ranges == [("2024-01-01", "2024-01-07")]
+    assert "Morning Ride" in result
+    _reset_gear_cache()
+
+
 def test_get_activity_details(monkeypatch):
     """
     Test get_activity_details returns a formatted string with the activity name and details.

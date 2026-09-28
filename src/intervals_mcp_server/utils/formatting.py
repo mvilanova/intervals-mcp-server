@@ -30,6 +30,32 @@ class _KeyTracker(dict):
         return super().__contains__(key)
 
 
+# Payload keys already rendered by `format_activity_summary` / `format_zone_times`.
+# Anything outside this set is only shown when a caller asks for all fields.
+_ACTIVITY_SUMMARY_KEYS = {
+    "_resolved_gear_name",
+    "avgHr", "avgPower", "avg_lr_balance", "average_cadence", "average_heartrate",
+    "average_speed", "average_stride", "average_temp", "average_watts",
+    "average_wind_speed", "average_altitude", "calories", "carbs_used", "coasting_time",
+    "decoupling", "description", "device_name", "distance", "duration", "elapsed_time",
+    "elevationGain", "feel", "file_type", "gear", "gear_id", "gear_name", "headwind_percent",
+    "hr_load", "icu_atl", "icu_average_watts", "icu_cooldown_time", "icu_ctl",
+    "icu_efficiency_factor", "icu_ftp", "icu_hr_zone_times", "icu_hr_zones", "icu_intensity",
+    "icu_joules", "icu_joules_above_ftp", "icu_lap_count", "icu_max_wbal_depletion",
+    "icu_pm_cp", "icu_power_hr", "icu_recording_time", "icu_resting_hr", "icu_rpe",
+    "icu_training_load", "icu_variability_index", "icu_w_prime", "icu_warmup_time",
+    "icu_weight", "icu_weighted_avg_watts", "icu_zone_times", "id", "lthr", "max_altitude",
+    "max_heartrate", "max_speed", "max_temp", "min_altitude", "min_temp", "moving_time",
+    "name", "pace_load", "perceived_exertion", "polarization_index", "power_load",
+    "power_meter", "recording_stops", "session_rpe", "start_date", "startTime",
+    "strain_score", "tailwind_percent", "total_elevation_gain", "total_elevation_loss",
+    "trainer", "trainingLoad", "trimp", "type",
+}
+
+# Large binary/encoded blobs that are never useful as text.
+_ACTIVITY_BLOB_KEYS = {"skyline_chart_bytes"}
+
+
 def format_activity_summary(activity: dict[str, Any]) -> str:
     """Format an activity into a readable string."""
     start_time = activity.get("startTime", activity.get("start_date", "Unknown"))
@@ -84,6 +110,15 @@ Moving Time: {activity.get("moving_time", "N/A")} seconds
 Elevation Gain: {activity.get("elevationGain", activity.get("total_elevation_gain", 0))} meters
 Elevation Loss: {activity.get("total_elevation_loss", "N/A")} meters
 
+Time Breakdown:
+Elapsed Time: {activity.get("elapsed_time", "N/A")} seconds
+Coasting Time: {activity.get("coasting_time", "N/A")} seconds
+Recording Time: {activity.get("icu_recording_time", "N/A")} seconds
+Warmup Time: {activity.get("icu_warmup_time", "N/A")} seconds
+Cooldown Time: {activity.get("icu_cooldown_time", "N/A")} seconds
+Recording Stops: {len(activity["recording_stops"]) if isinstance(activity.get("recording_stops"), list) else "N/A"}
+Laps: {activity.get("icu_lap_count", "N/A")}
+
 Power Data:
 Average Power: {activity.get("avgPower", activity.get("icu_average_watts", activity.get("average_watts", "N/A")))} watts
 Weighted Avg Power: {activity.get("icu_weighted_avg_watts", "N/A")} watts
@@ -93,6 +128,10 @@ Kilojoules: {activity.get("icu_joules", "N/A")}
 Intensity: {activity.get("icu_intensity", "N/A")}
 Power:HR Ratio: {activity.get("icu_power_hr", "N/A")}
 Variability Index: {activity.get("icu_variability_index", "N/A")}
+Critical Power: {activity.get("icu_pm_cp", "N/A")} watts
+W': {activity.get("icu_w_prime", "N/A")} joules
+Max W' Depletion: {activity.get("icu_max_wbal_depletion", "N/A")}
+Joules Above FTP: {activity.get("icu_joules_above_ftp", "N/A")}
 
 Heart Rate Data:
 Average Heart Rate: {activity.get("avgHr", activity.get("average_heartrate", "N/A"))} bpm
@@ -104,6 +143,8 @@ Decoupling: {activity.get("decoupling", "N/A")}
 Other Metrics:
 Cadence: {activity.get("average_cadence", "N/A")} rpm
 Calories burned: {activity.get("calories", "N/A")} kcal
+Carbs Used: {activity.get("carbs_used", "N/A")} g
+Strain Score: {activity.get("strain_score", "N/A")}
 Average Speed: {activity.get("average_speed", "N/A")} m/s
 Max Speed: {activity.get("max_speed", "N/A")} m/s
 Average Stride: {activity.get("average_stride", "N/A")}
@@ -115,6 +156,9 @@ Feel: {feel}
 
 Environment:
 Trainer: {activity.get("trainer", "N/A")}
+Min Altitude: {activity.get("min_altitude", "N/A")} meters
+Average Altitude: {activity.get("average_altitude", "N/A")} meters
+Max Altitude: {activity.get("max_altitude", "N/A")} meters
 Average Temp: {activity.get("average_temp", "N/A")}°C
 Min Temp: {activity.get("min_temp", "N/A")}°C
 Max Temp: {activity.get("max_temp", "N/A")}°C
@@ -141,6 +185,50 @@ Gear:
 Name: {gear_name}
 ID: {gear_id}
 """
+
+
+def format_zone_times(activity: dict[str, Any]) -> str:
+    """Format time-in-zone data from an activity payload.
+
+    Intervals.icu reports power zones as a list of ``{"id", "secs"}`` entries
+    (including composite ones such as ``SS``) and heart rate zones as a bare
+    list of seconds aligned with the ``icu_hr_zones`` boundaries.
+    """
+    lines: list[str] = []
+
+    power_zone_times = activity.get("icu_zone_times")
+    if isinstance(power_zone_times, list) and power_zone_times:
+        lines.append("\nPower Zones:")
+        for zone in power_zone_times:
+            if isinstance(zone, dict):
+                lines.append(f"{zone.get('id', 'N/A')}: {zone.get('secs', 'N/A')} seconds")
+
+    hr_zone_times = activity.get("icu_hr_zone_times")
+    if isinstance(hr_zone_times, list) and hr_zone_times:
+        boundaries = activity.get("icu_hr_zones")
+        lines.append("\nHeart Rate Zones:")
+        for index, secs in enumerate(hr_zone_times):
+            label = f"Z{index + 1}"
+            if isinstance(boundaries, list) and index < len(boundaries):
+                label += f" (up to {boundaries[index]} bpm)"
+            lines.append(f"{label}: {secs} seconds")
+
+    return "\n".join(lines) + "\n" if lines else ""
+
+
+def format_activity_extra_fields(activity: dict[str, Any]) -> str:
+    """Format the raw payload fields not covered by the standard sections."""
+    skip_prefixes = ("_",)
+    known = _ACTIVITY_SUMMARY_KEYS
+    lines = [
+        f"- {key}: {json.dumps(value) if isinstance(value, (dict, list)) else value}"
+        for key, value in sorted(activity.items())
+        if key not in known
+        and key not in _ACTIVITY_BLOB_KEYS
+        and value is not None
+        and not key.startswith(skip_prefixes)
+    ]
+    return "\nAll Other Fields:\n" + "\n".join(lines) + "\n" if lines else ""
 
 
 def format_workout(workout: dict[str, Any]) -> str:
