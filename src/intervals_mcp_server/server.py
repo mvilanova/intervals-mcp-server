@@ -88,6 +88,10 @@ from intervals_mcp_server.tools.events import (  # pylint: disable=wrong-import-
 from intervals_mcp_server.tools.gear import get_gear_list  # pylint: disable=wrong-import-position  # noqa: E402
 from intervals_mcp_server.tools.wellness import get_wellness_data  # pylint: disable=wrong-import-position  # noqa: E402
 from intervals_mcp_server.tools.power_curves import get_athlete_power_curves  # pylint: disable=wrong-import-position  # noqa: E402
+from intervals_mcp_server.tools.training_review import (  # pylint: disable=wrong-import-position  # noqa: E402
+    get_plan_compliance,
+    get_weekly_summary,
+)
 from intervals_mcp_server.tools.custom_items import (  # pylint: disable=wrong-import-position  # noqa: E402
     create_custom_item,
     delete_custom_item,
@@ -114,6 +118,8 @@ __all__ = [
     "add_or_update_event",
     "get_wellness_data",
     "get_athlete_power_curves",
+    "get_weekly_summary",
+    "get_plan_compliance",
     "get_custom_items",
     "get_custom_item_by_id",
     "create_custom_item",

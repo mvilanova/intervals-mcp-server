@@ -17,6 +17,7 @@ The tests ensure that the server's public API returns expected strings and handl
 """
 
 import asyncio
+import datetime
 import os
 import pathlib
 import sys
@@ -37,6 +38,8 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_event_by_id,
     get_events,
     get_gear_list,
+    get_plan_compliance,
+    get_weekly_summary,
     get_wellness_data,
     get_custom_items,
     get_custom_item_by_id,
@@ -949,3 +952,218 @@ def test_get_activities_resolves_gear_name(monkeypatch):
     assert "Ride 2" in result
     assert "Name: Litening Air" in result
     assert "Name: S-Works Tarmac SL8" in result
+
+
+def _patch_training_review(monkeypatch, responses):
+    """Patch make_intervals_request in training_review, routing by URL suffix."""
+
+    async def fake_request(*_args, **kwargs):
+        url = kwargs.get("url") or _args[0]
+        for suffix, payload in responses.items():
+            if url.endswith(suffix):
+                return payload
+        raise AssertionError(f"unexpected url {url}")
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.training_review.make_intervals_request", fake_request
+    )
+
+
+def test_get_weekly_summary(monkeypatch):
+    """Weekly summary shows per-week totals, per-sport lines and end-of-week CTL/ATL/form."""
+    weeks = [
+        {
+            "date": "2026-08-10",
+            "count": 3,
+            "moving_time": 7200,
+            "distance": 50000.0,
+            "training_load": 120,
+            "fitness": 17.5,
+            "fatigue": 16.5,
+            "form": 1.0,
+            "rampRate": 0.6,
+            "timeInZones": [3600, 600, 0, 0, 0, 0, 0, 0],
+            "mostRecentWellnessId": "2026-08-16",
+            "byCategory": [
+                {"category": "Ride", "count": 1, "moving_time": 5400, "distance": 50000.0, "training_load": 118},
+                {"category": "Workout", "count": 2, "moving_time": 1800, "distance": 0.0, "training_load": 2},
+                {"category": "Run", "count": 0, "moving_time": 0, "distance": 0.0, "training_load": 0},
+            ],
+        }
+    ]
+    _patch_training_review(monkeypatch, {"athlete-summary.json": weeks})
+    result = asyncio.run(get_weekly_summary("2026-08-10", "2026-08-16", athlete_id="1"))
+    assert "ISO 2026-W33" in result
+    assert "3 sessions" in result
+    assert "CTL/fitness 17.5" in result and "form 1.0" in result
+    assert "as of 2026-08-16" in result
+    assert "- Workout: 2 sessions" in result
+    assert "- Ride: 1 sessions" in result
+    assert "Run:" not in result
+    assert "Z1 1:00:00" in result
+
+
+def test_get_weekly_summary_empty_error_and_invalid(monkeypatch):
+    """Weekly summary handles empty results, API errors and invalid dates."""
+    _patch_training_review(monkeypatch, {"athlete-summary.json": []})
+    assert "No weekly summary data" in asyncio.run(
+        get_weekly_summary("2026-08-10", "2026-08-16", athlete_id="1")
+    )
+    _patch_training_review(monkeypatch, {"athlete-summary.json": {"error": True, "message": "boom"}})
+    assert "Error fetching weekly summary: boom" in asyncio.run(
+        get_weekly_summary("2026-08-10", "2026-08-16", athlete_id="1")
+    )
+    assert "Error" in asyncio.run(get_weekly_summary("bad", "2026-08-16", athlete_id="1"))
+
+
+def test_get_plan_compliance_five_planned(monkeypatch):
+    """5 planned (3 paired, 1 missed, 1 future) plus 1 unplanned activity."""
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.training_review._today", lambda: datetime.date(2026, 10, 2)
+    )
+    events = [
+        # paired via event.paired_activity_id
+        {"id": 1, "category": "WORKOUT", "type": "Ride", "name": "Endurance",
+         "start_date_local": "2026-09-28T00:00:00", "moving_time": 3600,
+         "icu_training_load": 50, "paired_activity_id": "a1"},
+        # paired via activity.paired_event_id only
+        {"id": 2, "category": "WORKOUT", "type": "Run", "name": "Easy run",
+         "start_date_local": "2026-09-29T00:00:00", "moving_time": 2400, "icu_training_load": 40},
+        # paired via both
+        {"id": 3, "category": "WORKOUT", "type": "WeightTraining", "name": "Strength",
+         "start_date_local": "2026-09-30T00:00:00", "moving_time": 3000,
+         "icu_training_load": 10, "paired_activity_id": "a3"},
+        # missed
+        {"id": 4, "category": "WORKOUT", "type": "Run", "name": "Tempo",
+         "start_date_local": "2026-10-01T00:00:00", "moving_time": 3000, "icu_training_load": 60},
+        # future
+        {"id": 5, "category": "WORKOUT", "type": "Ride", "name": "Long ride",
+         "start_date_local": "2026-10-04T00:00:00", "moving_time": 7200, "icu_training_load": 90},
+        {"id": 6, "category": "NOTE", "name": "Travel", "start_date_local": "2026-10-03T00:00:00",
+         "training_availability": "LIMITED", "can_train_sports": ["Run"], "max_training_time": 3600},
+        {"id": 7, "category": "NOTE", "name": "Plain note", "start_date_local": "2026-10-03T00:00:00"},
+    ]
+    activities = [
+        {"id": "a1", "type": "Ride", "name": "Morning ride", "start_date_local": "2026-09-28T07:00:00",
+         "moving_time": 4320, "icu_training_load": 60},
+        {"id": "a2", "type": "Run", "name": "Run", "start_date_local": "2026-09-29T18:00:00",
+         "moving_time": 2400, "icu_training_load": 36, "paired_event_id": 2},
+        {"id": "a3", "type": "WeightTraining", "name": "Gym", "start_date_local": "2026-09-30T09:00:00",
+         "moving_time": 3000, "icu_training_load": 10, "paired_event_id": 3},
+        {"id": "a4", "type": "Swim", "name": "Pool swim", "start_date_local": "2026-09-30T12:00:00",
+         "moving_time": 1800, "icu_training_load": 20},
+    ]
+    _patch_training_review(monkeypatch, {"/events": events, "/activities": activities})
+    result = asyncio.run(get_plan_compliance("2026-09-28", "2026-10-04", athlete_id="1"))
+    assert "Planned workouts: 5 | completed: 3 | missed: 1 | upcoming: 1 | unplanned activities: 1" in result
+    assert "Completion: 75% (3 of 4 planned workouts due)" in result
+    assert "1:00:00 -> 1:12:00 (+20%)" in result
+    assert "50 -> 60 (+20%)" in result
+    assert "40 -> 36 (-10%)" in result
+    missed_section = result.split("Missed (1):")[1].split("Upcoming")[0]
+    assert "Tempo" in missed_section and "Long ride" not in missed_section
+    upcoming_section = result.split("Upcoming, not yet due (1):")[1].split("Unplanned")[0]
+    assert "Long ride" in upcoming_section
+    unplanned_section = result.split("Unplanned activities (1):")[1]
+    assert "Pool swim" in unplanned_section and "Morning ride" not in unplanned_section
+    assert "availability LIMITED; can train Run; max training time 1:00:00" in result
+    assert "Plain note" not in result
+
+
+def test_get_plan_compliance_empty_and_error(monkeypatch):
+    """Plan compliance handles empty results and API errors."""
+    _patch_training_review(monkeypatch, {"/events": [], "/activities": []})
+    assert "No events or activities" in asyncio.run(
+        get_plan_compliance("2026-09-28", "2026-10-04", athlete_id="1")
+    )
+    _patch_training_review(
+        monkeypatch, {"/events": {"error": True, "message": "nope"}, "/activities": []}
+    )
+    assert "Error fetching events: nope" in asyncio.run(
+        get_plan_compliance("2026-09-28", "2026-10-04", athlete_id="1")
+    )
+    _patch_training_review(
+        monkeypatch, {"/events": [], "/activities": {"error": True, "message": "bad"}}
+    )
+    assert "Error fetching activities: bad" in asyncio.run(
+        get_plan_compliance("2026-09-28", "2026-10-04", athlete_id="1")
+    )
+
+
+def _capture_training_review(monkeypatch, payload):
+    """Patch make_intervals_request in training_review and record call kwargs."""
+    calls = []
+
+    async def fake_request(*_args, **kwargs):
+        calls.append(kwargs)
+        return payload
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.training_review.make_intervals_request", fake_request
+    )
+    return calls
+
+
+def test_get_weekly_summary_multi_week_sorted_and_athlete_filter(monkeypatch):
+    """Unsorted multi-week input is sorted; rows of other athletes are dropped; params are sent."""
+    rows = [
+        {"date": "2026-08-17", "athlete_id": "i1", "count": 2, "fitness": 2.0, "fatigue": 1.0, "form": 1.0},
+        {"date": "2026-08-10", "athlete_id": "i2", "count": 9, "fitness": 99.0, "fatigue": 1.0, "form": 1.0},
+        {"date": "2026-08-10", "athlete_id": "i1", "count": 1, "fitness": 1.0, "fatigue": 1.0, "form": 0.0},
+        {"date": "2026-08-24", "count": 3, "fitness": 3.0, "fatigue": 1.0, "form": 2.0},
+    ]
+    calls = _capture_training_review(monkeypatch, rows)
+    result = asyncio.run(get_weekly_summary("2026-08-10", "2026-08-30", athlete_id="i1"))
+    assert calls[0]["params"] == {"start": "2026-08-10", "end": "2026-08-30"}
+    assert calls[0]["url"] == "/athlete/i1/athlete-summary.json"
+    assert "99.0" not in result and "9 sessions" not in result
+    positions = [result.index(f"Week {d}") for d in ("2026-08-10", "2026-08-17", "2026-08-24")]
+    assert positions == sorted(positions)
+    assert "ISO 2026-W33" in result and "ISO 2026-W35" in result
+
+
+def test_get_weekly_summary_only_other_athletes(monkeypatch):
+    """If all rows belong to other athletes, report no data."""
+    _capture_training_review(monkeypatch, [{"date": "2026-08-10", "athlete_id": "i2", "count": 1}])
+    result = asyncio.run(get_weekly_summary("2026-08-10", "2026-08-16", athlete_id="i1"))
+    assert "No weekly summary data" in result
+
+
+def test_get_plan_compliance_outside_range_and_duplicate_pairing(monkeypatch):
+    """Activity paired to an out-of-range event is not unplanned; shared activity counts once."""
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.training_review._today", lambda: datetime.date(2026, 10, 2)
+    )
+    events = [
+        {"id": 1, "category": "WORKOUT", "type": "Run", "name": "A", "start_date_local": "2026-09-29T00:00:00",
+         "moving_time": 1000, "paired_activity_id": "a1"},
+        {"id": 2, "category": "WORKOUT", "type": "Run", "name": "B", "start_date_local": "2026-09-30T00:00:00",
+         "moving_time": 1000, "paired_activity_id": "a1"},
+    ]
+    activities = [
+        {"id": "a1", "type": "Run", "name": "Shared run", "start_date_local": "2026-09-29T08:00:00",
+         "moving_time": 1000},
+        {"id": "a2", "type": "Ride", "name": "Early ride", "start_date_local": "2026-09-28T08:00:00",
+         "moving_time": 2000, "paired_event_id": 999},
+    ]
+    _patch_training_review(monkeypatch, {"/events": events, "/activities": activities})
+    result = asyncio.run(get_plan_compliance("2026-09-28", "2026-10-04", athlete_id="1"))
+    assert "completed: 1 | missed: 1 | upcoming: 0 | unplanned activities: 0" in result
+    assert "Completed, planned outside range (1):" in result
+    assert "Early ride" in result.split("planned outside range (1):")[1]
+    assert "Unplanned activities (0):" in result
+
+
+def test_get_plan_compliance_null_load_shows_na(monkeypatch):
+    """A planned workout whose load is null is shown as 'load n/a', not 'load None'."""
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.training_review._today", lambda: datetime.date(2026, 10, 2)
+    )
+    events = [
+        {"id": 1, "category": "WORKOUT", "type": "WeightTraining", "name": "Strength",
+         "start_date_local": "2026-10-03T00:00:00", "moving_time": 3300, "icu_training_load": None},
+    ]
+    _patch_training_review(monkeypatch, {"/events": events, "/activities": []})
+    result = asyncio.run(get_plan_compliance("2026-09-28", "2026-10-04", athlete_id="1"))
+    assert "load n/a" in result
+    assert "load None" not in result
