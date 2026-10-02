@@ -658,3 +658,102 @@ def format_power_curves(
         lines.append("")
 
     return "\n".join(lines)
+
+
+def _curve_header(curve: dict[str, Any]) -> str:
+    """Build the "label (start to end):" header line for a curve."""
+    label = curve.get("label", curve.get("id", "Unknown"))
+    start = curve.get("start", "")
+    end = curve.get("end", "")
+    date_range = ""
+    if start and end:
+        date_range = f" ({start[:10]} to {end[:10]})"
+    return f"{label}{date_range}:"
+
+
+def _format_clock(total_secs: float) -> str:
+    """Format seconds as m:ss or h:mm:ss."""
+    total = int(round(total_secs))
+    hours, rem = divmod(total, 3600)
+    mins, secs = divmod(rem, 60)
+    if hours:
+        return f"{hours}:{mins:02d}:{secs:02d}"
+    return f"{mins}:{secs:02d}"
+
+
+def _format_distance_label(metres: float) -> str:
+    """Format a distance in metres as e.g. 400m, 5km or 21.1km."""
+    if metres < 1000:
+        return f"{metres:g}m"
+    km = metres / 1000
+    return f"{round(km, 2):g}km"
+
+
+def format_hr_curves(curves: list[dict[str, Any]], activity_type: str) -> str:
+    """Format extracted heart rate curve data into a concise readable string.
+
+    Args:
+        curves: List of extracted curve data dicts with id, label, data_points.
+        activity_type: The activity type used for the query.
+
+    Returns:
+        A formatted string representation of the HR curves.
+    """
+    lines: list[str] = [f"Heart Rate Curves ({activity_type}):", ""]
+    for curve in curves:
+        lines.append(_curve_header(curve))
+        data_points = curve.get("data_points", [])
+        if not data_points:
+            lines.append("  No data available for requested durations.")
+        for point in data_points:
+            dur_label = _format_duration_label(point["secs"])
+            lines.append(f"  {dur_label}: {point['bpm']}bpm [{point.get('activity_id', '')}]")
+        missing = curve.get("missing", [])
+        if data_points and missing:
+            labels = ", ".join(_format_duration_label(s) for s in missing)
+            lines.append(f"  Not available: {labels}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def format_pace_curves(
+    curves: list[dict[str, Any]],
+    activity_type: str,
+    gap: bool,
+    per_100m: bool = False,
+) -> str:
+    """Format extracted pace curve data into a concise readable string.
+
+    Args:
+        curves: List of extracted curve data dicts with id, label, data_points
+            (each with distance in metres and secs for that distance).
+        activity_type: The activity type used for the query.
+        gap: Whether gradient adjusted pace was requested.
+        per_100m: Show pace per 100m (swims) instead of per km.
+
+    Returns:
+        A formatted string representation of the pace curves.
+    """
+    kind = "GAP" if gap else "Pace"
+    unit = "/100m" if per_100m else "/km"
+    scale = 100 if per_100m else 1000
+    lines: list[str] = [f"{kind} Curves ({activity_type}):", ""]
+    for curve in curves:
+        lines.append(_curve_header(curve))
+        data_points = curve.get("data_points", [])
+        if not data_points:
+            lines.append("  No data available for requested distances.")
+        for point in data_points:
+            dist = point["distance"]
+            secs = point["secs"]
+            pace = _format_clock(secs / dist * scale) if dist else "N/A"
+            lines.append(
+                f"  {_format_distance_label(dist)}: {_format_clock(secs)} "
+                f"({pace}{unit}) [{point.get('activity_id', '')}]"
+            )
+        missing = curve.get("missing", [])
+        if data_points and missing:
+            labels = ", ".join(_format_distance_label(d) for d in missing)
+            lines.append(f"  Not available: {labels}")
+        lines.append("")
+    return "\n".join(lines)
