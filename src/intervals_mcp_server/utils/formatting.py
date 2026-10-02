@@ -402,65 +402,111 @@ def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = Fa
     return "\n".join(lines)
 
 
+# Fields shown explicitly (in this order) for calendar events
+_EVENT_MAIN_FIELDS = [
+    ("start_date_local", "Date"),
+    ("end_date_local", "End"),
+    ("id", "ID"),
+    ("category", "Category"),
+    ("type", "Sport"),
+    ("name", "Name"),
+    ("description", "Description"),
+    ("moving_time", "Duration (s)"),
+    ("icu_training_load", "Planned load"),
+    ("indoor", "Indoor"),
+]
+
+# Internal / noisy fields that are never useful for planning
+_EVENT_SKIP_FIELDS = {
+    "athlete_id",
+    "uid",
+    "created",
+    "updated",
+    "icu_atl",
+    "icu_ctl",
+    "workout_doc",
+    "workout",
+    "color",
+    "external_id",
+    "calendar_id",
+    "date",
+    "workout_file_base64",
+    "workout_filename",
+    "shared_event_id",
+}
+
+
+def _event_value(value: Any) -> str | None:
+    """Render a scalar or simple list value; return None for empty or complex values."""
+    if value is None or value == "" or value == [] or value == {}:
+        return None
+    if isinstance(value, (str, int, float, bool)):
+        return str(value)
+    if isinstance(value, list) and all(isinstance(v, (str, int, float, bool)) for v in value):
+        return ", ".join(str(v) for v in value)
+    return None
+
+
 def format_event_summary(event: dict[str, Any]) -> str:
-    """Format a basic event summary into a readable string."""
+    """Format an event with all relevant non-empty fields (category, sport, end date, ...)."""
+    event = dict(event)
+    if not event.get("start_date_local") and event.get("date"):
+        event["start_date_local"] = event["date"]
 
-    # Update to check for "date" if "start_date_local" is not provided
-    event_date = event.get("start_date_local", event.get("date", "Unknown"))
-    event_type = "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
-    event_name = event.get("name", "Unnamed")
-    event_id = event.get("id", "N/A")
-    event_desc = event.get("description", "No description")
+    lines: list[str] = []
+    shown = {"race"}
+    legacy_type = "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
+    for key, label in _EVENT_MAIN_FIELDS:
+        if key == "category":
+            lines.append(f"Type: {legacy_type}")
+        shown.add(key)
+        rendered = _event_value(event.get(key))
+        if rendered is not None:
+            lines.append(f"{label}: {rendered}")
 
-    return f"""Date: {event_date}
-ID: {event_id}
-Type: {event_type}
-Name: {event_name}
-Description: {event_desc}"""
+    # Any further non-empty scalar fields (e.g. availability/limitation options set in the UI)
+    for key in sorted(event.keys()):
+        if key in shown or key in _EVENT_SKIP_FIELDS:
+            continue
+        rendered = _event_value(event.get(key))
+        if rendered is not None:
+            lines.append(f"{key}: {rendered}")
+
+    return "\n".join(lines)
 
 
 def format_event_details(event: dict[str, Any]) -> str:
-    """Format detailed event information into a readable string."""
+    """Format detailed event information, including all remaining raw fields as JSON."""
+    details = "Event Details:\n\n" + format_event_summary(event)
 
-    event_details = f"""Event Details:
+    workout = event.get("workout")
+    if isinstance(workout, dict) and workout:
+        details += (
+            "\n\nWorkout Information:"
+            f"\nWorkout ID: {workout.get('id', 'N/A')}"
+            f"\nSport: {workout.get('sport', 'Unknown')}"
+            f"\nDuration: {workout.get('duration', 0)} seconds"
+            f"\nTSS: {workout.get('tss', 'N/A')}"
+        )
+        if isinstance(workout.get("intervals"), list):
+            details += f"\nIntervals: {len(workout['intervals'])}"
 
-ID: {event.get("id", "N/A")}
-Date: {event.get("date", "Unknown")}
-Name: {event.get("name", "Unnamed")}
-Description: {event.get("description", "No description")}"""
+    workout_doc = event.get("workout_doc")
+    if isinstance(workout_doc, dict) and workout_doc.get("steps"):
+        details += f"\nStructured workout steps: {len(workout_doc['steps'])}"
 
-    # Check if it's a workout-based event
-    if "workout" in event and event["workout"]:
-        workout = event["workout"]
-        event_details += f"""
+    complex_fields = {
+        k: v
+        for k, v in event.items()
+        if k not in _EVENT_SKIP_FIELDS and v not in (None, "", [], {}) and _event_value(v) is None
+    }
+    if complex_fields:
+        raw = json.dumps(complex_fields, ensure_ascii=False, indent=2, default=str)
+        if len(raw) > 4000:
+            raw = raw[:4000] + "\n... (truncated)"
+        details += "\n\nAdditional fields:\n" + raw
 
-Workout Information:
-Workout ID: {workout.get("id", "N/A")}
-Sport: {workout.get("sport", "Unknown")}
-Duration: {workout.get("duration", 0)} seconds
-TSS: {workout.get("tss", "N/A")}"""
-
-        # Include interval count if available
-        if "intervals" in workout and isinstance(workout["intervals"], list):
-            event_details += f"""
-Intervals: {len(workout["intervals"])}"""
-
-    # Check if it's a race
-    if event.get("race"):
-        event_details += f"""
-
-Race Information:
-Priority: {event.get("priority", "N/A")}
-Result: {event.get("result", "N/A")}"""
-
-    # Include calendar information
-    if "calendar" in event:
-        cal = event["calendar"]
-        event_details += f"""
-
-Calendar: {cal.get("name", "N/A")}"""
-
-    return event_details
+    return details
 
 
 def format_activity_message(message: dict[str, Any]) -> str:

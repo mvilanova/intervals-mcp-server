@@ -237,3 +237,48 @@ def test_format_power_curves_without_normalised():
     result = format_power_curves(curves, "Ride", include_normalised=False)
     assert "780W" in result
     assert "W/kg" not in result
+
+
+def test_format_event_summary_includes_extra_fields():
+    """
+    Test that format_event_summary exposes category, end date and additional
+    non-empty fields such as training availability settings.
+    """
+    event = {
+        "id": 42,
+        "start_date_local": "2026-11-06T00:00:00",
+        "end_date_local": "2026-11-09T00:00:00",
+        "category": "NOTE",
+        "name": "Limited training",
+        "description": "Max 1h per day",
+        "training_availability": "LIMITED",
+        "can_train_sports": ["Ride"],
+        "max_training_time": 3600,
+        "athlete_id": "i1",
+        "color": None,
+    }
+    summary = format_event_summary(event)
+    assert "Category: NOTE" in summary
+    assert "End: 2026-11-09T00:00:00" in summary
+    assert "training_availability: LIMITED" in summary
+    assert "can_train_sports: Ride" in summary
+    assert "max_training_time: 3600" in summary
+    assert "athlete_id" not in summary
+    assert "color" not in summary
+
+
+def test_format_event_details_includes_complex_fields():
+    """
+    Test that format_event_details includes nested fields as JSON.
+    """
+    event = {
+        "id": 1,
+        "start_date_local": "2026-11-06T00:00:00",
+        "name": "Test",
+        "category": "WORKOUT",
+        "workout_doc": {"steps": [{"duration": 60}, {"duration": 120}]},
+        "targets": {"power": 200},
+    }
+    details = format_event_details(event)
+    assert "Structured workout steps: 2" in details
+    assert '"targets"' in details
