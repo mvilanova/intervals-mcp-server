@@ -14,6 +14,7 @@ from intervals_mcp_server.tools.gear import (
     resolve_gear_for_activities,
 )
 from intervals_mcp_server.utils.formatting import format_activity_message, format_activity_summary, format_intervals
+from intervals_mcp_server.utils.output import OutputFormat, activity_to_dict, to_json, validate_format
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
 
 # Import mcp instance from shared module for tool registration
@@ -112,6 +113,7 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     end_date: str | None = None,
     limit: int = 10,
     include_unnamed: bool = False,
+    format: OutputFormat = "text",  # pylint: disable=redefined-builtin
 ) -> str:
     """Get a list of activities for an athlete from Intervals.icu
 
@@ -122,7 +124,16 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
         end_date: End date in YYYY-MM-DD format (optional, defaults to today)
         limit: Maximum number of activities to return (optional, defaults to 10)
         include_unnamed: Whether to include unnamed activities (optional, defaults to False)
+        format: Output format, "text" (default, human-readable) or "json" (JSON array of records).
+            JSON keys are snake_case with unit suffixes and unconverted values: distance_m (meters),
+            duration_s / moving_time_s (seconds), elevation_*_m (meters), *_power_w / ftp_w (watts),
+            *_hr_bpm (beats/min), *_speed_mps (m/s), calories_kcal. Missing values are omitted;
+            gear is {id, name}. An empty result is returned as "[]".
     """
+    error = validate_format(format)
+    if error:
+        return error
+
     # Resolve athlete ID and date parameters
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
@@ -145,12 +156,16 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
         return f"Error fetching activities: {error_message}"
 
     if not result:
+        if format == "json":
+            return "[]"
         return f"No activities found for athlete {athlete_id_to_use} in the specified date range."
 
     # Parse activities from result
     activities = _parse_activities_from_result(result)
 
     if not activities:
+        if format == "json":
+            return "[]"
         return f"No valid activities found for athlete {athlete_id_to_use} in the specified date range."
 
     # Filter and fetch more if needed
@@ -171,6 +186,9 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     await resolve_gear_for_activities(
         activities, athlete_id=athlete_id_to_use, api_key=api_key
     )
+
+    if format == "json":
+        return to_json([activity_to_dict(a) for a in activities])
 
     return _format_activities_response(activities, athlete_id_to_use, include_unnamed)
 

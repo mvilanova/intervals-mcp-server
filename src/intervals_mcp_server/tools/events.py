@@ -12,6 +12,7 @@ from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
 from intervals_mcp_server.utils.formatting import format_event_details, format_event_summary
+from intervals_mcp_server.utils.output import OutputFormat, event_to_dict, to_json, validate_format
 from intervals_mcp_server.utils.types import WorkoutDoc
 from intervals_mcp_server.utils.validation import resolve_activity_type, resolve_athlete_id, validate_date
 
@@ -93,6 +94,7 @@ async def get_events(
     api_key: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
+    format: OutputFormat = "text",  # pylint: disable=redefined-builtin
 ) -> str:
     """Get events for an athlete from Intervals.icu
 
@@ -101,7 +103,15 @@ async def get_events(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
         end_date: End date in YYYY-MM-DD format (optional, defaults to 30 days from today)
+        format: Output format, "text" (default, human-readable) or "json" (JSON array of records with
+            keys id, date, name, description, category, type, kind ("workout"/"race"/"note"/"other",
+            derived from category);
+            missing values are omitted). An empty result is returned as "[]".
     """
+    error = validate_format(format)
+    if error:
+        return error
+
     # Resolve athlete ID
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
@@ -126,10 +136,15 @@ async def get_events(
 
     # Format the response
     if not result:
+        if format == "json":
+            return "[]"
         return f"No events found for athlete {athlete_id_to_use} in the specified date range."
 
     # Ensure result is a list
     events = result if isinstance(result, list) else []
+
+    if format == "json":
+        return to_json([event_to_dict(e) for e in events if isinstance(e, dict)])
 
     if not events:
         return f"No events found for athlete {athlete_id_to_use} in the specified date range."

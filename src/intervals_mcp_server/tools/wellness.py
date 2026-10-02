@@ -7,6 +7,7 @@ This module contains tools for retrieving athlete wellness data.
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import format_wellness_entry
+from intervals_mcp_server.utils.output import OutputFormat, to_json, validate_format, wellness_to_dict
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
 
 # Import mcp instance from shared module for tool registration
@@ -22,6 +23,7 @@ async def get_wellness_data(
     start_date: str | None = None,
     end_date: str | None = None,
     include_all_fields: bool = False,
+    format: OutputFormat = "text",  # pylint: disable=redefined-builtin
 ) -> str:
     """Get wellness data for an athlete from Intervals.icu.
 
@@ -35,7 +37,15 @@ async def get_wellness_data(
         start_date: Start date in YYYY-MM-DD format (optional, defaults to 30 days ago)
         end_date: End date in YYYY-MM-DD format (optional, defaults to today)
         include_all_fields: If True, include additional and custom fields beyond the standard set (optional, defaults to False)
+        format: Output format, "text" (default, human-readable) or "json" (JSON array, one object per day, date in the "date" key).
+            JSON keys are snake_case (e.g. resting_hr, sleep_secs, hrv, ctl, atl, weight) with the raw
+            API values and units (sleep_secs in seconds, weight in kg); missing values are omitted.
+            With include_all_fields=True, extra fields appear under "other_fields". An empty result is "[]".
     """
+    error = validate_format(format)
+    if error:
+        return error
+
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
@@ -52,9 +62,19 @@ async def get_wellness_data(
         return f"Error fetching wellness data: {result.get('message')}"
 
     if not result:
+        if format == "json":
+            return "[]"
         return (
             f"No wellness data found for athlete {athlete_id_to_use} in the specified date range."
         )
+
+    if format == "json":
+        raw = (
+            [{**d, "id": d.get("id", k)} for k, d in result.items() if isinstance(d, dict)]
+            if isinstance(result, dict)
+            else [e for e in result if isinstance(e, dict)]
+        )
+        return to_json([wellness_to_dict(e, include_all_fields) for e in raw])
 
     wellness_summary = "Wellness Data:\n\n"
 

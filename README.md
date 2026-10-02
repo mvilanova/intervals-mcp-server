@@ -249,13 +249,13 @@ The `mcp install` command may fail on Windows due to environment or permission i
 
 Once the server is running and Claude Desktop is configured, you can use the following tools to ask questions about your past and future activities, events, and wellness data.
 
-- `get_activities`: Retrieve a list of activities
+- `get_activities`: Retrieve a list of activities (optional `format="json"` for structured output)
 - `get_activity_details`: Get detailed information for a specific activity
 - `get_activity_intervals`: Get detailed interval data for a specific activity
 - `get_activity_streams`: Get raw data streams (power, heart rate, etc.) for a specific activity
 - `get_athlete_power_curves`: Get best power output curves for selected durations and time periods
-- `get_wellness_data`: Fetch wellness data
-- `get_events`: Retrieve upcoming events (workouts, races, etc.)
+- `get_wellness_data`: Fetch wellness data (optional `format="json"`)
+- `get_events`: Retrieve upcoming events (workouts, races, etc.) (optional `format="json"`)
 - `get_event_by_id`: Get detailed information for a specific event
 - `add_or_update_event`: Create or update an event (workout, race, note, etc.)
 - `delete_event`: Delete a specific event
