@@ -658,3 +658,98 @@ def format_power_curves(
         lines.append("")
 
     return "\n".join(lines)
+
+
+# Distance (meters) and display suffix for threshold pace. Intervals.icu stores
+# threshold_pace in m/s; pace_units selects how it is displayed.
+_PACE_UNIT_METERS: dict[str, tuple[float, str]] = {
+    "SECS_100M": (100.0, "/100m"),
+    "SECS_100Y": (91.44, "/100yd"),
+    "SECS_500M": (500.0, "/500m"),
+    "SECS_400M": (400.0, "/400m"),
+    "SECS_250M": (250.0, "/250m"),
+    "MINS_KM": (1000.0, "/km"),
+    "MINS_MILE": (1609.344, "/mile"),
+}
+
+
+def _format_threshold_pace(speed_mps: float, pace_units: str | None) -> str:
+    """Convert a threshold pace in m/s to a readable pace string."""
+    if not speed_mps or speed_mps <= 0:
+        return "N/A"
+    unit = _PACE_UNIT_METERS.get(pace_units or "")
+    if unit is None:
+        return f"{speed_mps:.3f} m/s"
+    meters, suffix = unit
+    total_secs = round(meters / speed_mps)
+    return f"{total_secs // 60}:{total_secs % 60:02d} {suffix}"
+
+
+def _format_power_zones(settings: dict[str, Any]) -> list[str]:
+    """Render power zones (percent of FTP, upper bounds) with absolute watt ranges."""
+    zones = settings.get("power_zones")
+    if not zones:
+        return []
+    names = settings.get("power_zone_names") or []
+    ftp = settings.get("ftp")
+    lines = ["Power zones (% of FTP / watts):" if ftp else "Power zones (% of FTP):"]
+    lower = 0
+    for idx, upper in enumerate(zones):
+        name = names[idx] if idx < len(names) else ""
+        open_ended = upper >= 999
+        pct = f"{lower}%+" if open_ended else f"{lower}-{upper}%"
+        watts = ""
+        if ftp:
+            low_w = round(ftp * lower / 100)
+            watts = f"  {low_w}+ W" if open_ended else f"  {low_w}-{round(ftp * upper / 100)} W"
+        lines.append(f"  Z{idx + 1} {name}: {pct}{watts}")
+        lower = upper
+    return lines
+
+
+def _format_hr_zones(settings: dict[str, Any]) -> list[str]:
+    """Render heart rate zones; the API stores absolute upper bounds in bpm."""
+    zones = settings.get("hr_zones")
+    if not zones:
+        return []
+    names = settings.get("hr_zone_names") or []
+    lines = ["Heart rate zones (bpm):"]
+    lower: int | None = None
+    for idx, upper in enumerate(zones):
+        name = names[idx] if idx < len(names) else ""
+        rng = f"<= {upper}" if lower is None else f"{lower + 1}-{upper}"
+        lines.append(f"  Z{idx + 1} {name}: {rng} bpm")
+        lower = upper
+    return lines
+
+
+def format_sport_settings(settings: dict[str, Any], weight: float | None = None) -> str:
+    """Format a single sport settings object, including zone boundaries.
+
+    Power zones are percentages of FTP and are rendered with watt ranges; HR
+    zones are absolute upper bounds in bpm.
+
+    Args:
+        settings: A SportSettings object from the Intervals.icu API.
+        weight: Optional athlete weight in kg to include.
+    """
+    types = ", ".join(settings.get("types") or []) or "N/A"
+    lines = [f"Sport settings: {types}"]
+    if settings.get("id") is not None:
+        lines.append(f"ID: {settings['id']}")
+    if settings.get("ftp") is not None:
+        lines.append(f"FTP: {settings['ftp']} W")
+    if settings.get("indoor_ftp") is not None:
+        lines.append(f"Indoor FTP: {settings['indoor_ftp']} W")
+    if settings.get("lthr") is not None:
+        lines.append(f"LTHR: {settings['lthr']} bpm")
+    if settings.get("max_hr") is not None:
+        lines.append(f"Max HR: {settings['max_hr']} bpm")
+    if settings.get("threshold_pace"):
+        pace = _format_threshold_pace(settings["threshold_pace"], settings.get("pace_units"))
+        lines.append(f"Threshold pace: {pace}")
+    if weight is not None:
+        lines.append(f"Athlete weight: {weight:g} kg")
+    lines.extend(_format_power_zones(settings))
+    lines.extend(_format_hr_zones(settings))
+    return "\n".join(lines)

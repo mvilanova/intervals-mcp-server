@@ -37,6 +37,8 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_event_by_id,
     get_events,
     get_gear_list,
+    get_sport_settings,
+    update_sport_settings,
     get_wellness_data,
     get_custom_items,
     get_custom_item_by_id,
@@ -949,3 +951,178 @@ def test_get_activities_resolves_gear_name(monkeypatch):
     assert "Ride 2" in result
     assert "Name: Litening Air" in result
     assert "Name: S-Works Tarmac SL8" in result
+
+
+SPORT_SETTINGS_RIDE = {
+    "id": 1,
+    "types": ["Ride", "VirtualRide"],
+    "ftp": 200,
+    "indoor_ftp": 190,
+    "lthr": 160,
+    "max_hr": 180,
+    "power_zones": [55, 75, 90, 105, 120, 150, 999],
+    "power_zone_names": ["Recovery", "Endurance", "Tempo", "Threshold", "VO2", "Anaerobic", "Neuro"],
+    "hr_zones": [130, 140, 150, 160, 170, 175, 180],
+    "hr_zone_names": ["Z1", "Z2", "Z3", "Z4", "Z5", "Z6", "Z7"],
+}
+
+
+def _sport_settings_fake(calls, put_result=None, get_result=None):
+    async def fake_request(url, **kwargs):
+        calls.append((url, kwargs))
+        if url.endswith("/athlete/i1"):
+            return {"icu_weight": 70.5}
+        if kwargs.get("method") == "PUT":
+            return put_result if put_result is not None else SPORT_SETTINGS_RIDE
+        return get_result if get_result is not None else [SPORT_SETTINGS_RIDE]
+
+    return fake_request
+
+
+def test_get_sport_settings(monkeypatch):
+    """get_sport_settings renders zones in watts/bpm and the athlete weight."""
+    calls: list = []
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.sport_settings.make_intervals_request",
+        _sport_settings_fake(calls),
+    )
+    result = asyncio.run(get_sport_settings(athlete_id="i1"))
+    assert calls[0][0] == "/athlete/i1/sport-settings"
+    assert "Ride, VirtualRide" in result
+    assert "FTP: 200 W" in result
+    assert "Indoor FTP: 190 W" in result
+    assert "LTHR: 160 bpm" in result
+    assert "Max HR: 180 bpm" in result
+    assert "Z1 Recovery: 0-55%  0-110 W" in result
+    assert "Z4 Threshold: 90-105%  180-210 W" in result
+    assert "Z7 Neuro: 150%+  300+ W" in result
+    assert "Z2 Z2: 131-140 bpm" in result
+    assert "Z1 Z1: <= 130 bpm" in result
+    assert "Athlete weight: 70.5 kg" in result
+
+
+def test_get_sport_settings_single_sport(monkeypatch):
+    """A single sport uses the /sport-settings/{sport} endpoint."""
+    calls: list = []
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.sport_settings.make_intervals_request",
+        _sport_settings_fake(calls, get_result=SPORT_SETTINGS_RIDE),
+    )
+    result = asyncio.run(get_sport_settings(sport="Ride", athlete_id="i1"))
+    assert calls[0][0] == "/athlete/i1/sport-settings/Ride"
+    assert "FTP: 200 W" in result
+
+
+def test_get_sport_settings_pace(monkeypatch):
+    """Threshold pace in m/s is converted using pace_units."""
+    swim = {"types": ["Swim"], "threshold_pace": 1.0, "pace_units": "SECS_100M"}
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.sport_settings.make_intervals_request",
+        _sport_settings_fake([], get_result=[swim]),
+    )
+    result = asyncio.run(get_sport_settings(athlete_id="i1"))
+    assert "Threshold pace: 1:40 /100m" in result
+
+
+def test_get_sport_settings_empty(monkeypatch):
+    """Empty result gives an informative message."""
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.sport_settings.make_intervals_request",
+        _sport_settings_fake([], get_result=[]),
+    )
+    result = asyncio.run(get_sport_settings(athlete_id="i1"))
+    assert "No sport settings found" in result
+
+
+def test_get_sport_settings_error(monkeypatch):
+    """API errors are reported."""
+
+    async def fake_request(*_args, **_kwargs):
+        return {"error": True, "message": "Not found"}
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.sport_settings.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_sport_settings(sport="Nope", athlete_id="i1"))
+    assert "Error fetching sport settings: Not found" in result
+
+
+def test_update_sport_settings_only_passed_fields(monkeypatch):
+    """Only passed fields are sent; HR zone recalculation defaults to off."""
+    calls: list = []
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.sport_settings.make_intervals_request",
+        _sport_settings_fake(calls),
+    )
+    result = asyncio.run(update_sport_settings(sport="Ride", ftp=200, athlete_id="i1"))
+    put_url, put_kwargs = calls[0]
+    assert put_url == "/athlete/i1/sport-settings/Ride"
+    assert put_kwargs["method"] == "PUT"
+    assert put_kwargs["data"] == {"ftp": 200}
+    assert put_kwargs["params"] == {"recalcHrZones": "false"}
+    assert "Sport settings updated." in result
+    assert "FTP: 200 W" in result
+    assert "Z4 Threshold: 90-105%  180-210 W" in result
+
+
+def test_update_sport_settings_hr_recalc(monkeypatch):
+    """recalc_hr_zones is sent only as passed; lthr/max_hr alone do not enable it."""
+    calls: list = []
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.sport_settings.make_intervals_request",
+        _sport_settings_fake(calls),
+    )
+    asyncio.run(update_sport_settings(sport="Run", lthr=160, max_hr=180, athlete_id="i1"))
+    _, put_kwargs = calls[0]
+    assert put_kwargs["data"] == {"lthr": 160, "max_hr": 180}
+    assert put_kwargs["params"] == {"recalcHrZones": "false"}
+    asyncio.run(
+        update_sport_settings(
+            sport="Run", lthr=160, max_hr=180, recalc_hr_zones=True, athlete_id="i1"
+        )
+    )
+    assert calls[2][1]["params"] == {"recalcHrZones": "true"}
+
+
+def test_update_sport_settings_validation(monkeypatch):
+    """Out-of-range values and lthr >= max_hr return an error without calling the API."""
+    calls: list = []
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.sport_settings.make_intervals_request",
+        _sport_settings_fake(calls),
+    )
+    for kwargs in (
+        {"ftp": 49},
+        {"ftp": 1001},
+        {"lthr": 79},
+        {"max_hr": 231},
+        {"lthr": 180, "max_hr": 180},
+        {"lthr": 190, "max_hr": 170},
+    ):
+        result = asyncio.run(update_sport_settings(sport="Ride", athlete_id="i1", **kwargs))
+        assert result.startswith("Error:"), kwargs
+    assert not calls
+    asyncio.run(update_sport_settings(sport="Ride", ftp=50, lthr=80, max_hr=230, athlete_id="i1"))
+    assert calls
+
+
+def test_update_sport_settings_requires_value(monkeypatch):
+    """No values passed returns an error without calling the API."""
+    calls: list = []
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.sport_settings.make_intervals_request",
+        _sport_settings_fake(calls),
+    )
+    result = asyncio.run(update_sport_settings(sport="Ride", athlete_id="i1"))
+    assert result.startswith("Error:")
+    assert not calls
+
+
+def test_update_sport_settings_api_error(monkeypatch):
+    """API errors on update are reported."""
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.sport_settings.make_intervals_request",
+        _sport_settings_fake([], put_result={"error": True, "message": "Bad request"}),
+    )
+    result = asyncio.run(update_sport_settings(sport="Ride", ftp=250, athlete_id="i1"))
+    assert "Error updating sport settings: Bad request" in result
