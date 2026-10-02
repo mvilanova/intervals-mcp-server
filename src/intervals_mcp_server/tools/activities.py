@@ -392,3 +392,69 @@ async def add_activity_message(
     if msg_id is not None:
         return f"Successfully added message (ID: {msg_id}) to activity {activity_id}."
     return f"Message appears to have been added to activity {activity_id}, but no ID was returned. Please verify manually."
+
+
+@mcp.tool()
+async def update_activity(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    activity_id: str,
+    rpe: int | None = None,
+    feel: int | None = None,
+    name: str | None = None,
+    description: str | None = None,
+    api_key: str | None = None,
+) -> str:
+    """WRITE TOOL: modifies an existing activity in Intervals.icu (PUT /activity/{id}).
+
+    Only the fields that are passed are sent; all other activity values stay untouched.
+    At least one of rpe, feel, name or description must be provided.
+    Activities imported from Strava cannot be updated via the API; the API returns an error.
+
+    Args:
+        activity_id: The Intervals.icu activity ID
+        rpe: Rate of perceived exertion, integer 1-10 (sent as `icu_rpe`; 1 = very easy, 10 = maximal)
+        feel: How the athlete felt, integer 1-5 (1 = Strong, 2 = Good, 3 = Normal, 4 = Poor, 5 = Weak)
+        name: New activity name
+        description: New activity description
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+    """
+    if rpe is not None and (isinstance(rpe, bool) or not 1 <= rpe <= 10):
+        return "Error: rpe must be an integer between 1 and 10."
+    if feel is not None and (isinstance(feel, bool) or not 1 <= feel <= 5):
+        return "Error: feel must be an integer between 1 and 5 (1 = Strong ... 5 = Weak)."
+
+    payload: dict[str, Any] = {}
+    if rpe is not None:
+        payload["icu_rpe"] = rpe
+    if feel is not None:
+        payload["feel"] = feel
+    if name is not None:
+        payload["name"] = name
+    if description is not None:
+        payload["description"] = description
+
+    if not payload:
+        return "Error: at least one of rpe, feel, name or description must be provided."
+
+    result = await make_intervals_request(
+        url=f"/activity/{activity_id}",
+        api_key=api_key,
+        method="PUT",
+        data=payload,
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error updating activity: {error_message}"
+
+    activity_data = result[0] if isinstance(result, list) and result else result
+    if not activity_data or not isinstance(activity_data, dict):
+        return f"Error: Unexpected response when updating activity {activity_id}."
+
+    await resolve_gear_for_activity(activity_data, api_key=api_key)
+    # List the changed fields with the values returned by the API, because the summary
+    # formatter prefers `perceived_exertion` over `icu_rpe` and could show a stale RPE.
+    updated = ", ".join(f"{field}={activity_data.get(field)!r}" for field in payload)
+    return (
+        f"Successfully updated activity {activity_id}.\nUpdated: {updated}\n\n"
+        f"{format_activity_summary(activity_data)}"
+    )

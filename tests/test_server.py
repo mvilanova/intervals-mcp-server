@@ -8,6 +8,7 @@ These tests use monkeypatching to mock API responses and verify the formatting a
 - get_activity_streams
 - get_activity_messages
 - add_activity_message
+- update_activity
 - get_events
 - get_event_by_id
 - add_or_update_event
@@ -38,6 +39,7 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_events,
     get_gear_list,
     get_wellness_data,
+    update_activity,
     get_custom_items,
     get_custom_item_by_id,
     create_custom_item,
@@ -949,3 +951,102 @@ def test_get_activities_resolves_gear_name(monkeypatch):
     assert "Ride 2" in result
     assert "Name: Litening Air" in result
     assert "Name: S-Works Tarmac SL8" in result
+
+
+def _patch_activity_request(monkeypatch, fake_request):
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+
+
+def test_update_activity(monkeypatch):
+    """Test update_activity sends only passed fields via PUT and formats the result."""
+    calls = []
+
+    async def fake_request(*_args, **kwargs):
+        calls.append(kwargs)
+        return {"id": "i123", "name": "Renamed run", "icu_rpe": 6, "feel": 2}
+
+    _patch_activity_request(monkeypatch, fake_request)
+    result = asyncio.run(update_activity(activity_id="i123", rpe=6, name="Renamed run"))
+    assert len(calls) == 1
+    assert calls[0]["method"] == "PUT"
+    assert calls[0]["url"] == "/activity/i123"
+    assert calls[0]["data"] == {"icu_rpe": 6, "name": "Renamed run"}
+    assert "Successfully updated activity i123" in result
+    assert "Renamed run" in result
+    assert "Updated: icu_rpe=6, name='Renamed run'" in result
+    assert "6/10" in result
+
+
+def test_update_activity_reports_api_values_not_stale_rpe(monkeypatch):
+    """The confirmation lists API-returned values even if perceived_exertion is stale."""
+
+    async def fake_request(*_args, **_kwargs):
+        return {"id": "i123", "name": "Run", "icu_rpe": 7, "feel": 2, "perceived_exertion": 3}
+
+    _patch_activity_request(monkeypatch, fake_request)
+    result = asyncio.run(update_activity(activity_id="i123", rpe=7, feel=2))
+    assert "Updated: icu_rpe=7, feel=2" in result
+
+
+def test_update_activity_feel_and_description(monkeypatch):
+    """Test update_activity maps feel and description without extra fields."""
+    sent = {}
+
+    async def fake_request(*_args, **kwargs):
+        sent.update(kwargs["data"])
+        return {"id": "i123", "name": "Run", "feel": 4}
+
+    _patch_activity_request(monkeypatch, fake_request)
+    result = asyncio.run(update_activity(activity_id="i123", feel=4, description="Tired legs"))
+    assert sent == {"feel": 4, "description": "Tired legs"}
+    assert "4/5" in result
+
+
+def test_update_activity_no_fields(monkeypatch):
+    """Test update_activity errors and does not call the API when nothing is passed."""
+
+    async def fake_request(*_args, **_kwargs):
+        raise AssertionError("API must not be called")
+
+    _patch_activity_request(monkeypatch, fake_request)
+    result = asyncio.run(update_activity(activity_id="i123"))
+    assert "at least one" in result
+
+
+def test_update_activity_invalid_ranges(monkeypatch):
+    """Test update_activity validates rpe and feel ranges before calling the API."""
+
+    async def fake_request(*_args, **_kwargs):
+        raise AssertionError("API must not be called")
+
+    _patch_activity_request(monkeypatch, fake_request)
+    assert "rpe must be" in asyncio.run(update_activity(activity_id="i123", rpe=11))
+    assert "rpe must be" in asyncio.run(update_activity(activity_id="i123", rpe=0))
+    assert "feel must be" in asyncio.run(update_activity(activity_id="i123", feel=6))
+    assert "feel must be" in asyncio.run(update_activity(activity_id="i123", feel=0))
+
+
+def test_update_activity_empty_response(monkeypatch):
+    """Test update_activity handles an empty API response."""
+
+    async def fake_request(*_args, **_kwargs):
+        return {}
+
+    _patch_activity_request(monkeypatch, fake_request)
+    result = asyncio.run(update_activity(activity_id="i123", rpe=5))
+    assert "Unexpected response" in result
+
+
+def test_update_activity_error(monkeypatch):
+    """Test update_activity handles API errors."""
+
+    async def fake_request(*_args, **_kwargs):
+        return {"error": True, "message": "Activity not found"}
+
+    _patch_activity_request(monkeypatch, fake_request)
+    result = asyncio.run(update_activity(activity_id="i999", rpe=5))
+    assert "Error updating activity" in result
+    assert "Activity not found" in result
