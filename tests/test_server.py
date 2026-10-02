@@ -17,6 +17,7 @@ The tests ensure that the server's public API returns expected strings and handl
 """
 
 import asyncio
+import json
 import os
 import pathlib
 import sys
@@ -32,6 +33,7 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_activity_intervals,
     get_activity_messages,
     get_activity_streams,
+    add_events_bulk,
     add_or_update_event,
     get_athlete_power_curves,
     get_event_by_id,
@@ -326,6 +328,189 @@ def test_add_or_update_event(monkeypatch):
     )
     assert "Successfully created event id:" in result
     assert "e123" in result
+
+
+def _bulk_capture(monkeypatch, response):
+    """Patch the events request function and capture the calls."""
+    calls: list[dict] = []
+
+    async def fake_request(*_args, **kwargs):
+        calls.append(kwargs)
+        return response
+
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    return calls
+
+
+def test_add_events_bulk_happy_path(monkeypatch):
+    """Valid entries are sent in one bulk request; ids are matched by order."""
+    calls = _bulk_capture(monkeypatch, [{"id": 11}, {"id": 12}])
+    result = json.loads(
+        asyncio.run(
+            add_events_bulk(
+                athlete_id="i1",
+                events=[
+                    {
+                        "name": "Easy run",
+                        "start_date": "2025-01-06",
+                        "workout_type": "Run",
+                        "moving_time": 2700,
+                        "workout_doc": {"steps": [{"duration": 600, "text": "Warmup"}]},
+                    },
+                    {
+                        "name": "Rest",
+                        "start_date": "2025-01-07",
+                        "category": "NOTE",
+                        "description": "Full rest",
+                    },
+                ],
+            )
+        )
+    )
+    assert len(calls) == 1
+    assert calls[0]["url"] == "/athlete/i1/events/bulk"
+    assert calls[0]["method"] == "POST"
+    assert calls[0]["params"] == {"upsert": False, "upsertOnUid": False, "updatePlanApplied": False}
+    body = calls[0]["data"]
+    assert body[0]["category"] == "WORKOUT"
+    assert body[0]["type"] == "Run"
+    assert body[0]["start_date_local"] == "2025-01-06T00:00:00"
+    assert body[0]["moving_time"] == 2700
+    assert "Warmup" in body[0]["description"]
+    assert body[1]["category"] == "NOTE"
+    assert body[1]["description"] == "Full rest"
+    assert result["created"] == [
+        {"index": 0, "id": 11, "name": "Easy run", "start_date_local": None},
+        {"index": 1, "id": 12, "name": "Rest", "start_date_local": None},
+    ]
+    assert result["errors"] == []
+
+
+def test_add_events_bulk_matches_single_event_body(monkeypatch):
+    """Bulk workout body is identical to the body add_or_update_event sends."""
+    calls = _bulk_capture(monkeypatch, [{"id": 1}])
+    asyncio.run(
+        add_or_update_event(
+            athlete_id="i1", start_date="2025-01-06", name="Easy run", workout_type="Run"
+        )
+    )
+    asyncio.run(
+        add_events_bulk(
+            athlete_id="i1",
+            events=[{"name": "Easy run", "start_date": "2025-01-06", "workout_type": "Run"}],
+        )
+    )
+    assert calls[0]["data"] == calls[1]["data"][0]
+
+
+def test_add_events_bulk_invalid_entries_not_sent(monkeypatch):
+    """If any entry is invalid, nothing is sent and all errors are reported per index."""
+    calls = _bulk_capture(monkeypatch, [{"id": 5}])
+    result = json.loads(
+        asyncio.run(
+            add_events_bulk(
+                athlete_id="i1",
+                events=[
+                    {"name": "Bad date", "start_date": "06.01.2025", "workout_type": "Run"},
+                    {"name": "Ok", "start_date": "2025-01-06", "workout_type": "Run"},
+                    {"start_date": "2025-01-06", "workout_type": "Run"},
+                    {"name": "No type", "start_date": "2025-01-06"},
+                    {"name": "Note", "start_date": "2025-01-06", "category": "NOTE"},
+                    {"name": "Typo", "start_date": "2025-01-06", "workout_type": "Run", "foo": 1},
+                    {"name": "Color", "start_date": "2025-01-06", "workout_type": "Run", "color": "red"},
+                    {"name": "N", "start_date": "2025-01-06", "category": "NOTE", "description": "d", "distance": 5},
+                    {
+                        "name": "Both",
+                        "start_date": "2025-01-06",
+                        "workout_type": "Run",
+                        "description": "x",
+                        "workout_doc": {"steps": []},
+                    },
+                    {
+                        "name": "BadDoc",
+                        "start_date": "2025-01-06",
+                        "workout_type": "Run",
+                        "workout_doc": {"steps": [42]},
+                    },
+                ],
+            )
+        )
+    )
+    assert calls == []
+    assert result["created"] == []
+    assert result["created_count"] == 0
+    assert [e["index"] for e in result["errors"]] == [0, 2, 3, 4, 5, 6, 7, 8, 9]
+
+
+def test_add_events_bulk_reports_all_problems_of_an_entry(monkeypatch):
+    """Every problem of one entry is reported, not only the first one."""
+    calls = _bulk_capture(monkeypatch, [])
+    result = json.loads(
+        asyncio.run(
+            add_events_bulk(
+                athlete_id="i1",
+                events=[{"name": "Missing date and type", "moving_time": "1h"}],
+            )
+        )
+    )
+    assert calls == []
+    error = result["errors"][0]["error"]
+    assert "'start_date' is required" in error
+    assert "'workout_type' is required for category WORKOUT" in error
+    assert "'moving_time' must be an integer" in error
+
+
+def test_add_events_bulk_workout_description(monkeypatch):
+    """A WORKOUT description without workout_doc is sent as the workout text."""
+    calls = _bulk_capture(monkeypatch, [{"id": 1, "name": "Server name", "start_date_local": "2025-01-06T00:00:00"}])
+    result = json.loads(
+        asyncio.run(
+            add_events_bulk(
+                athlete_id="i1",
+                events=[
+                    {
+                        "name": "Mine",
+                        "start_date": "2025-01-06",
+                        "workout_type": "Run",
+                        "description": "- 10m 60%",
+                    }
+                ],
+            )
+        )
+    )
+    assert calls[0]["data"][0]["description"] == "- 10m 60%"
+    assert result["created"][0]["name"] == "Server name"
+    assert result["created"][0]["start_date_local"] == "2025-01-06T00:00:00"
+
+
+def test_add_events_bulk_all_invalid_makes_no_request(monkeypatch):
+    """No API call is made when every entry is invalid."""
+    calls = _bulk_capture(monkeypatch, [])
+    result = json.loads(asyncio.run(add_events_bulk(athlete_id="i1", events=[{"name": "x"}])))
+    assert calls == []
+    assert result["created"] == []
+    assert result["error_count"] == 1
+
+
+def test_add_events_bulk_empty_list(monkeypatch):
+    """An empty list returns an error without a request."""
+    calls = _bulk_capture(monkeypatch, [])
+    result = asyncio.run(add_events_bulk(athlete_id="i1", events=[]))
+    assert result.startswith("Error")
+    assert calls == []
+
+
+def test_add_events_bulk_api_error(monkeypatch):
+    """A failing bulk request is reported as an API error."""
+    _bulk_capture(monkeypatch, {"error": True, "message": "boom"})
+    result = asyncio.run(
+        add_events_bulk(
+            athlete_id="i1",
+            events=[{"name": "Ok", "start_date": "2025-01-06", "workout_type": "Run"}],
+        )
+    )
+    assert "Error creating events in bulk: boom" in result
+    assert "may have been partially or fully created" in result
 
 
 def test_get_activity_messages(monkeypatch):

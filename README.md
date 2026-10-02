@@ -258,6 +258,7 @@ Once the server is running and Claude Desktop is configured, you can use the fol
 - `get_events`: Retrieve upcoming events (workouts, races, etc.)
 - `get_event_by_id`: Get detailed information for a specific event
 - `add_or_update_event`: Create or update an event (workout, race, note, etc.)
+- `add_events_bulk`: WRITES: create many events (workouts/notes) in one call via the bulk endpoint
 - `delete_event`: Delete a specific event
 - `delete_events_by_date_range`: Delete events within a date range
 - `get_custom_items`: Get custom items (charts, custom fields, zones, etc.) for an athlete

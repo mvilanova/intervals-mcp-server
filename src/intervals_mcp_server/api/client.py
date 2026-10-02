@@ -154,7 +154,7 @@ async def make_intervals_request(
     api_key: str | None = None,
     params: dict[str, Any] | None = None,
     method: str = "GET",
-    data: dict[str, Any] | None = None,
+    data: dict[str, Any] | list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | list[dict[str, Any]]:
     """
     Make a request to the Intervals.icu API with proper error handling.
@@ -164,7 +164,7 @@ async def make_intervals_request(
         api_key (str | None): Optional API key to use for authentication. Defaults to the global API_KEY.
         params (dict[str, Any] | None): Optional query parameters for the request.
         method (str): HTTP method to use (GET, POST, etc.). Defaults to GET.
-        data (dict[str, Any] | None): Optional data to send in the request body.
+        data (dict[str, Any] | list[dict[str, Any]] | None): Optional JSON data (object or array) to send in the request body.
 
     Returns:
         dict[str, Any] | list[dict[str, Any]]: The parsed JSON response from the API, or an error dict.

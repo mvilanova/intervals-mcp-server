@@ -13,7 +13,11 @@ from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
 from intervals_mcp_server.utils.formatting import format_event_details, format_event_summary
 from intervals_mcp_server.utils.types import WorkoutDoc
-from intervals_mcp_server.utils.validation import resolve_activity_type, resolve_athlete_id, validate_date
+from intervals_mcp_server.utils.validation import (
+    resolve_activity_type,
+    resolve_athlete_id,
+    validate_date,
+)
 
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
@@ -42,6 +46,19 @@ def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-position
         "type": resolved_workout_type,
         "moving_time": moving_time,
         "distance": distance,
+    }
+
+
+def _prepare_note_data(
+    name: str, description: str, start_date: str, color: str | None
+) -> dict[str, Any]:
+    """Prepare note (category NOTE) data dictionary for API request."""
+    return {
+        "category": "NOTE",
+        "name": name,
+        "description": description,
+        "start_date_local": start_date + "T00:00:00",
+        "color": color,
     }
 
 
@@ -386,14 +403,7 @@ async def add_or_update_note(
 
     try:
         validated_date = validate_date(start_date)
-        event_data = {
-            "category": "NOTE",
-            "name": name,
-            "description": description,
-            "start_date_local": validated_date + "T00:00:00",
-            "color": color
-        }
-
+        event_data = _prepare_note_data(name, description, validated_date, color)
         return await _create_or_update_event_request(
             athlete_id_to_use, api_key, event_data, validated_date, event_id
         )
@@ -431,3 +441,217 @@ async def _create_or_update_event_request(
     )
     action = "updated" if event_id else "created"
     return _handle_event_response(result, action, athlete_id, start_date)
+
+
+_BULK_COMMON_KEYS = {"category", "name", "start_date"}
+_BULK_WORKOUT_KEYS = _BULK_COMMON_KEYS | {
+    "workout_type",
+    "workout_doc",
+    "description",
+    "moving_time",
+    "distance",
+}
+_BULK_NOTE_KEYS = _BULK_COMMON_KEYS | {"description", "color"}
+
+
+def _build_bulk_event_entry(entry: Any) -> dict[str, Any]:  # pylint: disable=too-many-branches
+    """Validate one bulk entry and build the API event body using the shared builders.
+
+    All problems of the entry are collected and reported together.
+
+    Raises:
+        ValueError: If the entry is invalid; the message lists every problem found.
+    """
+    if not isinstance(entry, dict):
+        raise ValueError("entry must be an object")
+
+    problems: list[str] = []
+    category = str(entry.get("category") or "WORKOUT").upper()
+    if category not in ("WORKOUT", "NOTE"):
+        raise ValueError("'category' must be WORKOUT or NOTE")
+    allowed = _BULK_NOTE_KEYS if category == "NOTE" else _BULK_WORKOUT_KEYS
+    not_applicable = sorted(set(entry) - allowed)
+    if not_applicable:
+        problems.append(f"keys not supported for category {category}: {', '.join(not_applicable)}")
+
+    name = entry.get("name")
+    if not isinstance(name, str) or not name:
+        problems.append("'name' is required")
+    validated_date = ""
+    if not entry.get("start_date"):
+        problems.append("'start_date' is required")
+    else:
+        try:
+            validated_date = validate_date(str(entry["start_date"]))
+        except ValueError as e:
+            problems.append(str(e))
+
+    description = entry.get("description")
+    if category == "NOTE":
+        if not isinstance(description, str) or not description:
+            problems.append("'description' is required for category NOTE")
+        if problems:
+            raise ValueError("; ".join(problems))
+        return _prepare_note_data(
+            str(name), str(description), validated_date, entry.get("color", "green")
+        )
+
+    workout_type = entry.get("workout_type")
+    if not isinstance(workout_type, str) or not workout_type:
+        problems.append("'workout_type' is required for category WORKOUT")
+    if description is not None and not isinstance(description, str):
+        problems.append("'description' must be a string")
+    raw_doc = entry.get("workout_doc")
+    workout_doc: WorkoutDoc | None = None
+    if raw_doc is not None and description:
+        problems.append("provide either 'workout_doc' or 'description', not both")
+    if isinstance(raw_doc, dict):
+        try:
+            workout_doc = WorkoutDoc.from_dict(raw_doc)
+        except (ValueError, TypeError, KeyError) as e:
+            problems.append(f"invalid 'workout_doc': {e!r}")
+    elif isinstance(raw_doc, WorkoutDoc):
+        workout_doc = raw_doc
+    elif raw_doc is not None:
+        problems.append("'workout_doc' must be an object")
+    for key in ("moving_time", "distance"):
+        value = entry.get(key)
+        if value is not None and (isinstance(value, bool) or not isinstance(value, int)):
+            problems.append(f"'{key}' must be an integer")
+    if problems:
+        raise ValueError("; ".join(problems))
+
+    try:
+        body = _prepare_event_data(
+            str(name),
+            str(workout_type),
+            validated_date,
+            workout_doc,
+            entry.get("moving_time"),
+            entry.get("distance"),
+        )
+    except (ValueError, TypeError, KeyError) as e:
+        raise ValueError(f"invalid 'workout_doc': {e!r}") from e
+    if description:
+        # Native Intervals.icu workout text, sent as-is.
+        body["description"] = description
+    return body
+
+
+@mcp.tool()
+async def add_events_bulk(
+    events: list[dict[str, Any]],
+    athlete_id: str | None = None,
+    api_key: str | None = None,
+) -> str:
+    """WRITES to Intervals.icu: create many calendar events (planned workouts and/or notes) in one call.
+
+    All entries are validated first. If ANY entry is invalid, nothing is sent and all errors are
+    returned (fix them and retry). Otherwise all entries are sent in a single POST to
+    /athlete/{id}/events/bulk. This tool only creates new events (it never updates existing ones;
+    use add_or_update_event for that).
+
+    Args:
+        events: List of entry objects (see below).
+        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+
+    Entry keys (keys that do not apply to the entry's category are rejected, not ignored):
+        name (str, required): Name/title of the event
+        start_date (str, required): Date in YYYY-MM-DD format
+        category (str, optional): "WORKOUT" (default) or "NOTE"
+        WORKOUT entries:
+            workout_type (str, REQUIRED here, unlike add_or_update_event where it is inferred
+                from the name): e.g. Ride, Run, Swim, Walk, Row
+            workout_doc (object, optional): structured workout with "steps", same structure as in
+                add_or_update_event, e.g.
+                {"description": "...", "steps": [{"power": {"value": 80, "units": "%ftp"}, "duration": 900}]}
+            description (str, optional): workout as native Intervals.icu workout text, sent as-is.
+                Mutually exclusive with workout_doc.
+            moving_time (int, optional): expected moving time in seconds
+            distance (int, optional): expected distance in meters
+        NOTE entries:
+            description (str, required): plain text content of the note
+            color (str, optional): note color, defaults to "green"
+
+    Example:
+        [
+            {"name": "Easy run", "start_date": "2025-01-06", "workout_type": "Run", "moving_time": 2700},
+            {"name": "Rest day", "start_date": "2025-01-07", "category": "NOTE", "description": "Full rest"}
+        ]
+
+    Returns:
+        JSON with "created" (per event: input index, event id, and the name/start date as returned
+        by the API), "errors" (index and all problems found per invalid entry, joined with "; ")
+        and counts. If the request
+        fails, an error string is returned and events may have been created.
+    """
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    if error_msg:
+        return error_msg
+    if not events:
+        return "Error: No events provided."
+
+    bodies: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    for index, entry in enumerate(events):
+        try:
+            bodies.append(_build_bulk_event_entry(entry))
+        except (ValueError, TypeError, KeyError) as e:
+            errors.append({"index": index, "error": str(e)})
+
+    if errors:
+        return json.dumps(
+            {
+                "message": "No events were sent because some entries are invalid.",
+                "created_count": 0,
+                "error_count": len(errors),
+                "created": [],
+                "errors": errors,
+            },
+            indent=2,
+        )
+
+    result = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/events/bulk",
+        api_key=api_key,
+        method="POST",
+        params={"upsert": False, "upsertOnUid": False, "updatePlanApplied": False},
+        data=bodies,
+    )
+    if isinstance(result, dict) and "error" in result:
+        return (
+            f"Error creating events in bulk: {result.get('message', 'Unknown error')}. "
+            "The events may have been partially or fully created; check get_events for the "
+            "date range before retrying."
+        )
+    returned = result if isinstance(result, list) else []
+    created: list[dict[str, Any]] = []
+    for index, body in enumerate(bodies):
+        item = returned[index] if index < len(returned) else {}
+        if not isinstance(item, dict):
+            item = {}
+        created.append(
+            {
+                "index": index,
+                "id": item.get("id"),
+                "name": item.get("name", body.get("name")),
+                "start_date_local": item.get("start_date_local"),
+            }
+        )
+    if len(returned) != len(bodies):
+        errors.append(
+            {
+                "index": None,
+                "error": f"API returned {len(returned)} events for {len(bodies)} sent; ids may be missing",
+            }
+        )
+    return json.dumps(
+        {
+            "created_count": len(created),
+            "error_count": len(errors),
+            "created": created,
+            "errors": errors,
+        },
+        indent=2,
+    )

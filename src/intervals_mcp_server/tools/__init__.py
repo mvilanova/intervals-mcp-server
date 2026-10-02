@@ -15,6 +15,7 @@ from intervals_mcp_server.tools.activities import (  # noqa: F401
     get_activity_streams,
 )
 from intervals_mcp_server.tools.events import (  # noqa: F401
+    add_events_bulk,
     add_or_update_event,
     delete_event,
     delete_events_by_date_range,
@@ -62,6 +63,7 @@ __all__ = [
     "delete_event",
     "delete_events_by_date_range",
     "add_or_update_event",
+    "add_events_bulk",
     "get_custom_items",
     "get_custom_item_by_id",
     "create_custom_item",
