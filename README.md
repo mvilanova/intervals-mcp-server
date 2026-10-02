@@ -259,6 +259,10 @@ Once the server is running and Claude Desktop is configured, you can use the fol
 - `get_event_by_id`: Get detailed information for a specific event
 - `add_or_update_event`: Create or update an event (workout, race, note, etc.)
 - `delete_event`: Delete a specific event
+- `get_workout_library`: List workout library folders/plans and their workouts (optionally filtered by folder)
+- `create_library_workout`: Create a workout template in the workout library (writes data)
+- `add_event_from_library`: Schedule a library workout on the calendar (writes data)
+- `delete_library_workout`: Permanently delete a workout from the library (writes data)
 - `delete_events_by_date_range`: Delete events within a date range
 - `get_custom_items`: Get custom items (charts, custom fields, zones, etc.) for an athlete
 - `get_custom_item_by_id`: Get detailed information for a specific custom item
