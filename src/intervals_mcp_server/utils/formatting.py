@@ -249,6 +249,18 @@ def _format_menstrual_tracking(entries: dict[str, Any]) -> list[str]:
     return menstrual_lines
 
 
+# Value labels of the 1-4 subjective wellness scales in Intervals.icu.
+_LEVEL_LABELS = {1: "Low", 2: "Avg", 3: "High", 4: "Extreme"}
+SUBJECTIVE_SCALE_LABELS: dict[str, dict[int, str]] = {
+    "soreness": _LEVEL_LABELS,
+    "fatigue": _LEVEL_LABELS,
+    "stress": _LEVEL_LABELS,
+    "mood": {1: "Great", 2: "Good", 3: "OK", 4: "Grumpy"},
+    "motivation": {1: "Extreme", 2: "High", 3: "Avg", 4: "Low"},
+    "injury": {1: "None", 2: "Niggle", 3: "Poor", 4: "Injured"},
+}
+
+
 def _format_subjective_feelings(entries: dict[str, Any]) -> list[str]:
     """Format subjective feelings section."""
     subjective_lines = []
@@ -261,7 +273,11 @@ def _format_subjective_feelings(entries: dict[str, Any]) -> list[str]:
         ("injury", "Injury Level"),
     ]:
         if entries.get(k) is not None:
-            subjective_lines.append(f"  {label}: {entries[k]}/10")
+            value = entries[k]
+            text = SUBJECTIVE_SCALE_LABELS[k].get(value) if isinstance(value, int) else None
+            subjective_lines.append(
+                f"  {label}: {value} ({text})" if text else f"  {label}: {value}"
+            )
     return subjective_lines
 
 
