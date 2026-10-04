@@ -72,11 +72,20 @@ def format_activity_summary(activity: dict[str, Any]) -> str:
         gear_name = activity.get("gear_name", "N/A")
         gear_id = activity.get("gear_id", "N/A")
 
+    tags = activity.get("tags") or []
+    tags = ", ".join(tags) if isinstance(tags, list) else str(tags)
+
+    # API sub_type is an upper-case enum (e.g. COMMUTE, RACE) or null
+    sub_type = activity.get("sub_type")
+    sub_type = sub_type.replace("_", " ").capitalize() if isinstance(sub_type, str) and sub_type else "None"
+
     return f"""
 Activity: {activity.get("name", "Unnamed")}
 ID: {activity.get("id", "N/A")}
 Type: {activity.get("type", "Unknown")}
+Sub-type: {sub_type}
 Date: {start_time}
+Tags: {tags or "None"}
 Description: {activity.get("description", "N/A")}
 Distance: {activity.get("distance", 0)} meters
 Duration: {activity.get("duration", activity.get("elapsed_time", 0))} seconds

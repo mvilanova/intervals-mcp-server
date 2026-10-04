@@ -32,6 +32,27 @@ def test_format_activity_summary():
     result = format_activity_summary(data)
     assert "Activity: Morning Ride" in result
     assert "ID: 1" in result
+    assert "Tags: None" in result
+    assert "Sub-type: None" in result
+
+
+def test_format_activity_summary_tags():
+    """
+    Test that format_activity_summary lists activity tags, comma-separated.
+    """
+    data = {"name": "Morning Ride", "id": "i1", "type": "Ride", "tags": ["tempo", "outdoor"]}
+    assert "Tags: tempo, outdoor" in format_activity_summary(data)
+    assert "Tags: None" in format_activity_summary({**data, "tags": []})
+    assert "Tags: None" in format_activity_summary({**data, "tags": None})
+
+
+def test_format_activity_summary_sub_type():
+    """
+    Test that format_activity_summary shows the activity sub_type (e.g. COMMUTE) in readable form.
+    """
+    data = {"name": "Morning Ride", "id": "i1", "type": "Ride", "sub_type": "COMMUTE", "trainer": True}
+    assert "Sub-type: Commute" in format_activity_summary(data)
+    assert "Sub-type: Race" in format_activity_summary({**data, "sub_type": "RACE"})
 
 
 def test_format_workout():
