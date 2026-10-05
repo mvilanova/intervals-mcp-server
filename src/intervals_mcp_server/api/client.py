@@ -8,6 +8,7 @@ including request management, error handling, and client lifecycle.
 from json import JSONDecodeError
 import json
 import logging
+import re
 import sys
 from contextlib import asynccontextmanager
 from http import HTTPStatus
@@ -19,6 +20,12 @@ from mcp.server.fastmcp import FastMCP  # pylint: disable=import-error
 from intervals_mcp_server.config import get_config
 
 logger = logging.getLogger("intervals_icu_mcp_server")
+
+# httpx logs every request URL at INFO level, and those URLs contain the athlete ID.
+# Only keep its warnings and errors so the ID never ends up in the logs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
+_ATHLETE_PATH = re.compile(r"(/athlete/)[^/?#\s]+")
 
 # Create a single AsyncClient instance for all requests (lazily initialized)
 # This can be monkeypatched via server.httpx_client for testing
@@ -81,6 +88,11 @@ async def setup_api_client(_app: FastMCP):
             pass
 
 
+def _redact(url: str) -> str:
+    """Replace the athlete ID in an API path or URL before logging it."""
+    return _ATHLETE_PATH.sub(r"\1***", url)
+
+
 def _get_error_message(error_code: int, error_text: str) -> str:
     """Return a user-friendly error message for a given HTTP status code."""
     error_messages = {
@@ -119,7 +131,7 @@ def _prepare_request_config(
     # Use provided api_key or fall back to global API_KEY
     key_to_use = api_key if api_key is not None else config.api_key
     if not key_to_use:
-        logger.error("No API key provided for request to: %s", url)
+        logger.error("No API key provided for request to: %s", _redact(url))
         return (
             "",
             httpx.BasicAuth("", ""),
@@ -143,7 +155,7 @@ def _parse_response(
     try:
         response_data = response.json() if response.content else {}
     except JSONDecodeError:
-        logger.error("Invalid JSON in response from: %s", full_url)
+        logger.error("Invalid JSON in response from: %s", _redact(full_url))
         return {"error": True, "message": "Invalid JSON in response"}
     response.raise_for_status()
     return response_data
@@ -177,7 +189,7 @@ async def make_intervals_request(
     async def _send_request(client: httpx.AsyncClient) -> httpx.Response:
         if method in {"POST", "PUT"} and data is not None:
             body = json.dumps(data)
-            logger.debug("Request %s %s body: %s", method, full_url, body)
+            logger.debug("Request %s %s body: %s", method, _redact(full_url), body)
             return await client.request(
                 method=method,
                 url=full_url,
@@ -216,10 +228,10 @@ async def make_intervals_request(
     except httpx.HTTPStatusError as e:
         return _handle_http_status_error(e)
     except httpx.RequestError as e:
-        logger.error("Request error: %s", str(e))
+        logger.error("Request error: %s", _redact(str(e)))
         return {"error": True, "message": f"Request error: {str(e)}"}
     except httpx.HTTPError as e:
-        logger.error("HTTP client error: %s", str(e))
+        logger.error("HTTP client error: %s", _redact(str(e)))
         return {"error": True, "message": f"HTTP client error: {str(e)}"}
 
 
@@ -234,7 +246,7 @@ def _handle_http_status_error(e: httpx.HTTPStatusError) -> dict[str, Any]:
     """
     error_code = e.response.status_code
     error_text = e.response.text
-    logger.error("HTTP error: %s - %s", error_code, error_text)
+    logger.error("HTTP error: %s - %s", error_code, _redact(error_text))
     return {
         "error": True,
         "status_code": error_code,

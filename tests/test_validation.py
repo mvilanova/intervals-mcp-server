@@ -2,7 +2,7 @@
 Unit tests for resolve_activity_type in intervals_mcp_server.utils.validation.
 """
 
-from intervals_mcp_server.utils.validation import resolve_activity_type
+from intervals_mcp_server.utils.validation import resolve_activity_type, resolve_athlete_id
 
 
 def test_explicit_activity_type_returned_as_is():
@@ -52,3 +52,31 @@ def test_case_insensitive():
     """Keyword matching is case-insensitive."""
     assert resolve_activity_type("MORNING RUN") == "Run"
     assert resolve_activity_type("SWIM") == "Swim"
+
+
+def test_resolve_athlete_id_defaults_when_missing_or_blank():
+    """None, empty and blank IDs fall back to the default athlete."""
+    for athlete_id in (None, "", "   "):
+        assert resolve_athlete_id(athlete_id, "i1") == ("i1", None)
+
+
+def test_resolve_athlete_id_uses_given_id():
+    """A given ID wins over the default and is stripped."""
+    assert resolve_athlete_id("i2", "i1") == ("i2", None)
+    assert resolve_athlete_id(" 12345 ", "i1") == ("12345", None)
+
+
+def test_resolve_athlete_id_rejects_invalid_format():
+    """IDs that could change the URL path are rejected."""
+    for athlete_id in ("i2/events", "../1", "abc", "i 2"):
+        athlete_id_to_use, error = resolve_athlete_id(athlete_id, "i1")
+        assert athlete_id_to_use == ""
+        assert error is not None and error.startswith("Error: athlete_id must be all digits")
+
+
+def test_resolve_athlete_id_without_default():
+    """Without ID and default an error is returned."""
+    assert resolve_athlete_id(None) == (
+        "",
+        "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables.",
+    )

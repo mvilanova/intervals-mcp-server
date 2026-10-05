@@ -109,6 +109,15 @@ def float_to_str(value: float) -> str:
     return str(int(value)) if value.is_integer() else str(value)
 
 
+# Absolute pace units are written as "m:ss<suffix> Pace", e.g. "5:35/km Pace"
+_ABSOLUTE_PACE_SUFFIXES = {
+    ValueUnits.MINS_KM: "/km",
+    ValueUnits.MINS_MILE: "/mi",
+    ValueUnits.SECS_100M: "/100m",
+    ValueUnits.SECS_500M: "/500m",
+}
+
+
 @dataclass
 class Value:
     """Represents a value with units for workout step intensity (power, heart rate, pace, cadence).
@@ -178,7 +187,21 @@ class Value:
             return f"{float_to_str(value)}W"
         if self.units in [ValueUnits.CADENCE]:
             return f"{float_to_str(value)}rpm"
+        if self.units in _ABSOLUTE_PACE_SUFFIXES:
+            return self._format_pace(value)
         return float_to_str(value)
+
+    def _format_pace(self, value: float) -> str:
+        """Format an absolute pace as m:ss.
+
+        MINS_KM / MINS_MILE accept seconds (>= 60) or decimal minutes (< 60);
+        SECS_100M / SECS_500M are always seconds.
+        """
+        seconds = value
+        if self.units in [ValueUnits.MINS_KM, ValueUnits.MINS_MILE] and value < 60:
+            seconds = value * 60
+        minutes, secs = divmod(round(seconds), 60)
+        return f"{minutes}:{secs:02d}"
 
     def _format_units(self) -> str:
         """Format units into a human-readable string using dictionary mapping."""
@@ -192,6 +215,10 @@ class Value:
             ValueUnits.PERCENT_FTP: "ftp",
             ValueUnits.POWER_ZONE: "W",
             ValueUnits.CADENCE: "Cadence",
+            ValueUnits.MINS_KM: "Pace",
+            ValueUnits.MINS_MILE: "Pace",
+            ValueUnits.SECS_100M: "Pace",
+            ValueUnits.SECS_500M: "Pace",
         }
         if self.units is None:
             return ""
@@ -199,10 +226,12 @@ class Value:
 
     def __str__(self) -> str:
         val = ""
+        # Absolute paces carry their suffix once, after the value or range: "5:30-5:40/km"
+        suffix = _ABSOLUTE_PACE_SUFFIXES.get(self.units, "") if self.units is not None else ""
         if self.start is not None and self.end is not None:
-            val += f"{self._format_value(self.start)}-{self._format_value(self.end)} "
+            val += f"{self._format_value(self.start)}-{self._format_value(self.end)}{suffix} "
         if self.value is not None:
-            val += f"{self._format_value(self.value)} "
+            val += f"{self._format_value(self.value)}{suffix} "
         if self.units is not None:
             val += f"{self._format_units()} "
         if self.target is not None:

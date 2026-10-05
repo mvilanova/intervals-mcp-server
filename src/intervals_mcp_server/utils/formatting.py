@@ -402,32 +402,69 @@ def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = Fa
     return "\n".join(lines)
 
 
+_RACE_PRIORITIES = {"RACE_A": "A", "RACE_B": "B", "RACE_C": "C"}
+
+
+def _race_priority(event: dict[str, Any]) -> str | None:
+    """Race priority (A, B or C) from the event category; None for other events."""
+    return _RACE_PRIORITIES.get(str(event.get("category") or "").upper())
+
+
+def _planned_value(value: Any, divisor: float = 1, unit: str = "") -> str:
+    """Rounded planned value with unit; N/A when Intervals.icu did not provide one."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return "N/A"
+    return f"{round(value / divisor)}{unit}"
+
+
+def _event_planning_lines(event: dict[str, Any]) -> list[str]:
+    """Category, sport, planned load and planned time of a calendar event.
+
+    ``type`` holds the sport (Ride, Run, WeightTraining, ...), ``icu_training_load``
+    the load Intervals.icu computed for the planned workout and ``moving_time`` its
+    planned duration in seconds. Missing values are shown as N/A, never as 0.
+    """
+    return [
+        f"Category: {event.get('category') or 'N/A'}",
+        f"Sport: {event.get('type') or 'N/A'}",
+        f"Planned load: {_planned_value(event.get('icu_training_load'))}",
+        f"Planned time: {_planned_value(event.get('moving_time'), 60, ' min')}",
+    ]
+
+
 def format_event_summary(event: dict[str, Any]) -> str:
-    """Format a basic event summary into a readable string."""
+    """Format a basic event summary into a readable string.
+
+    The event list of the API has no ``workout`` object, so sport and planning data
+    come from ``type``, ``icu_training_load`` and ``moving_time`` (see
+    :func:`_event_planning_lines`).
+    """
 
     # Update to check for "date" if "start_date_local" is not provided
-    event_date = event.get("start_date_local", event.get("date", "Unknown"))
-    event_type = "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
-    event_name = event.get("name", "Unnamed")
-    event_id = event.get("id", "N/A")
-    event_desc = event.get("description", "No description")
-
-    return f"""Date: {event_date}
-ID: {event_id}
-Type: {event_type}
-Name: {event_name}
-Description: {event_desc}"""
+    lines = [
+        f"Date: {event.get('start_date_local', event.get('date', 'Unknown'))}",
+        f"ID: {event.get('id', 'N/A')}",
+        *_event_planning_lines(event),
+    ]
+    priority = _race_priority(event)
+    if priority:
+        lines.append(f"Race priority: {priority}")
+    lines.append(f"Name: {event.get('name', 'Unnamed')}")
+    lines.append(f"Description: {event.get('description') or 'No description'}")
+    return "\n".join(lines)
 
 
 def format_event_details(event: dict[str, Any]) -> str:
     """Format detailed event information into a readable string."""
 
+    planning = "\n".join(_event_planning_lines(event))
     event_details = f"""Event Details:
 
 ID: {event.get("id", "N/A")}
-Date: {event.get("date", "Unknown")}
+Date: {event.get("start_date_local", event.get("date", "Unknown"))}
+{planning}
 Name: {event.get("name", "Unnamed")}
-Description: {event.get("description", "No description")}"""
+Description: {event.get("description") or "No description"}"""
 
     # Check if it's a workout-based event
     if "workout" in event and event["workout"]:
@@ -445,13 +482,13 @@ TSS: {workout.get("tss", "N/A")}"""
             event_details += f"""
 Intervals: {len(workout["intervals"])}"""
 
-    # Check if it's a race
-    if event.get("race"):
+    # Races are events with category RACE_A, RACE_B or RACE_C
+    priority = _race_priority(event)
+    if priority:
         event_details += f"""
 
 Race Information:
-Priority: {event.get("priority", "N/A")}
-Result: {event.get("result", "N/A")}"""
+Priority: {priority}"""
 
     # Include calendar information
     if "calendar" in event:

@@ -1,0 +1,735 @@
+{
+ "default": {
+  "schema_version": "1.0",
+  "period": {
+   "start": "2026-08-31",
+   "end": "2026-09-28",
+   "load_end": "2026-09-27",
+   "days": 28,
+   "windows": {
+    "acute": 7,
+    "chronic": 28,
+    "baseline": 60
+   }
+  },
+  "flags": [
+   {
+    "code": "ftp_eftp_dev",
+    "sev": "warning",
+    "val": -2.6,
+    "thr": 2.0
+   },
+   {
+    "code": "subjective_missing",
+    "sev": "info",
+    "val": 1.0,
+    "thr": 0.8
+   }
+  ],
+  "load": {
+   "ctl": 100.0,
+   "atl": 95.0,
+   "tsb": 5.0,
+   "ramp": 1.0,
+   "src": "api",
+   "as_of": "2026-09-27",
+   "load_7d": 745,
+   "load_28d": 2980,
+   "acwr": 1.0,
+   "monotony": 1.34,
+   "monotony_note": null,
+   "strain": 995,
+   "primary_sport": "Rad",
+   "primary_monotony": 0.83,
+   "effective_monotony": 0.83,
+   "deload": false
+  },
+  "recovery": {
+   "hrv": {
+    "status": "within",
+    "ln_7d": 4.38,
+    "ln_base": 4.38,
+    "band": [
+     4.37,
+     4.39
+    ],
+    "rmssd_7d": 80,
+    "days_below": 0,
+    "n_7d": 6,
+    "n_base": 59
+   },
+   "rhr": {
+    "avg_7d": 41.0,
+    "avg_base": 41.0,
+    "delta": 0.0,
+    "days_high": 0,
+    "n_7d": 6,
+    "n_base": 59
+   },
+   "sleep": {
+    "avg_h": 7.3,
+    "avg_7d_h": 7.1,
+    "nights_short": 2,
+    "recent_h": [
+     7.4,
+     6.6,
+     null
+    ],
+    "n": 27
+   }
+  },
+  "volume": [
+   {
+    "week": "2026-W36",
+    "days": 7,
+    "sports": {
+     "Kraft": {
+      "h": 1.3,
+      "load": 30,
+      "n": 2
+     },
+     "Lauf": {
+      "h": 2.5,
+      "load": 145,
+      "n": 2,
+      "km": 27.0
+     },
+     "Rad": {
+      "h": 10.0,
+      "load": 550,
+      "n": 4,
+      "km": 270.0
+     },
+     "Schwimmen": {
+      "h": 0.8,
+      "load": 20,
+      "n": 1,
+      "km": 2.5
+     }
+    },
+    "total": {
+     "h": 14.6,
+     "load": 745,
+     "n": 9
+    },
+    "rest_days": 1,
+    "hard_days": 3,
+    "monotony": 1.34
+   },
+   {
+    "week": "2026-W37",
+    "days": 7,
+    "sports": {
+     "Kraft": {
+      "h": 1.3,
+      "load": 30,
+      "n": 2
+     },
+     "Lauf": {
+      "h": 2.5,
+      "load": 145,
+      "n": 2,
+      "km": 27.0
+     },
+     "Rad": {
+      "h": 10.0,
+      "load": 550,
+      "n": 4,
+      "km": 270.0
+     },
+     "Schwimmen": {
+      "h": 0.8,
+      "load": 20,
+      "n": 1,
+      "km": 2.5
+     }
+    },
+    "total": {
+     "h": 14.6,
+     "load": 745,
+     "n": 9
+    },
+    "rest_days": 1,
+    "hard_days": 3,
+    "monotony": 1.34
+   },
+   {
+    "week": "2026-W38",
+    "days": 7,
+    "sports": {
+     "Kraft": {
+      "h": 1.3,
+      "load": 30,
+      "n": 2
+     },
+     "Lauf": {
+      "h": 2.5,
+      "load": 145,
+      "n": 2,
+      "km": 27.0
+     },
+     "Rad": {
+      "h": 10.0,
+      "load": 550,
+      "n": 4,
+      "km": 270.0
+     },
+     "Schwimmen": {
+      "h": 0.8,
+      "load": 20,
+      "n": 1,
+      "km": 2.5
+     }
+    },
+    "total": {
+     "h": 14.6,
+     "load": 745,
+     "n": 9
+    },
+    "rest_days": 1,
+    "hard_days": 3,
+    "monotony": 1.34
+   },
+   {
+    "week": "2026-W39",
+    "days": 7,
+    "sports": {
+     "Kraft": {
+      "h": 1.3,
+      "load": 30,
+      "n": 2
+     },
+     "Lauf": {
+      "h": 2.5,
+      "load": 145,
+      "n": 2,
+      "km": 27.0
+     },
+     "Rad": {
+      "h": 10.0,
+      "load": 550,
+      "n": 4,
+      "km": 270.0
+     },
+     "Schwimmen": {
+      "h": 0.8,
+      "load": 20,
+      "n": 1,
+      "km": 2.5
+     }
+    },
+    "total": {
+     "h": 14.6,
+     "load": 745,
+     "n": 9
+    },
+    "rest_days": 1,
+    "hard_days": 3,
+    "monotony": 1.34
+   }
+  ],
+  "intensity": {
+   "map": {
+    "power": "Z1-Z2|Z3|Z4-Z7",
+    "hr": "Z1-Z2|Z3-Z4|Z5-Z7"
+   },
+   "all": {
+    "pct": [
+     78.1,
+     11.6,
+     10.3
+    ],
+    "h": 58.3,
+    "pi": 1.84,
+    "cls": "Pyramidal",
+    "basis_pct": {
+     "power": 69,
+     "hr": 31
+    }
+   },
+   "rad": {
+    "pct": [
+     71.4,
+     13.6,
+     15.0
+    ],
+    "h": 40.0,
+    "pi": 1.9,
+    "cls": "Pyramidal",
+    "basis_pct": {
+     "power": 100,
+     "hr": 0
+    }
+   },
+   "drift": {
+    "cls_7d": "Pyramidal",
+    "cls_28d": "Pyramidal",
+    "pi_7d": 1.84,
+    "pi_28d": 1.84,
+    "drift": "consistent"
+   }
+  },
+  "capability": {
+   "durability": {
+    "Rad": {
+     "median": 4.2,
+     "n": 16,
+     "high": 4,
+     "high_7d": 1,
+     "trend": "stable"
+    },
+    "Lauf": {
+     "median": null,
+     "n": 0,
+     "high": 0,
+     "high_7d": 0,
+     "trend": null
+    },
+    "excluded": 8,
+    "reasons": {
+     "no_decoupling": 8
+    }
+   },
+   "ef": {
+    "ef_7d": 1.82,
+    "ef_28d": 1.82,
+    "n_7d": 4,
+    "n_28d": 16,
+    "trend": "stable"
+   },
+   "eftp": {
+    "now": 352,
+    "d28": 349,
+    "pct_28": 0.8,
+    "d56": 346,
+    "pct_56": 1.6
+   }
+  },
+  "top_sessions": [
+   {
+    "date": "2026-09-26",
+    "type": "Rad",
+    "min": 300,
+    "load": 260,
+    "if": 0.66
+   },
+   {
+    "date": "2026-09-19",
+    "type": "Rad",
+    "min": 300,
+    "load": 260,
+    "if": 0.66
+   },
+   {
+    "date": "2026-09-12",
+    "type": "Rad",
+    "min": 300,
+    "load": 260,
+    "if": 0.66
+   },
+   {
+    "date": "2026-09-05",
+    "type": "Rad",
+    "min": 300,
+    "load": 260,
+    "if": 0.66
+   },
+   {
+    "date": "2026-09-24",
+    "type": "Rad",
+    "min": 120,
+    "load": 110,
+    "if": 0.78
+   }
+  ],
+  "thresholds": {
+   "ftp": 343,
+   "ftp_indoor": null,
+   "lthr_rad": 170,
+   "lthr_lauf": 173
+  },
+  "coverage": {
+   "days": 28,
+   "hrv_days": 27,
+   "rhr_days": 27,
+   "sleep_days": 27,
+   "sessions": 36,
+   "zones": {
+    "power": 16,
+    "hr": 20,
+    "none": 0
+   },
+   "rpe": 0,
+   "feel": 0
+  }
+ },
+ "explicit_end": {
+  "schema_version": "1.0",
+  "period": {
+   "start": "2026-08-31",
+   "end": "2026-09-27",
+   "load_end": "2026-09-27",
+   "days": 28,
+   "windows": {
+    "acute": 7,
+    "chronic": 28,
+    "baseline": 60
+   }
+  },
+  "flags": [
+   {
+    "code": "ftp_eftp_dev",
+    "sev": "warning",
+    "val": -2.6,
+    "thr": 2.0
+   },
+   {
+    "code": "sleep_short",
+    "sev": "warning",
+    "val": 2,
+    "thr": 2
+   },
+   {
+    "code": "subjective_missing",
+    "sev": "info",
+    "val": 1.0,
+    "thr": 0.8
+   }
+  ],
+  "load": {
+   "ctl": 100.0,
+   "atl": 95.0,
+   "tsb": 5.0,
+   "ramp": 1.0,
+   "src": "api",
+   "load_7d": 745,
+   "load_28d": 2980,
+   "acwr": 1.0,
+   "monotony": 1.34,
+   "monotony_note": null,
+   "strain": 995,
+   "primary_sport": "Rad",
+   "primary_monotony": 0.83,
+   "effective_monotony": 0.83,
+   "deload": false
+  },
+  "recovery": {
+   "hrv": {
+    "status": "within",
+    "ln_7d": 4.38,
+    "ln_base": 4.38,
+    "band": [
+     4.37,
+     4.39
+    ],
+    "rmssd_7d": 80,
+    "days_below": 2,
+    "n_7d": 7,
+    "n_base": 60
+   },
+   "rhr": {
+    "avg_7d": 40.9,
+    "avg_base": 41.0,
+    "delta": -0.1,
+    "days_high": 0,
+    "n_7d": 7,
+    "n_base": 60
+   },
+   "sleep": {
+    "avg_h": 7.3,
+    "avg_7d_h": 7.2,
+    "nights_short": 2,
+    "recent_h": [
+     6.6,
+     7.4,
+     6.6
+    ],
+    "n": 28
+   }
+  },
+  "volume": [
+   {
+    "week": "2026-W36",
+    "days": 7,
+    "sports": {
+     "Kraft": {
+      "h": 1.3,
+      "load": 30,
+      "n": 2
+     },
+     "Lauf": {
+      "h": 2.5,
+      "load": 145,
+      "n": 2,
+      "km": 27.0
+     },
+     "Rad": {
+      "h": 10.0,
+      "load": 550,
+      "n": 4,
+      "km": 270.0
+     },
+     "Schwimmen": {
+      "h": 0.8,
+      "load": 20,
+      "n": 1,
+      "km": 2.5
+     }
+    },
+    "total": {
+     "h": 14.6,
+     "load": 745,
+     "n": 9
+    },
+    "rest_days": 1,
+    "hard_days": 3,
+    "monotony": 1.34
+   },
+   {
+    "week": "2026-W37",
+    "days": 7,
+    "sports": {
+     "Kraft": {
+      "h": 1.3,
+      "load": 30,
+      "n": 2
+     },
+     "Lauf": {
+      "h": 2.5,
+      "load": 145,
+      "n": 2,
+      "km": 27.0
+     },
+     "Rad": {
+      "h": 10.0,
+      "load": 550,
+      "n": 4,
+      "km": 270.0
+     },
+     "Schwimmen": {
+      "h": 0.8,
+      "load": 20,
+      "n": 1,
+      "km": 2.5
+     }
+    },
+    "total": {
+     "h": 14.6,
+     "load": 745,
+     "n": 9
+    },
+    "rest_days": 1,
+    "hard_days": 3,
+    "monotony": 1.34
+   },
+   {
+    "week": "2026-W38",
+    "days": 7,
+    "sports": {
+     "Kraft": {
+      "h": 1.3,
+      "load": 30,
+      "n": 2
+     },
+     "Lauf": {
+      "h": 2.5,
+      "load": 145,
+      "n": 2,
+      "km": 27.0
+     },
+     "Rad": {
+      "h": 10.0,
+      "load": 550,
+      "n": 4,
+      "km": 270.0
+     },
+     "Schwimmen": {
+      "h": 0.8,
+      "load": 20,
+      "n": 1,
+      "km": 2.5
+     }
+    },
+    "total": {
+     "h": 14.6,
+     "load": 745,
+     "n": 9
+    },
+    "rest_days": 1,
+    "hard_days": 3,
+    "monotony": 1.34
+   },
+   {
+    "week": "2026-W39",
+    "days": 7,
+    "sports": {
+     "Kraft": {
+      "h": 1.3,
+      "load": 30,
+      "n": 2
+     },
+     "Lauf": {
+      "h": 2.5,
+      "load": 145,
+      "n": 2,
+      "km": 27.0
+     },
+     "Rad": {
+      "h": 10.0,
+      "load": 550,
+      "n": 4,
+      "km": 270.0
+     },
+     "Schwimmen": {
+      "h": 0.8,
+      "load": 20,
+      "n": 1,
+      "km": 2.5
+     }
+    },
+    "total": {
+     "h": 14.6,
+     "load": 745,
+     "n": 9
+    },
+    "rest_days": 1,
+    "hard_days": 3,
+    "monotony": 1.34
+   }
+  ],
+  "intensity": {
+   "map": {
+    "power": "Z1-Z2|Z3|Z4-Z7",
+    "hr": "Z1-Z2|Z3-Z4|Z5-Z7"
+   },
+   "all": {
+    "pct": [
+     78.1,
+     11.6,
+     10.3
+    ],
+    "h": 58.3,
+    "pi": 1.84,
+    "cls": "Pyramidal",
+    "basis_pct": {
+     "power": 69,
+     "hr": 31
+    }
+   },
+   "rad": {
+    "pct": [
+     71.4,
+     13.6,
+     15.0
+    ],
+    "h": 40.0,
+    "pi": 1.9,
+    "cls": "Pyramidal",
+    "basis_pct": {
+     "power": 100,
+     "hr": 0
+    }
+   },
+   "drift": {
+    "cls_7d": "Pyramidal",
+    "cls_28d": "Pyramidal",
+    "pi_7d": 1.84,
+    "pi_28d": 1.84,
+    "drift": "consistent"
+   }
+  },
+  "capability": {
+   "durability": {
+    "Rad": {
+     "median": 4.2,
+     "n": 16,
+     "high": 4,
+     "high_7d": 1,
+     "trend": "stable"
+    },
+    "Lauf": {
+     "median": null,
+     "n": 0,
+     "high": 0,
+     "high_7d": 0,
+     "trend": null
+    },
+    "excluded": 8,
+    "reasons": {
+     "no_decoupling": 8
+    }
+   },
+   "ef": {
+    "ef_7d": 1.82,
+    "ef_28d": 1.82,
+    "n_7d": 4,
+    "n_28d": 16,
+    "trend": "stable"
+   },
+   "eftp": {
+    "now": 352,
+    "d28": 349,
+    "pct_28": 0.8,
+    "d56": 346,
+    "pct_56": 1.6
+   }
+  },
+  "top_sessions": [
+   {
+    "date": "2026-09-26",
+    "type": "Rad",
+    "min": 300,
+    "load": 260,
+    "if": 0.66
+   },
+   {
+    "date": "2026-09-19",
+    "type": "Rad",
+    "min": 300,
+    "load": 260,
+    "if": 0.66
+   },
+   {
+    "date": "2026-09-12",
+    "type": "Rad",
+    "min": 300,
+    "load": 260,
+    "if": 0.66
+   },
+   {
+    "date": "2026-09-05",
+    "type": "Rad",
+    "min": 300,
+    "load": 260,
+    "if": 0.66
+   },
+   {
+    "date": "2026-09-24",
+    "type": "Rad",
+    "min": 120,
+    "load": 110,
+    "if": 0.78
+   }
+  ],
+  "thresholds": {
+   "ftp": 343,
+   "ftp_indoor": null,
+   "lthr_rad": 170,
+   "lthr_lauf": 173
+  },
+  "coverage": {
+   "days": 28,
+   "hrv_days": 28,
+   "rhr_days": 28,
+   "sleep_days": 28,
+   "sessions": 36,
+   "zones": {
+    "power": 16,
+    "hr": 20,
+    "none": 0
+   },
+   "rpe": 0,
+   "feel": 0
+  }
+ }
+}

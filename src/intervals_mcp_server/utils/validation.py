@@ -9,6 +9,9 @@ from datetime import datetime
 
 from intervals_mcp_server.utils.dates import parse_date_range
 
+# The ID ends up in URL paths (/athlete/{id}/...), so nothing else may pass.
+_ATHLETE_ID_PATTERN = re.compile(r"i?\d+")
+
 
 def validate_athlete_id(athlete_id: str) -> None:
     """Validate that an athlete ID is in the correct format.
@@ -22,7 +25,7 @@ def validate_athlete_id(athlete_id: str) -> None:
     Raises:
         ValueError: If the athlete ID is not in the correct format.
     """
-    if athlete_id and not re.fullmatch(r"i?\d+", athlete_id):
+    if athlete_id and not _ATHLETE_ID_PATTERN.fullmatch(athlete_id):
         raise ValueError(
             "ATHLETE_ID must be all digits (e.g. 123456) or start with 'i' followed by digits (e.g. i123456)"
         )
@@ -50,22 +53,27 @@ def validate_date(date_str: str) -> str:
 def resolve_athlete_id(
     athlete_id: str | None, default_athlete_id: str = ""
 ) -> tuple[str, str | None]:
-    """Resolve athlete ID from parameter or default, with error message if missing.
+    """Resolve athlete ID from parameter or default, with error message if missing or invalid.
 
     Args:
-        athlete_id: Optional athlete ID parameter.
-        default_athlete_id: Default athlete ID to use if athlete_id is None.
+        athlete_id: Optional athlete ID parameter (e.g. a coached athlete).
+        default_athlete_id: Default athlete ID to use if athlete_id is None or blank.
 
     Returns:
         Tuple of (athlete_id_to_use, error_message).
-        athlete_id_to_use will be empty string if not found.
+        athlete_id_to_use will be empty string if not found or invalid.
         error_message will be None if athlete_id is resolved successfully.
     """
-    athlete_id_to_use = athlete_id if athlete_id is not None else default_athlete_id
+    athlete_id_to_use = (athlete_id or "").strip() or default_athlete_id
     if not athlete_id_to_use:
         return (
             "",
             "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables.",
+        )
+    if not _ATHLETE_ID_PATTERN.fullmatch(athlete_id_to_use):
+        return (
+            "",
+            "Error: athlete_id must be all digits (e.g. 123456) or 'i' followed by digits (e.g. i123456).",
         )
     return athlete_id_to_use, None
 

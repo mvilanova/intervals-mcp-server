@@ -141,18 +141,60 @@ def test_format_wellness_entry_macros_null_hidden():
 
 def test_format_event_summary():
     """
-    Test that format_event_summary returns a string containing the event date and type.
+    Test that format_event_summary shows category, sport, planned load and time.
     """
     event = {
-        "start_date_local": "2024-01-01",
-        "id": "e1",
-        "name": "Event1",
+        "start_date_local": "2026-10-01T00:00:00",
+        "id": 139039499,
+        "category": "WORKOUT",
+        "type": "Ride",
+        "icu_training_load": 245,
+        "moving_time": 18000,
+        "name": "Bikepacking Tag 1 (5h)",
         "description": "desc",
-        "race": True,
+    }
+    assert format_event_summary(event) == (
+        "Date: 2026-10-01T00:00:00\n"
+        "ID: 139039499\n"
+        "Category: WORKOUT\n"
+        "Sport: Ride\n"
+        "Planned load: 245\n"
+        "Planned time: 300 min\n"
+        "Name: Bikepacking Tag 1 (5h)\n"
+        "Description: desc"
+    )
+
+
+def test_format_event_summary_missing_fields_are_na():
+    """
+    Test that missing load and duration appear as N/A (not 0) and a zero load stays 0.
+    """
+    event = {
+        "start_date_local": "2026-09-29T00:00:00",
+        "id": "e2",
+        "category": "WORKOUT",
+        "type": "WeightTraining",
+        "icu_training_load": None,
+        "name": "Stabi",
     }
     summary = format_event_summary(event)
-    assert "Date: 2024-01-01" in summary
-    assert "Type: Race" in summary
+    assert "Sport: WeightTraining" in summary
+    assert "Planned load: N/A" in summary
+    assert "Planned time: N/A" in summary
+    assert "Description: No description" in summary
+    assert "Planned load: 0" in format_event_summary({**event, "icu_training_load": 0})
+    assert "Category: N/A" in format_event_summary({"id": "e3"})
+
+
+def test_format_event_summary_detects_race_by_category():
+    """
+    Test that races are detected from the RACE_A/B/C category.
+    """
+    event = {"start_date_local": "2026-10-25T00:00:00", "id": "e4", "category": "RACE_B", "type": "Ride"}
+    summary = format_event_summary(event)
+    assert "Category: RACE_B" in summary
+    assert "Race priority: B" in summary
+    assert "Race priority" not in format_event_summary({**event, "category": "NOTE"})
 
 
 def test_format_event_details():
@@ -179,6 +221,32 @@ def test_format_event_details():
     details = format_event_details(event)
     assert "Event Details:" in details
     assert "Workout Information:" in details
+    assert "Race Information:" not in details  # races are detected via category only
+
+
+def test_format_event_details_planning_fields_and_race():
+    """
+    Test that format_event_details shows category, sport, planned load and time,
+    and detects races from the RACE_A/B/C category.
+    """
+    event = {
+        "id": 139039499,
+        "start_date_local": "2026-10-25T00:00:00",
+        "category": "RACE_B",
+        "type": "Ride",
+        "icu_training_load": 245,
+        "moving_time": 18000,
+        "name": "Gravel race",
+        "description": None,
+    }
+    details = format_event_details(event)
+    assert "Date: 2026-10-25T00:00:00" in details
+    assert "Category: RACE_B" in details
+    assert "Sport: Ride" in details
+    assert "Planned load: 245" in details
+    assert "Planned time: 300 min" in details
+    assert "Description: No description" in details
+    assert "Race Information:\nPriority: B" in details
 
 
 def test_format_intervals():

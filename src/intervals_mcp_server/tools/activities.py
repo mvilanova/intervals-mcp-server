@@ -199,8 +199,12 @@ async def get_activity_details(activity_id: str, api_key: str | None = None) -> 
     if not isinstance(activity_data, dict):
         return f"Invalid activity format for activity {activity_id}."
 
-    # Resolve gear name (uses configured athlete_id via ATHLETE_ID env var)
-    await resolve_gear_for_activity(activity_data, api_key=api_key)
+    # Resolve gear name from the activity's owner (a coached athlete's activity has
+    # their gear); falls back to the configured ATHLETE_ID if the field is missing.
+    owner_id = activity_data.get("icu_athlete_id")
+    await resolve_gear_for_activity(
+        activity_data, athlete_id=str(owner_id) if owner_id else None, api_key=api_key
+    )
 
     # Return a more detailed view of the activity
     detailed_view = format_activity_summary(activity_data)

@@ -255,9 +255,9 @@ Once the server is running and Claude Desktop is configured, you can use the fol
 - `get_activity_streams`: Get raw data streams (power, heart rate, etc.) for a specific activity
 - `get_athlete_power_curves`: Get best power output curves for selected durations and time periods
 - `get_wellness_data`: Fetch wellness data
-- `get_events`: Retrieve upcoming events (workouts, races, etc.)
+- `get_events`: Retrieve upcoming events (workouts, races, etc.) with category, sport, planned load and planned time
 - `get_event_by_id`: Get detailed information for a specific event
-- `add_or_update_event`: Create or update an event (workout, race, note, etc.)
+- `add_or_update_event`: Create or update an event (workout, race, note, etc.); an update only changes the fields you pass
 - `delete_event`: Delete a specific event
 - `delete_events_by_date_range`: Delete events within a date range
 - `get_custom_items`: Get custom items (charts, custom fields, zones, etc.) for an athlete
@@ -265,6 +265,24 @@ Once the server is running and Claude Desktop is configured, you can use the fol
 - `create_custom_item`: Create a new custom item for an athlete
 - `update_custom_item`: Update an existing custom item
 - `delete_custom_item`: Delete a custom item
+- `get_coach_report`: Get a compact, pre-computed training report (JSON) for coaching questions
+
+#### Coach report
+
+`get_coach_report(days=28, end_date=None, athlete_id=None)` returns a compact JSON report (about 3.3 KB for the default 28 days; each additional week adds roughly 150 bytes) so the LLM interprets numbers instead of calculating them from raw activities. All metrics are computed deterministically in `src/intervals_mcp_server/coach_metrics.py`, a pure module without network access. All thresholds live in its `CoachConfig` dataclass.
+
+- **Volume**: hours, load, sessions and km per ISO week and sport family (Ride and VirtualRide are merged as "Rad"), rest days, hard days, weekly monotony
+- **Load**: CTL, ATL, TSB and ramp rate at the end date, ACWR (7 d / 28 d), Foster monotony and strain, primary-sport monotony for multi-sport athletes, deload detection
+- **Recovery**: 7-day ln(rMSSD) vs. a 60-day baseline band (mean ± 0.5 SD), resting HR delta, sleep (average, nights under 7 h, last 3 nights)
+- **Intensity**: 3-zone distribution (power for cycling, HR otherwise, with separate configurable mappings), Treff polarization index, distribution class and 7-vs-28-day drift
+- **Capability**: aerobic decoupling of steady sessions after a quality filter (≥ 60 min, VI ≤ 1.20, moving/elapsed ≥ 0.85, ≤ 25 °C), efficiency factor trend, eFTP trend
+- **Flags**: rule-based hints with severity (for example FTP vs. eFTP deviation, ACWR, monotony, HRV below its normal range, short sleep, missing RPE/feel)
+- **Coverage**: how many days and sessions have HRV, sleep and zone data
+- **Plan** (only for a future `end_date`): planned load, hours and sessions per ISO week and sport family from the calendar, rest days, workouts without a computed load, projected CTL, ramp rate and lowest TSB per week, upcoming races (12 weeks ahead), and flags for a planned ramp above 6 CTL/week, a projected TSB below −20/−30 and planned weeks without a rest day
+
+The report is for `ATHLETE_ID` by default. As a coach, pass `athlete_id` to get the report of an athlete you coach; profile, time zone and thresholds are then theirs. The API key is read from the environment only. The default end date is today in the athlete's time zone; until the first activity of the day is recorded, the load-based sections end yesterday (`period.load_end`) so a morning report does not count today as a rest day. Recovery and CTL/ATL/TSB refer to the report date.
+
+An `end_date` after today (at most 90 days ahead) switches to projection mode (`period.mode = "projection"`, schema 1.1). Everything based on completed training covers the `days` up to the last completed day, and recovery refers to today (`recovery.as_of`), so planned days no longer count as rest days and do not trigger ACWR, deload or HRV false alarms. CTL/ATL/TSB at the end date come from the Intervals.icu projection including planned workouts (`load.src = "api_incl_planned"`); `load.actual` and `load.projected` show both states, and every flag carries `basis: actual` or `basis: projection`. Without a future end date the report is unchanged apart from `schema_version` and `period.mode = "actual"`.
 
 ## Usage with ChatGPT
 

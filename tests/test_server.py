@@ -109,11 +109,14 @@ def test_get_events(monkeypatch):
     Test get_events returns a formatted string containing event details when given a sample event.
     """
     event = {
-        "date": "2024-01-01",
+        "start_date_local": "2024-01-01T00:00:00",
         "id": "e1",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "icu_training_load": 79,
+        "moving_time": 7200,
         "name": "Test Event",
         "description": "desc",
-        "race": True,
     }
 
     async def fake_request(*_args, **_kwargs):
@@ -125,6 +128,9 @@ def test_get_events(monkeypatch):
     result = asyncio.run(get_events(athlete_id="1", start_date="2024-01-01", end_date="2024-01-02"))
     assert "Test Event" in result
     assert "Events:" in result
+    assert "Sport: Ride" in result
+    assert "Planned time: 120 min" in result
+    assert "Type: Other" not in result
 
 
 def test_get_event_by_id(monkeypatch):
@@ -133,21 +139,29 @@ def test_get_event_by_id(monkeypatch):
     """
     event = {
         "id": "e1",
-        "date": "2024-01-01",
+        "start_date_local": "2024-01-01T00:00:00",
+        "category": "WORKOUT",
+        "type": "Ride",
+        "icu_training_load": 79,
+        "moving_time": 7200,
         "name": "Test Event",
         "description": "desc",
-        "race": True,
     }
+    urls = []
 
-    async def fake_request(*_args, **_kwargs):
+    async def fake_request(url=None, **_kwargs):
+        urls.append(url)
         return event
 
     # Patch in both api.client and tools modules to ensure it works
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
     monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
     result = asyncio.run(get_event_by_id("e1", athlete_id="1"))
+    assert urls == ["/athlete/1/events/e1"]
     assert "Event Details:" in result
     assert "Test Event" in result
+    assert "Sport: Ride" in result
+    assert "Planned load: 79" in result
 
 
 def test_get_wellness_data(monkeypatch):
@@ -898,6 +912,42 @@ def test_get_activity_details_resolves_gear_name(monkeypatch):
     assert "Gear:" in result
     assert "Name: Litening Air" in result
     assert "ID: b1" in result
+
+
+def test_get_activity_details_resolves_gear_of_activity_owner(monkeypatch):
+    """
+    Test get_activity_details looks up the gear of the athlete who owns the activity
+    (e.g. a coached athlete), not the configured ATHLETE_ID.
+    """
+    _reset_gear_cache()
+
+    activity = {
+        "name": "Coached Ride",
+        "id": 456,
+        "type": "Ride",
+        "startTime": "2024-01-01T08:00:00Z",
+        "icu_athlete_id": "i2",
+        "gear_id": "b9",
+    }
+    urls: list[str] = []
+
+    async def fake_request(url=None, **_kwargs):
+        urls.append(url)
+        if url and "/gear" in url:
+            return [{"id": "b9", "type": "Bike", "name": "Coached Bike"}]
+        return activity
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.gear.make_intervals_request", fake_request
+    )
+    monkeypatch.setattr(gear_module.config, "athlete_id", "i1")
+
+    result = asyncio.run(get_activity_details("456"))
+    assert "Name: Coached Bike" in result
+    assert urls == ["/activity/456", "/athlete/i2/gear"]
 
 
 def test_get_activities_resolves_gear_name(monkeypatch):

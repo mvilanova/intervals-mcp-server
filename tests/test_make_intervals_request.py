@@ -12,6 +12,8 @@ import pathlib
 import sys
 from json import JSONDecodeError
 
+import httpx
+
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 os.environ.setdefault("API_KEY", "test")
 os.environ.setdefault("ATHLETE_ID", "i1")
@@ -99,3 +101,28 @@ def test_make_intervals_request_bad_json(monkeypatch, caplog):
 
     assert result["error"] is True
     assert "Invalid JSON in response" in result["message"]
+
+
+def test_athlete_id_is_redacted_in_logged_urls():
+    """
+    Test that logged URLs never contain the athlete ID and httpx request logging is silenced.
+    """
+    redact = api_client._redact  # pylint: disable=protected-access
+    assert redact("/athlete/i12345/activities") == "/athlete/***/activities"
+    assert redact("https://intervals.icu/api/v1/athlete/i12345?x=1") == "https://intervals.icu/api/v1/athlete/***?x=1"
+    assert redact("/activity/i999/intervals") == "/activity/i999/intervals"
+    assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING
+
+
+def test_http_error_body_is_redacted_in_logs(caplog):
+    """
+    Test that an error response echoing the request path does not leak the athlete ID into logs.
+    """
+    request = httpx.Request("GET", "https://intervals.icu/api/v1/athlete/i12345/events/1")
+    response = httpx.Response(404, text='{"path":"/api/v1/athlete/i12345/events/1"}', request=request)
+    error = httpx.HTTPStatusError("not found", request=request, response=response)
+    with caplog.at_level(logging.ERROR):
+        result = api_client._handle_http_status_error(error)  # pylint: disable=protected-access
+    assert result["status_code"] == 404
+    assert "i12345" not in caplog.text
+    assert "/athlete/***/events/1" in caplog.text
