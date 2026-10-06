@@ -250,7 +250,11 @@ def _format_menstrual_tracking(entries: dict[str, Any]) -> list[str]:
 
 
 def _format_subjective_feelings(entries: dict[str, Any]) -> list[str]:
-    """Format subjective feelings section."""
+    """Format subjective feelings section.
+
+    Intervals.icu stores these on a 1-4 scale where 1 is the best value (low soreness,
+    fatigue and stress, great mood, high motivation, no injury) and 4 the worst.
+    """
     subjective_lines = []
     for k, label in [
         ("soreness", "Soreness"),
@@ -261,7 +265,7 @@ def _format_subjective_feelings(entries: dict[str, Any]) -> list[str]:
         ("injury", "Injury Level"),
     ]:
         if entries.get(k) is not None:
-            subjective_lines.append(f"  {label}: {entries[k]}/10")
+            subjective_lines.append(f"  {label}: {entries[k]}/4 (1 = best)")
     return subjective_lines
 
 

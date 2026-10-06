@@ -87,6 +87,20 @@ def test_format_wellness_entry_include_all_fields():
     assert "updated:" not in result
 
 
+def test_format_wellness_entry_subjective_scale():
+    """
+    Subjective feelings are on intervals.icu's 1-4 scale (1 = best), not out of 10.
+    """
+    entry = {"id": "2024-06-01", "soreness": 2, "fatigue": 3, "stress": 1, "mood": 1,
+             "motivation": 4, "injury": 1}
+    result = format_wellness_entry(entry)
+    assert "Soreness: 2/4 (1 = best)" in result
+    assert "Fatigue: 3/4 (1 = best)" in result
+    assert "Motivation: 4/4 (1 = best)" in result
+    assert "Injury Level: 1/4 (1 = best)" in result
+    assert "/10" not in result
+
+
 def test_format_wellness_entry_no_extra_fields_by_default():
     """
     Test that format_wellness_entry without include_all_fields does not include additional fields.
