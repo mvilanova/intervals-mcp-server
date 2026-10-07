@@ -289,6 +289,29 @@ ChatGPT’s beta MCP connectors can also talk to this server over the SSE transp
 
 3. Save the connector and open a new chat. ChatGPT will keep the SSE connection open and POST follow-up requests to the `/messages/` endpoint announced by the server. If you restart the MCP server or tunnel, rerun the SSE command and update the connector URL if it changes.
 
+## Remote access with OAuth
+
+To use the server as a remote connector (for example a custom connector on claude.ai, which is then also available in the Claude mobile and desktop apps), expose the Streamable HTTP transport over HTTPS and let an external OAuth 2.1 authorization server (Keycloak, Authentik, Auth0, ...) issue the tokens. The server then acts as an OAuth protected resource as defined by the [MCP authorization specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization):
+
+- `GET /.well-known/oauth-protected-resource/mcp` returns the protected resource metadata (RFC 9728) pointing to your authorization server.
+- Requests without a valid token get `401` with a `WWW-Authenticate: Bearer resource_metadata="..."` header.
+- Bearer tokens are validated locally as JWTs against the issuer's JWKS: signature, `iss`, `aud` (must contain `MCP_RESOURCE_URL`), `exp` and `typ`.
+
+OAuth is enabled only when both `OAUTH_ISSUER` and `MCP_RESOURCE_URL` are set; setting just one of them is an error. Without them the server behaves as before (no authentication), so stdio setups are unaffected.
+
+```bash
+MCP_TRANSPORT=streamable-http
+OAUTH_ISSUER=https://auth.example.com/realms/mcp       # issuer URL, exactly as in the tokens
+MCP_RESOURCE_URL=https://intervals.example.com/mcp      # public URL of this endpoint
+MCP_ALLOWED_USERS=alice                                 # optional, comma-separated preferred_username allowlist
+# OAUTH_JWKS_URL=...                                    # optional, discovered via OpenID configuration by default
+# OAUTH_SCOPES=openid profile offline_access           # optional, published as scopes_supported and required in tokens
+```
+
+On the authorization server, create a confidential client with the authorization code flow and PKCE (S256), allow the redirect URI of your MCP client (for claude.ai: `https://claude.ai/api/mcp/auth_callback`), and add an audience mapper so that access tokens carry `MCP_RESOURCE_URL` in `aud`. Enter the client ID and secret in the connector's advanced settings.
+
+Without `OAUTH_SCOPES`, clients such as claude.ai request every scope listed in the authorization server's metadata; Keycloak rejects the request if any of them is not assigned to the client. Setting `OAUTH_SCOPES` limits the request to the listed scopes.
+
 ## Development and testing
 
 Install development dependencies and run the test suite with:
