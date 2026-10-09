@@ -6,6 +6,8 @@ This module contains tools for retrieving athlete wellness data.
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
+from intervals_mcp_server.tools.custom_items import get_custom_item_index
+from intervals_mcp_server.utils.custom_fields import INPUT_FIELD, CustomFieldDefs
 from intervals_mcp_server.utils.formatting import format_wellness_entry
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
 
@@ -27,7 +29,9 @@ async def get_wellness_data(
 
     By default returns standard wellness fields (training metrics, vitals, sleep,
     subjective scores, etc.). Set include_all_fields=True to also include any
-    additional or custom fields configured by the user in Intervals.icu.
+    additional or custom fields configured by the user in Intervals.icu; custom
+    wellness fields are labelled with their display name and units from the
+    athlete's custom item definitions.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
@@ -56,16 +60,35 @@ async def get_wellness_data(
             f"No wellness data found for athlete {athlete_id_to_use} in the specified date range."
         )
 
+    field_definitions: CustomFieldDefs | None = None
+    if include_all_fields:
+        index = await get_custom_item_index(athlete_id=athlete_id_to_use, api_key=api_key)
+        field_definitions = index.get(INPUT_FIELD) or None
+
     wellness_summary = "Wellness Data:\n\n"
 
     if isinstance(result, dict):
         for date_str, data in result.items():
             if isinstance(data, dict) and "date" not in data:
                 data["date"] = date_str
-            wellness_summary += format_wellness_entry(data, include_all_fields=include_all_fields) + "\n\n"
+            wellness_summary += (
+                format_wellness_entry(
+                    data,
+                    include_all_fields=include_all_fields,
+                    field_definitions=field_definitions,
+                )
+                + "\n\n"
+            )
     elif isinstance(result, list):
         for entry in result:
             if isinstance(entry, dict):
-                wellness_summary += format_wellness_entry(entry, include_all_fields=include_all_fields) + "\n\n"
+                wellness_summary += (
+                    format_wellness_entry(
+                        entry,
+                        include_all_fields=include_all_fields,
+                        field_definitions=field_definitions,
+                    )
+                    + "\n\n"
+                )
 
     return wellness_summary

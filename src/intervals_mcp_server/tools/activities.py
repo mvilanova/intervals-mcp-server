@@ -4,22 +4,53 @@ Activity-related MCP tools for Intervals.icu.
 This module contains tools for retrieving and managing athlete activities.
 """
 
+import json
 from datetime import datetime, timedelta
 from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
+from intervals_mcp_server.tools.custom_items import get_custom_item_index
 from intervals_mcp_server.tools.gear import (
     resolve_gear_for_activity,
     resolve_gear_for_activities,
 )
-from intervals_mcp_server.utils.formatting import format_activity_message, format_activity_summary, format_intervals
+from intervals_mcp_server.utils.custom_fields import (
+    ACTIVITY_FIELD,
+    ACTIVITY_STREAM,
+    INTERVAL_FIELD,
+    CustomFieldDefs,
+)
+from intervals_mcp_server.utils.formatting import (
+    format_activity_details,
+    format_activity_message,
+    format_activity_summary,
+    format_intervals,
+)
+from intervals_mcp_server.utils.streams import (
+    DEFAULT_STREAM_TYPES,
+    describe_stream,
+    find_stream,
+    format_stats,
+    format_streams_summary,
+    order_streams,
+    range_stats,
+    render_streams_json,
+    render_streams_table,
+    resolve_sample_range,
+    stream_label,
+    stream_length,
+)
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
 
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
 config = get_config()
+
+STREAM_OUTPUT_FORMATS = ("summary", "full", "json")
+# Selectors of get_activity_streams / get_activity_intervals that fetch every stream.
+_ALL_STREAM_SELECTORS = ("all", "custom")
 
 
 def _parse_activities_from_result(result: Any) -> list[dict[str, Any]]:
@@ -104,6 +135,71 @@ def _format_activities_response(
     return activities_summary
 
 
+async def _custom_defs(
+    item_type: str, api_key: str | None, athlete_id: Any = None
+) -> CustomFieldDefs:
+    """Custom item definitions of one type for the athlete (cached per process).
+
+    The athlete is taken from the payload (``icu_athlete_id``) when given, otherwise
+    from the configured ATHLETE_ID. Without an athlete there are no definitions.
+    """
+    athlete_id_to_use = str(athlete_id) if athlete_id else config.athlete_id
+    if not athlete_id_to_use:
+        return {}
+    index = await get_custom_item_index(athlete_id=athlete_id_to_use, api_key=api_key)
+    return index.get(item_type, {})
+
+
+def _split_stream_types(stream_types: str) -> list[str]:
+    """Split a comma-separated list, trimming blanks and duplicates (order kept)."""
+    selected: list[str] = []
+    for part in stream_types.split(","):
+        name = part.strip()
+        if name and name not in selected:
+            selected.append(name)
+    return selected
+
+
+def _stream_request_params(
+    stream_types: str | None, *, ensure_time: bool
+) -> dict[str, str] | None:
+    """Translate the stream_types argument into query parameters for the streams endpoint.
+
+    None selects the default streams, "all"/"custom" fetch every stream of the
+    activity (no filter), anything else is passed through as given. The time
+    stream is added when ensure_time is set, because it carries the timestamps.
+    """
+    if stream_types is None:
+        selected = _split_stream_types(DEFAULT_STREAM_TYPES)
+    elif stream_types.strip().lower() in _ALL_STREAM_SELECTORS:
+        return None
+    else:
+        selected = _split_stream_types(stream_types)
+    if ensure_time and "time" not in selected:
+        selected.insert(0, "time")
+    return {"types": ",".join(selected)}
+
+
+async def _fetch_streams(
+    activity_id: str, api_key: str | None, params: dict[str, str] | None
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Fetch streams for an activity. Returns (streams, error_message)."""
+    result = await make_intervals_request(
+        url=f"/activity/{activity_id}/streams",
+        api_key=api_key,
+        params=params,
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return [], f"Error fetching activity streams: {error_message}"
+
+    streams = [item for item in result if isinstance(item, dict)] if isinstance(result, list) else []
+    if not streams:
+        return [], f"No stream data found for activity {activity_id}."
+    return streams, None
+
+
 @mcp.tool()
 async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-statements,too-many-branches,too-many-positional-arguments
     athlete_id: str | None = None,
@@ -176,12 +272,30 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
 
 
 @mcp.tool()
-async def get_activity_details(activity_id: str, api_key: str | None = None) -> str:
+async def get_activity_details(
+    activity_id: str,
+    api_key: str | None = None,
+    include_custom_fields: bool = True,
+    include_all_fields: bool = False,
+) -> str:
     """Get detailed information for a specific activity from Intervals.icu
+
+    Besides the standard summary the result lists every custom activity field the
+    athlete has defined on Intervals.icu that has a value on this activity, with
+    display name, technical code, value and units (for select fields also the option
+    label). This covers metrics that devices write into custom fields, for example
+    aerobic/anaerobic training effect, training load, EPOC, recovery time, VO2max,
+    performance condition, stamina at start/end, sweat loss and any other field the
+    athlete has configured. The fields are read dynamically from the athlete's custom
+    item definitions; nothing is hard-coded. 'no value' means null/NaN on Intervals.icu.
 
     Args:
         activity_id: The Intervals.icu activity ID
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        include_custom_fields: Include the custom activity fields section (optional, default True)
+        include_all_fields: Also list every other non-empty field of the raw activity payload
+            that is not part of the standard summary, e.g. time in zones, running dynamics,
+            power meter details, available stream types (optional, default False)
     """
     # Call the Intervals.icu API
     result = await make_intervals_request(url=f"/activity/{activity_id}", api_key=api_key)
@@ -202,33 +316,49 @@ async def get_activity_details(activity_id: str, api_key: str | None = None) -> 
     # Resolve gear name (uses configured athlete_id via ATHLETE_ID env var)
     await resolve_gear_for_activity(activity_data, api_key=api_key)
 
-    # Return a more detailed view of the activity
-    detailed_view = format_activity_summary(activity_data)
+    custom_field_defs: CustomFieldDefs | None = None
+    if include_custom_fields:
+        custom_field_defs = await _custom_defs(
+            ACTIVITY_FIELD, api_key, activity_data.get("icu_athlete_id")
+        )
 
-    # Add additional details if available
-    if "zones" in activity_data:
-        zones = activity_data["zones"]
-        detailed_view += "\nPower Zones:\n"
-        for zone in zones.get("power", []):
-            detailed_view += f"Zone {zone.get('number')}: {zone.get('secondsInZone')} seconds\n"
-
-        detailed_view += "\nHeart Rate Zones:\n"
-        for zone in zones.get("hr", []):
-            detailed_view += f"Zone {zone.get('number')}: {zone.get('secondsInZone')} seconds\n"
-
-    return detailed_view
+    return format_activity_details(
+        activity_data,
+        custom_field_defs=custom_field_defs,
+        include_all_fields=include_all_fields,
+    )
 
 
 @mcp.tool()
-async def get_activity_intervals(activity_id: str, api_key: str | None = None) -> str:
+async def get_activity_intervals(
+    activity_id: str,
+    api_key: str | None = None,
+    stream_types: str | None = None,
+    include_custom_fields: bool = True,
+) -> str:
     """Get interval data for a specific activity from Intervals.icu
 
     This endpoint returns detailed metrics for each interval in an activity, including power, heart rate,
     cadence, speed, and environmental data. It also includes grouped intervals if applicable.
 
+    Custom interval fields defined by the athlete are listed per interval with display
+    name, technical code, value and units. With stream_types the raw samples of the given
+    streams between each interval's start_index and end_index are evaluated (start, end,
+    min, max, mean, delta and the number of non-null samples), which yields per-interval
+    values for any stream Intervals.icu does not summarise itself: custom streams such as
+    stamina (delta = stamina drop during the interval), performance condition or grade
+    adjusted speed, a second power meter (secondary_power), gear selection and so on.
+    Groups are evaluated over all their member intervals. Statistics are computed from
+    the recorded samples only; missing samples are never interpolated.
+
     Args:
         activity_id: The Intervals.icu activity ID
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        stream_types: Comma-separated stream types to evaluate per interval, e.g.
+            "Stamina,PotentialStamina,secondary_power"; "custom" = every custom stream of the
+            activity plus secondary_power; "all" = every stream. Use list_activity_streams to
+            see what is available. (optional, default: no stream metrics)
+        include_custom_fields: List custom interval fields per interval (optional, default True)
     """
     # Call the Intervals.icu API
     result = await make_intervals_request(url=f"/activity/{activity_id}/intervals", api_key=api_key)
@@ -247,86 +377,255 @@ async def get_activity_intervals(activity_id: str, api_key: str | None = None) -
     ):
         return f"No interval data or unrecognized format for activity {activity_id}."
 
+    interval_field_defs: CustomFieldDefs = {}
+    if include_custom_fields:
+        interval_field_defs = await _custom_defs(INTERVAL_FIELD, api_key)
+
+    streams: list[dict[str, Any]] | None = None
+    stream_defs: CustomFieldDefs = {}
+    note = ""
+    if stream_types:
+        streams, error = await _fetch_streams(
+            activity_id, api_key, _stream_request_params(stream_types, ensure_time=True)
+        )
+        if error:
+            note = f"\nNote: stream metrics unavailable. {error}\n"
+            streams = None
+        else:
+            if stream_types.strip().lower() == "custom":
+                streams = [
+                    s for s in streams if s.get("custom") or s.get("type") == "secondary_power"
+                ]
+            stream_defs = await _custom_defs(ACTIVITY_STREAM, api_key)
+
     # Format the intervals data
-    return format_intervals(result)
+    return (
+        format_intervals(
+            result,
+            interval_field_defs=interval_field_defs,
+            streams=streams,
+            stream_defs=stream_defs,
+        )
+        + note
+    )
+
+
+def _render_stream_rows(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    activity_id: str,
+    streams: list[dict[str, Any]],
+    stream_defs: CustomFieldDefs,
+    output_format: str,
+    window: tuple[int | None, int | None, int | None, int | None],
+    downsample: int,
+    max_points: int,
+) -> str:
+    """Render the selected sample range of the streams as CSV table or JSON."""
+    start_index, end_index, start_time, end_time = window
+    length = stream_length(streams)
+    time_stream = find_stream(streams, "time")
+    start, end = resolve_sample_range(
+        length,
+        time_stream.get("data") if time_stream else None,
+        start_index,
+        end_index,
+        start_time,
+        end_time,
+    )
+
+    total = len(range(start, end, downsample))
+    cut_end = end
+    note = ""
+    if total > max_points:
+        cut_end = start + max_points * downsample
+        note = (
+            f"\nNote: output cut to {max_points} of {total} samples (indices {start}-{cut_end - 1}). "
+            f"Continue with start_index={cut_end}, or raise downsample or max_points.\n"
+        )
+
+    resolution = "full sample resolution" if downsample == 1 else f"every {downsample}. sample"
+    header = (
+        f"Activity Streams for {activity_id}: samples {start}-{max(start, cut_end - 1)} of {length} "
+        f"({resolution}). time = seconds since activity start; empty/null = no value.\n"
+    )
+    header += "Streams: " + ", ".join(
+        stream_label(describe_stream(s, stream_defs)) for s in order_streams(streams)
+    ) + "\n"
+    if cut_end <= start:
+        return header + "No samples in the selected range.\n"
+
+    if output_format == "json":
+        body = json.dumps(
+            render_streams_json(streams, stream_defs, start, cut_end, downsample),
+            ensure_ascii=False,
+        )
+        body += "\n"
+    else:
+        body = render_streams_table(streams, start, cut_end, downsample)
+    return header + body + note
 
 
 @mcp.tool()
-async def get_activity_streams(
+async def get_activity_streams(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     activity_id: str,
     api_key: str | None = None,
     stream_types: str | None = None,
+    output_format: str = "summary",
+    start_index: int | None = None,
+    end_index: int | None = None,
+    start_time: int | None = None,
+    end_time: int | None = None,
+    downsample: int = 1,
+    max_points: int = 10000,
 ) -> str:
-    """Get stream data for a specific activity from Intervals.icu
+    """Get time-series (stream) data for a specific activity from Intervals.icu
 
-    This endpoint returns time-series data for an activity, including metrics like power, heart rate,
-    cadence, altitude, distance, temperature, and velocity data.
+    Any stream the activity has can be requested by its technical type: the standard
+    streams (time, watts, heartrate, cadence, altitude, distance, velocity_smooth, temp,
+    torque, left_right_balance, hrv, respiration, secondary_power, ...) and every custom
+    stream the athlete has defined, addressed by its code (for example Stamina,
+    PotentialStamina, GarminGASpeed, FrontGear, RearGear ...). Use list_activity_streams
+    to discover what an activity offers. All streams of an activity are sample-aligned:
+    index i of every stream belongs to the same recorded sample and time[i] is its offset
+    in seconds from the activity start. Recording pauses appear as jumps in time, so use
+    the time column, not the index, as the timestamp.
 
     Args:
         activity_id: The Intervals.icu activity ID
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-        stream_types: Comma-separated list of stream types to retrieve (optional, defaults to all available types)
-                     Available types: time, watts, heartrate, cadence, altitude, distance,
-                     core_temperature, skin_temperature, velocity_smooth
+        stream_types: Comma-separated stream types to retrieve, or "all" for every stream of
+            the activity (optional, defaults to time,watts,heartrate,cadence,altitude,distance,velocity_smooth)
+        output_format: "summary" (default) = per-stream metadata, statistics and a short preview;
+            "full" = CSV table with one row per sample (index, time, one column per stream,
+            empty cell = no value); "json" = the same selection as JSON arrays (null = no value).
+            The time stream is always included in full/json output.
+        start_index: First sample index of the full/json output (optional, default 0; matches
+            start_index of get_activity_intervals)
+        end_index: Sample index to stop before in full/json output (optional, default = end;
+            matches end_index of get_activity_intervals, which is exclusive)
+        start_time: Only samples with time >= start_time seconds (optional, full/json)
+        end_time: Only samples with time < end_time seconds (optional, full/json)
+        downsample: Keep every n-th recorded sample in full/json output (optional, default 1 =
+            full sample resolution; samples are skipped, never averaged)
+        max_points: Maximum number of samples in full/json output (optional, default 10000).
+            Longer selections are cut and the response says how to continue (page with
+            start_index, or raise downsample or max_points).
     """
-    # Build query parameters
-    params = {}
-    if stream_types:
-        params["types"] = stream_types
-    else:
-        # Default to common stream types if none specified
-        params["types"] = "time,watts,heartrate,cadence,altitude,distance,velocity_smooth"
+    output_format = (output_format or "summary").strip().lower()
+    if output_format not in STREAM_OUTPUT_FORMATS:
+        return f"Error: output_format must be one of {', '.join(STREAM_OUTPUT_FORMATS)}."
+    if downsample < 1 or max_points < 1:
+        return "Error: downsample and max_points must be positive integers."
 
-    # Call the Intervals.icu API
-    result = await make_intervals_request(
-        url=f"/activity/{activity_id}/streams",
-        api_key=api_key,
-        params=params,
+    params = _stream_request_params(stream_types, ensure_time=output_format != "summary")
+    streams, error = await _fetch_streams(activity_id, api_key, params)
+    if error:
+        return error
+
+    stream_defs = await _custom_defs(ACTIVITY_STREAM, api_key)
+
+    if output_format == "summary":
+        return format_streams_summary(activity_id, streams, stream_defs)
+
+    return _render_stream_rows(
+        activity_id,
+        streams,
+        stream_defs,
+        output_format,
+        (start_index, end_index, start_time, end_time),
+        downsample,
+        max_points,
     )
+
+
+def _format_stream_listing(
+    activity_id: str,
+    activity: dict[str, Any],
+    available: list[Any],
+    streams: list[dict[str, Any]],
+    stream_defs: CustomFieldDefs,
+) -> str:
+    """Render the stream listing of list_activity_streams."""
+    by_type = {s.get("type"): s for s in streams}
+    standard: list[str] = []
+    custom: list[str] = []
+    for stream_type in available:
+        stream = by_type.get(stream_type) or {
+            "type": stream_type,
+            "custom": stream_type in stream_defs,
+        }
+        info = describe_stream(stream, stream_defs)
+        line = f"- {stream_label(info)}"
+        if info["description"]:
+            line += f": {info['description']}"
+        data = stream.get("data")
+        if isinstance(data, list) and stream_type != "latlng":
+            line += f" | {format_stats(range_stats(data, [(0, len(data))]))}"
+        (custom if info["custom"] else standard).append(line)
+
+    output = (
+        f"Streams available for activity {activity_id} ('{activity.get('name', 'Unnamed')}', "
+        f"start {activity.get('start_date_local', 'unknown')}, "
+        f"elapsed {activity.get('elapsed_time', 'N/A')} s):\n"
+    )
+    power_fields = activity.get("power_field_names")
+    if isinstance(power_fields, list) and power_fields:
+        output += f"Power fields: {', '.join(str(p) for p in power_fields)}\n"
+    output += f"\nStandard streams ({len(standard)}):\n" + "\n".join(standard or ["- (none)"]) + "\n"
+    output += f"\nCustom streams ({len(custom)}):\n" + "\n".join(custom or ["- (none)"]) + "\n"
+    output += (
+        "\nRequest samples with get_activity_streams(activity_id, stream_types='time,watts,<type>', "
+        "output_format='full') and evaluate streams per interval with "
+        "get_activity_intervals(activity_id, stream_types='<type>').\n"
+    )
+    return output
+
+
+@mcp.tool()
+async def list_activity_streams(
+    activity_id: str,
+    api_key: str | None = None,
+    include_stats: bool = False,
+) -> str:
+    """List every data stream available for an activity on Intervals.icu
+
+    Returns the standard streams and the custom streams (defined by the athlete, for
+    example streams a device records such as stamina, potential stamina, performance
+    condition, grade adjusted speed, gear selection, battery ...) present on the activity,
+    with display name, units and description. Use the listed stream types with
+    get_activity_streams (full sample data) or get_activity_intervals(stream_types=...)
+    (per-interval statistics).
+
+    Args:
+        activity_id: The Intervals.icu activity ID
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        include_stats: Also download the streams and report sample count, non-null count and
+            start/end/min/max/mean per stream (optional, default False)
+    """
+    result = await make_intervals_request(url=f"/activity/{activity_id}", api_key=api_key)
 
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")
-        return f"Error fetching activity streams: {error_message}"
+        return f"Error fetching activity details: {error_message}"
 
-    # Format the response
-    if not result:
-        return f"No stream data found for activity {activity_id}."
+    activity = result[0] if isinstance(result, list) and result else result
+    if not isinstance(activity, dict) or not activity:
+        return f"No details found for activity {activity_id}."
 
-    # Ensure result is a list
-    streams = result if isinstance(result, list) else []
+    stream_defs = await _custom_defs(ACTIVITY_STREAM, api_key, activity.get("icu_athlete_id"))
 
-    if not streams:
-        return f"No stream data found for activity {activity_id}."
+    available = activity.get("stream_types")
+    streams: list[dict[str, Any]] = []
+    if include_stats or not isinstance(available, list) or not available:
+        streams, error = await _fetch_streams(activity_id, api_key, None)
+        if error and not available:
+            return error
+        if streams:
+            available = [s.get("type") for s in streams]
 
-    # Format the streams data
-    streams_summary = f"Activity Streams for {activity_id}:\n\n"
+    if not isinstance(available, list) or not available:
+        return f"No streams found for activity {activity_id}."
 
-    for stream in streams:
-        if not isinstance(stream, dict):
-            continue
-
-        stream_type = stream.get("type", "unknown")
-        stream_name = stream.get("name", stream_type)
-        data = stream.get("data", [])
-        value_type = stream.get("valueType", "")
-
-        streams_summary += f"Stream: {stream_name} ({stream_type})\n"
-        streams_summary += f"  Value Type: {value_type}\n"
-        streams_summary += f"  Data Points: {len(data)}\n"
-
-        # Show first few and last few data points for preview
-        if data:
-            if len(data) <= 10:
-                streams_summary += f"  Values: {data}\n"
-            else:
-                preview_start = data[:5]
-                preview_end = data[-5:]
-                streams_summary += f"  First 5 values: {preview_start}\n"
-                streams_summary += f"  Last 5 values: {preview_end}\n"
-
-        streams_summary += "\n"
-
-    return streams_summary
+    return _format_stream_listing(activity_id, activity, available, streams, stream_defs)
 
 
 @mcp.tool()

@@ -250,9 +250,10 @@ The `mcp install` command may fail on Windows due to environment or permission i
 Once the server is running and Claude Desktop is configured, you can use the following tools to ask questions about your past and future activities, events, and wellness data.
 
 - `get_activities`: Retrieve a list of activities
-- `get_activity_details`: Get detailed information for a specific activity
-- `get_activity_intervals`: Get detailed interval data for a specific activity
-- `get_activity_streams`: Get raw data streams (power, heart rate, etc.) for a specific activity
+- `get_activity_details`: Get detailed information for a specific activity, including every custom activity field with value and units (`include_all_fields=True` adds all remaining payload fields)
+- `get_activity_intervals`: Get detailed interval data for a specific activity, including custom interval fields and, with `stream_types`, per-interval statistics of any stream (e.g. stamina drop, second power meter)
+- `get_activity_streams`: Get raw data streams for a specific activity: any standard or custom stream, as summary or at full sample resolution (CSV or JSON) with slicing and downsampling
+- `list_activity_streams`: List the standard and custom streams an activity has, with names and units
 - `get_athlete_power_curves`: Get best power output curves for selected durations and time periods
 - `get_wellness_data`: Fetch wellness data
 - `get_events`: Retrieve upcoming events (workouts, races, etc.)
@@ -265,6 +266,16 @@ Once the server is running and Claude Desktop is configured, you can use the fol
 - `create_custom_item`: Create a new custom item for an athlete
 - `update_custom_item`: Update an existing custom item
 - `delete_custom_item`: Delete a custom item
+
+### Custom fields and streams (device metrics)
+
+Intervals.icu stores the values of custom items the athlete has defined (for example metrics a Garmin device writes such as training effect, EPOC, recovery time, VO2max, performance condition, stamina, sweat loss, grade adjusted speed or gear selection) as plain keys of the activity, interval and wellness payloads, named by the item's code. The tools resolve those keys against the athlete's custom item definitions (`/athlete/{id}/custom-item`, cached per process) and report each value with its display name, technical code, units and select label. Nothing is hard-coded: whatever is defined in the account is picked up.
+
+- `get_activity_details(activity_id)` lists all custom activity fields that have a value. `null`/`NaN` is reported as "no value"; a `0` in a field filled from the device file is marked, because Intervals.icu stores `0` when the source field is absent from the file.
+- `list_activity_streams(activity_id)` shows which standard and custom streams exist; `include_stats=True` adds per-stream statistics.
+- `get_activity_streams(activity_id, stream_types="time,watts,heartrate,Stamina", output_format="full")` returns sample-aligned rows (`index,time,...`) at full resolution; `start_index`/`end_index` (or `start_time`/`end_time`), `downsample` and `max_points` page through long activities. `output_format="json"` returns the same selection as JSON arrays. `stream_types="all"` fetches every stream.
+- `get_activity_intervals(activity_id, stream_types="Stamina,secondary_power")` evaluates the given streams over each interval's sample range (start, end, min, max, mean, delta, non-null samples); `"custom"` selects every custom stream plus the second power meter.
+- `get_wellness_data(include_all_fields=True)` labels custom wellness fields with name and units.
 
 ## Usage with ChatGPT
 

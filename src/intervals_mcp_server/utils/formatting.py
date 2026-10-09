@@ -8,6 +8,16 @@ import json
 from datetime import datetime
 from typing import Any
 
+from intervals_mcp_server.utils.custom_fields import (
+    CustomFieldDefs,
+    format_custom_activity_fields,
+    format_custom_field_lines,
+    format_value,
+    is_missing,
+    select_label,
+)
+from intervals_mcp_server.utils.streams import format_range_metrics
+
 
 class _KeyTracker(dict):
     """A dict wrapper that records which keys are accessed."""
@@ -141,6 +151,64 @@ Gear:
 Name: {gear_name}
 ID: {gear_id}
 """
+
+
+def _format_activity_zones(activity: dict[str, Any]) -> str:
+    """Render the zones block for payloads that carry a 'zones' object."""
+    if "zones" not in activity:
+        return ""
+    zones = activity["zones"]
+    text = "\nPower Zones:\n"
+    for zone in zones.get("power", []):
+        text += f"Zone {zone.get('number')}: {zone.get('secondsInZone')} seconds\n"
+    text += "\nHeart Rate Zones:\n"
+    for zone in zones.get("hr", []):
+        text += f"Zone {zone.get('number')}: {zone.get('secondsInZone')} seconds\n"
+    return text
+
+
+# Payload keys that are never useful in a text view.
+_ACTIVITY_OTHER_FIELDS_SKIP = {"skyline_chart_bytes"}
+_OTHER_FIELD_MAX_CHARS = 400
+
+
+def _format_activity_other_fields(activity: _KeyTracker) -> list[str]:
+    """Every non-empty payload field that the standard sections did not render."""
+    lines: list[str] = []
+    for key, value in activity.items():
+        if key in activity.accessed or key in _ACTIVITY_OTHER_FIELDS_SKIP or key.startswith("_"):
+            continue
+        if is_missing(value):
+            continue
+        text = format_value(value)
+        if len(text) > _OTHER_FIELD_MAX_CHARS:
+            text = f"{text[:_OTHER_FIELD_MAX_CHARS]}... (truncated, {len(text)} chars)"
+        lines.append(f"- {key}: {text}")
+    return lines
+
+
+def format_activity_details(
+    activity: dict[str, Any],
+    custom_field_defs: CustomFieldDefs | None = None,
+    include_all_fields: bool = False,
+) -> str:
+    """Detailed activity view: summary, zones, custom fields and optionally every other field.
+
+    Args:
+        activity: The raw activity payload from the Intervals.icu API
+        custom_field_defs: ACTIVITY_FIELD definitions keyed by code. Custom fields present
+            on the activity are rendered with name, code, value and units; None skips the section
+        include_all_fields: Append every other non-empty payload field under "Other Fields"
+    """
+    data: dict[str, Any] = _KeyTracker(activity) if include_all_fields else activity
+    view = format_activity_summary(data) + _format_activity_zones(data)
+    if custom_field_defs is not None:
+        view += "\n" + format_custom_activity_fields(data, custom_field_defs) + "\n"
+    if isinstance(data, _KeyTracker):
+        other = _format_activity_other_fields(data)
+        if other:
+            view += "\nOther Fields:\n" + "\n".join(other) + "\n"
+    return view
 
 
 def format_workout(workout: dict[str, Any]) -> str:
@@ -292,19 +360,39 @@ def _format_nutrition_hydration(entries: dict[str, Any]) -> list[str]:
     return nutrition_lines
 
 
-def _format_other_fields(entries: dict[str, Any], known_keys: set[str]) -> list[str]:
-    """Format any fields not already handled by the standard formatting sections."""
+def _format_other_fields(
+    entries: dict[str, Any],
+    known_keys: set[str],
+    field_definitions: CustomFieldDefs | None = None,
+) -> list[str]:
+    """Format any fields not already handled by the standard formatting sections.
+
+    When custom item definitions are given, a field whose key matches a definition
+    code is annotated with its display name, units and (select fields) option label.
+    """
     other_lines = []
     for key, value in entries.items():
-        if key not in known_keys and value is not None:
-            if isinstance(value, (dict, list)):
-                other_lines.append(f"- {key}: {json.dumps(value)}")
-            else:
-                other_lines.append(f"- {key}: {value}")
+        if key in known_keys or value is None:
+            continue
+        text = json.dumps(value) if isinstance(value, (dict, list)) else str(value)
+        definition = (field_definitions or {}).get(key)
+        if definition:
+            meta = [
+                part
+                for part in (definition.get("name"), definition.get("units"), select_label(definition, value))
+                if part and part != key
+            ]
+            if meta:
+                text += f" ({', '.join(meta)})"
+        other_lines.append(f"- {key}: {text}")
     return other_lines
 
 
-def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = False) -> str:
+def format_wellness_entry(
+    entries: dict[str, Any],
+    include_all_fields: bool = False,
+    field_definitions: CustomFieldDefs | None = None,
+) -> str:
     """Format wellness entry data into a readable string.
 
     Formats various wellness metrics including training metrics, vital signs,
@@ -324,6 +412,8 @@ def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = Fa
             - Other: comments, locked, date
         include_all_fields: If True, any fields not covered by the standard
             sections are appended under an "Other Fields" heading (default False).
+        field_definitions: INPUT_FIELD definitions keyed by code, used to label custom
+            wellness fields in "Other Fields" with name and units (optional).
 
     Returns:
         A formatted string representation of the wellness entry.
@@ -393,7 +483,7 @@ def format_wellness_entry(entries: dict[str, Any], include_all_fields: bool = Fa
         lines.append(f"Status: {'Locked' if entries.get('locked') else 'Unlocked'}")
 
     if include_all_fields and isinstance(entries, _KeyTracker):
-        other_lines = _format_other_fields(entries, entries.accessed)
+        other_lines = _format_other_fields(entries, entries.accessed, field_definitions)
         if other_lines:
             lines.append("")
             lines.append("Other Fields:")
@@ -500,29 +590,9 @@ def format_custom_item_details(item: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def format_intervals(intervals_data: dict[str, Any]) -> str:
-    """Format intervals data into a readable string with all available fields.
-
-    Args:
-        intervals_data: The intervals data from the Intervals.icu API
-
-    Returns:
-        A formatted string representation of the intervals data
-    """
-    # Format basic intervals information
-    result = f"""Intervals Analysis:
-
-ID: {intervals_data.get("id", "N/A")}
-Analyzed: {intervals_data.get("analyzed", "N/A")}
-
-"""
-
-    # Format individual intervals
-    if "icu_intervals" in intervals_data and intervals_data["icu_intervals"]:
-        result += "Individual Intervals:\n\n"
-
-        for i, interval in enumerate(intervals_data["icu_intervals"], 1):
-            result += f"""[{i}] {interval.get("label", f"Interval {i}")} ({interval.get("type", "Unknown")})
+def _format_interval_block(index: int, interval: dict[str, Any]) -> str:
+    """Render the standard metrics of one interval."""
+    return f"""[{index}] {interval.get("label", f"Interval {index}")} ({interval.get("type", "Unknown")})
 Duration: {interval.get("elapsed_time", 0)} seconds (moving: {interval.get("moving_time", 0)} seconds)
 Distance: {interval.get("distance", 0)} meters
 Start-End Indices: {interval.get("start_index", 0)}-{interval.get("end_index", 0)}
@@ -566,12 +636,10 @@ Elevation & Environment:
 
 """
 
-    # Format interval groups
-    if "icu_groups" in intervals_data and intervals_data["icu_groups"]:
-        result += "Interval Groups:\n\n"
 
-        for i, group in enumerate(intervals_data["icu_groups"], 1):
-            result += f"""Group: {group.get("id", f"Group {i}")} (Contains {group.get("count", 0)} intervals)
+def _format_group_block(index: int, group: dict[str, Any]) -> str:
+    """Render the standard metrics of one interval group."""
+    return f"""Group: {group.get("id", f"Group {index}")} (Contains {group.get("count", 0)} intervals)
 Duration: {group.get("elapsed_time", 0)} seconds (moving: {group.get("moving_time", 0)} seconds)
 Distance: {group.get("distance", 0)} meters
 Start-End Indices: {group.get("start_index", 0)}-N/A
@@ -583,6 +651,117 @@ Speed: Avg {group.get("average_speed", 0)}, Max {group.get("max_speed", 0)} m/s
 Cadence: Avg {group.get("average_cadence", 0)}, Max {group.get("max_cadence", 0)} rpm
 
 """
+
+
+def _interval_ranges(interval: dict[str, Any]) -> list[tuple[int, int]]:
+    """Sample index range (end exclusive) of an interval, if it has one."""
+    start, end = interval.get("start_index"), interval.get("end_index")
+    if isinstance(start, bool) or isinstance(end, bool):
+        return []
+    if isinstance(start, int) and isinstance(end, int) and end >= start:
+        return [(start, end)]
+    return []
+
+
+def _group_ranges(group: dict[str, Any], intervals: list[dict[str, Any]]) -> list[tuple[int, int]]:
+    """Sample index ranges of all member intervals of a group."""
+    group_id = group.get("id")
+    if group_id is None:
+        return []
+    ranges: list[tuple[int, int]] = []
+    for interval in intervals:
+        if isinstance(interval, dict) and interval.get("group_id") == group_id:
+            ranges.extend(_interval_ranges(interval))
+    return ranges
+
+
+def _format_interval_extras(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    payload: dict[str, Any],
+    ranges: list[tuple[int, int]],
+    interval_field_defs: CustomFieldDefs | None,
+    streams: list[dict[str, Any]] | None,
+    stream_defs: CustomFieldDefs | None,
+    label: str,
+) -> str:
+    """Custom interval fields and per-range stream metrics of an interval or group."""
+    lines: list[str] = []
+    if interval_field_defs:
+        custom_lines = format_custom_field_lines(payload, interval_field_defs, prefix="  ")
+        if custom_lines:
+            lines.append("Custom Interval Fields:")
+            lines.extend(custom_lines)
+    if streams is not None:
+        if ranges:
+            span = ", ".join(f"{start}-{end - 1}" for start, end in ranges)
+            lines.append(f"Stream Metrics (samples {span}):")
+            metric_lines = format_range_metrics(streams, stream_defs or {}, ranges)
+            lines.extend(metric_lines or ["  (no metric streams in the selection)"])
+        else:
+            lines.append(f"Stream Metrics: not available ({label} has no sample indices)")
+    if not lines:
+        return ""
+    return "\n".join(lines) + "\n\n"
+
+
+def format_intervals(
+    intervals_data: dict[str, Any],
+    interval_field_defs: CustomFieldDefs | None = None,
+    streams: list[dict[str, Any]] | None = None,
+    stream_defs: CustomFieldDefs | None = None,
+) -> str:
+    """Format intervals data into a readable string with all available fields.
+
+    Args:
+        intervals_data: The intervals data from the Intervals.icu API
+        interval_field_defs: INTERVAL_FIELD definitions keyed by code; custom interval
+            fields present on an interval are listed with name, code, value and units
+        streams: Sample-aligned streams of the activity; when given, statistics over
+            each interval's start_index..end_index (and over all member intervals of a
+            group) are appended per metric stream
+        stream_defs: ACTIVITY_STREAM definitions keyed by code (labels and units)
+
+    Returns:
+        A formatted string representation of the intervals data
+    """
+    # Format basic intervals information
+    result = f"""Intervals Analysis:
+
+ID: {intervals_data.get("id", "N/A")}
+Analyzed: {intervals_data.get("analyzed", "N/A")}
+
+"""
+
+    # Format individual intervals
+    intervals = intervals_data.get("icu_intervals") or []
+    if intervals:
+        result += "Individual Intervals:\n\n"
+
+        for i, interval in enumerate(intervals, 1):
+            result += _format_interval_block(i, interval)
+            result += _format_interval_extras(
+                interval,
+                _interval_ranges(interval),
+                interval_field_defs,
+                streams,
+                stream_defs,
+                "interval",
+            )
+
+    # Format interval groups
+    groups = intervals_data.get("icu_groups") or []
+    if groups:
+        result += "Interval Groups:\n\n"
+
+        for i, group in enumerate(groups, 1):
+            result += _format_group_block(i, group)
+            result += _format_interval_extras(
+                group,
+                _group_ranges(group, intervals),
+                interval_field_defs,
+                streams,
+                stream_defs,
+                "group",
+            )
 
     return result
 
