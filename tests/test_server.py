@@ -139,13 +139,18 @@ def test_get_event_by_id(monkeypatch):
         "race": True,
     }
 
-    async def fake_request(*_args, **_kwargs):
+    seen: dict = {}
+
+    async def fake_request(*_args, **kwargs):
+        seen.update(kwargs)
         return event
 
     # Patch in both api.client and tools modules to ensure it works
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
     monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
     result = asyncio.run(get_event_by_id("e1", athlete_id="1"))
+    # The API serves one event at /events/{id} (plural); /event/{id} is a 404.
+    assert seen["url"] == "/athlete/1/events/e1"
     assert "Event Details:" in result
     assert "Test Event" in result
 
