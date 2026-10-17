@@ -27,6 +27,7 @@ Usage:
         - get_activity_streams
         - get_activity_messages
         - add_activity_message
+        - update_activity
         - get_events
         - get_event_by_id
         - add_or_update_event
@@ -72,6 +73,7 @@ config = get_config()
 # Import tool functions for re-export
 from intervals_mcp_server.tools.activities import (  # pylint: disable=wrong-import-position  # noqa: E402
     add_activity_message,
+    update_activity,
     get_activities,
     get_activity_details,
     get_activity_intervals,
@@ -102,6 +104,7 @@ __all__ = [
     "make_intervals_request",
     "httpx_client",  # Re-exported for test compatibility
     "add_activity_message",
+    "update_activity",
     "get_activities",
     "get_activity_details",
     "get_activity_intervals",

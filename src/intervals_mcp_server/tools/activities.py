@@ -392,3 +392,44 @@ async def add_activity_message(
     if msg_id is not None:
         return f"Successfully added message (ID: {msg_id}) to activity {activity_id}."
     return f"Message appears to have been added to activity {activity_id}, but no ID was returned. Please verify manually."
+
+
+@mcp.tool()
+async def update_activity(
+    activity_id: str,
+    name: str | None = None,
+    description: str | None = None,
+    api_key: str | None = None,
+) -> str:
+    """Update the name and/or description of an activity on Intervals.icu
+
+    Args:
+        activity_id: The Intervals.icu activity ID
+        name: New activity name (optional, leave unset to keep the current name)
+        description: New activity description (optional, leave unset to keep the current description)
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+    """
+    data: dict[str, Any] = {}
+    if name is not None:
+        data["name"] = name
+    if description is not None:
+        data["description"] = description
+    if not data:
+        return "Error: Provide at least one of name or description to update."
+
+    result = await make_intervals_request(
+        url=f"/activity/{activity_id}",
+        api_key=api_key,
+        method="PUT",
+        data=data,
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error updating activity: {error_message}"
+
+    if not result or not isinstance(result, dict):
+        return "Error: Unexpected response when updating activity."
+
+    updated = ", ".join(f"{key}={result.get(key)!r}" for key in data)
+    return f"Successfully updated activity {activity_id}: {updated}"

@@ -8,6 +8,7 @@ These tests use monkeypatching to mock API responses and verify the formatting a
 - get_activity_streams
 - get_activity_messages
 - add_activity_message
+- update_activity
 - get_events
 - get_event_by_id
 - add_or_update_event
@@ -27,6 +28,7 @@ os.environ.setdefault("ATHLETE_ID", "i1")
 
 from intervals_mcp_server.server import (  # pylint: disable=wrong-import-position
     add_activity_message,
+    update_activity,
     get_activities,
     get_activity_details,
     get_activity_intervals,
@@ -949,3 +951,26 @@ def test_get_activities_resolves_gear_name(monkeypatch):
     assert "Ride 2" in result
     assert "Name: Litening Air" in result
     assert "Name: S-Works Tarmac SL8" in result
+
+
+def test_update_activity(monkeypatch):
+    """Test update_activity sends only the provided fields via PUT."""
+
+    async def fake_request(*_args, **kwargs):
+        assert kwargs.get("url") == "/activity/i123"
+        assert kwargs.get("method") == "PUT"
+        assert kwargs.get("data") == {"name": "Rouvy free ride"}
+        return {"id": "i123", "name": "Rouvy free ride"}
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(update_activity(activity_id="i123", name="Rouvy free ride"))
+    assert "Successfully updated activity i123" in result
+    assert "Rouvy free ride" in result
+
+
+def test_update_activity_requires_field():
+    """Test update_activity rejects a call with nothing to update."""
+    result = asyncio.run(update_activity(activity_id="i123"))
+    assert "at least one of name or description" in result
