@@ -299,6 +299,54 @@ def test_get_activity_streams(monkeypatch):
     assert "Data Points: 11" in result
 
 
+def test_get_activity_streams_latlng_pairs(monkeypatch):
+    """
+    Test get_activity_streams pairs latitudes (data) with longitudes (data2) for the latlng stream.
+    """
+    lats = [45.1 + i / 1000 for i in range(12)]
+    lngs = [6.2 + i / 1000 for i in range(12)]
+    sample_streams = [
+        {
+            "type": "latlng",
+            "data": lats,
+            "data2": lngs,
+            "valueTypeIsArray": False,
+            "anomalies": None,
+            "custom": False,
+        },
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return sample_streams
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_streams("i107537962", stream_types="latlng"))
+    assert "Data Points: 12" in result
+    pairs = [[lat, lng] for lat, lng in zip(lats, lngs, strict=True)]
+    assert f"First 5 values: {pairs[:5]}" in result
+    assert f"Last 5 values: {pairs[-5:]}" in result
+
+
+def test_get_activity_streams_short_latlng(monkeypatch):
+    """
+    Test a short latlng stream (10 points or fewer) is shown as [lat, lng] pairs too.
+    """
+    sample_streams = [
+        {"type": "latlng", "data": [45.1, 45.2], "data2": [6.2, 6.3]},
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return sample_streams
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_streams("i107537962", stream_types="latlng"))
+    assert "Values: [[45.1, 6.2], [45.2, 6.3]]" in result
+
+
 def test_add_or_update_event(monkeypatch):
     """
     Test add_or_update_event successfully posts an event and returns the response data.

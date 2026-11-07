@@ -267,7 +267,7 @@ async def get_activity_streams(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         stream_types: Comma-separated list of stream types to retrieve (optional, defaults to all available types)
                      Available types: time, watts, heartrate, cadence, altitude, distance,
-                     core_temperature, skin_temperature, velocity_smooth
+                     core_temperature, skin_temperature, velocity_smooth, latlng
     """
     # Build query parameters
     params = {}
@@ -308,6 +308,8 @@ async def get_activity_streams(
         stream_type = stream.get("type", "unknown")
         stream_name = stream.get("name", stream_type)
         data = stream.get("data", [])
+        if stream.get("data2"):  # latlng: latitudes in data, longitudes in data2
+            data = [[lat, lng] for lat, lng in zip(data, stream["data2"], strict=False)]
         value_type = stream.get("valueType", "")
 
         streams_summary += f"Stream: {stream_name} ({stream_type})\n"
